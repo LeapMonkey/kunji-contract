@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.9;
 
-import {IBatchedVault} from "./IBatchedVault.sol";
-
-interface IPlatformAdapter {
-    struct TradeOperation {
-        uint8 platformId;
-        uint8 actionId;
+interface IAdapterOperations {
+    
+    struct AdapterOperation {
+        uint8 operationId;
         bytes data;
     }
 
+    
+    function executeOperation(AdapterOperation[] memory) external returns(bool);
+
+
+    /*
     error InvalidOperation(uint8 platformId, uint8 actionId);
 
     function createTrade(
@@ -18,4 +20,5 @@ interface IPlatformAdapter {
     ) external returns (bytes memory);
 
     function totalAssets() external view returns (uint256);
+    */
 }
