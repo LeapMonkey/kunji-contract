@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {SafeERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
@@ -94,13 +93,35 @@ contract TraderWallet is OwnableUpgradeable {
         cumulativePendingWithdrawals = 0;
     }
 
-    function setVaultAddress(address _vaultAddress) external onlyTrader {
+    function setVaultAddress(address _vaultAddress) external onlyOwner {
         if (_vaultAddress == address(0))
             revert AddressZero({target: "_vaultAddress"});
 
         emit VaultAddressSet(_vaultAddress);
 
         vaultAddress = _vaultAddress;
+    }
+
+    function setAdapterRegistryAddress(
+        address _adapterRegistryAddress
+    ) external onlyOwner {
+        if (_adapterRegistryAddress == address(0))
+            revert AddressZero({target: "_adapterRegistryAddress"});
+
+        emit AdapterRegistryAddressSet(_adapterRegistryAddress);
+
+        adapterRegistryAddress = _adapterRegistryAddress;
+    }
+
+    function setContractsFactoryAddress(
+        address _contractsFactoryAddress
+    ) external onlyOwner {
+        if (_contractsFactoryAddress == address(0))
+            revert AddressZero({target: "_contractsFactoryAddress"});
+
+        emit ContractsFactoryAddressSet(_contractsFactoryAddress);
+
+        contractsFactoryAddress = _contractsFactoryAddress;
     }
 
     function setUnderlyingTokenAddress(
@@ -112,28 +133,6 @@ contract TraderWallet is OwnableUpgradeable {
         emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
 
         underlyingTokenAddress = _underlyingTokenAddress;
-    }
-
-    function setAdapterRegistryAddress(
-        address _adapterRegistryAddress
-    ) external onlyTrader {
-        if (_adapterRegistryAddress == address(0))
-            revert AddressZero({target: "_adapterRegistryAddress"});
-
-        emit AdapterRegistryAddressSet(_adapterRegistryAddress);
-
-        adapterRegistryAddress = _adapterRegistryAddress;
-    }
-
-    function setContractsFactoryAddress(
-        address _contractsFactoryAddress
-    ) external onlyTrader {
-        if (_contractsFactoryAddress == address(0))
-            revert AddressZero({target: "_contractsFactoryAddress"});
-
-        emit ContractsFactoryAddressSet(_contractsFactoryAddress);
-
-        contractsFactoryAddress = _contractsFactoryAddress;
     }
 
     function setTraderAddress(address _traderAddress) external onlyTrader {
@@ -223,24 +222,37 @@ contract TraderWallet is OwnableUpgradeable {
     /// @dev consider one operation per time ? so replication can happen easily ?
     function executeOnAdapter(
         uint256 _protocolId,
-        IAdapterOperations.AdapterOperation[] memory _traderOperation,
+        IAdapterOperations.AdapterOperation[] memory _traderOperations,
         bool _replicate
     ) external onlyTrader {
+
+        // check if protocol id is valid
         (bool isValidProtocol, address adapterAddress) = _isProtocolValid(
             _protocolId
         );
         require(isValidProtocol, "Invalid Adapter");
 
-        bool success = IAdapterOperations(adapterAddress).executeOperation(
-            _traderOperation
+        // check if operations on adapters are valid
+        require(
+            IAdapterOperations(adapterAddress).isOperationAllowed(
+                _traderOperations
+            ),
+            "Invalid Operation on _traderOperations array"
         );
+
+        // execute operation
+        bool success = IAdapterOperations(adapterAddress).executeOperation(
+            _traderOperations
+        );
+        // check operation success
         require(success, "Adapter Operation result failed");
 
+        // if tx needs to be replicated on vault
         if (_replicate) {
             // scale parameters
             IAdapterOperations.AdapterOperation[]
                 memory scaledOperation = _scaleTraderOperation(
-                    _traderOperation
+                    _traderOperations
                 );
 
             // call user vault
@@ -259,7 +271,10 @@ contract TraderWallet is OwnableUpgradeable {
 
     // not sure if the execution is here. Don't think so
     function rollover() external onlyTrader {
-        require(IUserVault(vaultAddress).rolloverFromTrader(), "Rollover from trader error");
+        require(
+            IUserVault(vaultAddress).rolloverFromTrader(),
+            "Rollover from trader error"
+        );
     }
 
     function _isProtocolValid(
@@ -279,15 +294,15 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function _scaleTraderOperation(
-        IAdapterOperations.AdapterOperation[] memory _traderOperation
+        IAdapterOperations.AdapterOperation[] memory _traderOperations
     ) internal pure returns (IAdapterOperations.AdapterOperation[] memory) {
         IAdapterOperations.AdapterOperation[] memory scaledOperation;
 
-        for (uint256 i; i < _traderOperation.length; i++) {
-            scaledOperation[i].operationId = _traderOperation[i].operationId;
+        for (uint256 i; i < _traderOperations.length; i++) {
+            scaledOperation[i].operationId = _traderOperations[i].operationId;
 
             // scale each operation here
-            scaledOperation[i].data = _traderOperation[i].data;
+            scaledOperation[i].data = _traderOperations[i].data;
         }
         return scaledOperation;
     }
