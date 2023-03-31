@@ -12,9 +12,10 @@ import {IUserVault} from "./interfaces/IUserVault.sol";
 contract TraderWallet is OwnableUpgradeable {
     address public vaultAddress;
     address public underlyingTokenAddress;
-    address public adapterRegistryAddress;
+    address public adaptersRegistryAddress;
     address public contractsFactoryAddress;
     address public traderAddress;
+    address public dynamicValueAddress;
 
     uint256 public cumulativePendingDeposits;
     uint256 public cumulativePendingWithdrawals;
@@ -28,9 +29,10 @@ contract TraderWallet is OwnableUpgradeable {
 
     event VaultAddressSet(address indexed vaultAddress);
     event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
-    event AdapterRegistryAddressSet(address indexed adapterRegistryAddress);
+    event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
+    event DynamicValueAddressSet(address indexed dynamicValueAddress);
     event ProtocolToUseAdded(
         uint256 indexed protocolId,
         address indexed trader
@@ -65,28 +67,38 @@ contract TraderWallet is OwnableUpgradeable {
     function initialize(
         address _vaultAddress,
         address _underlyingTokenAddress,
-        address _adapterRegistryAddress,
+        address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
-        address _traderAddress
+        address _traderAddress,
+        address _dynamicValueAddress
     ) external initializer {
-        if (_vaultAddress == address(0))
-            revert AddressZero({target: "_vaultAddress"});
-        if (_underlyingTokenAddress == address(0))
-            revert AddressZero({target: "_underlyingTokenAddress"});
-        if (_adapterRegistryAddress == address(0))
-            revert AddressZero({target: "_adapterRegistryAddress"});
-        if (_contractsFactoryAddress == address(0))
-            revert AddressZero({target: "_contractsFactoryAddress"});
-        if (_traderAddress == address(0))
-            revert AddressZero({target: "_traderAddress"});
+        require(_vaultAddress != address(0), "INVALID address _vaultAddress");
+        require(
+            _underlyingTokenAddress != address(0),
+            "INVALID address _underlyingTokenAddress"
+        );
+        require(
+            _adaptersRegistryAddress != address(0),
+            "INVALID address _adaptersRegistryAddress"
+        );
+        require(
+            _contractsFactoryAddress != address(0),
+            "INVALID address _contractsFactoryAddress"
+        );
+        require(_traderAddress != address(0), "INVALID address _traderAddress");
+        require(
+            _dynamicValueAddress != address(0),
+            "INVALID address _dynamicValueAddress"
+        );
 
         __Ownable_init();
 
         vaultAddress = _vaultAddress;
         underlyingTokenAddress = _underlyingTokenAddress;
-        adapterRegistryAddress = _adapterRegistryAddress;
+        adaptersRegistryAddress = _adaptersRegistryAddress;
         contractsFactoryAddress = _contractsFactoryAddress;
         traderAddress = _traderAddress;
+        dynamicValueAddress = _dynamicValueAddress;
 
         traderFee = 0; // @TODO ASK IF THIS IS A THING OTHER THAN THE 30% FOR KUNJI
         cumulativePendingDeposits = 0;
@@ -102,15 +114,26 @@ contract TraderWallet is OwnableUpgradeable {
         vaultAddress = _vaultAddress;
     }
 
-    function setAdapterRegistryAddress(
-        address _adapterRegistryAddress
+    function setAdaptersRegistryAddress(
+        address _adaptersRegistryAddress
     ) external onlyOwner {
-        if (_adapterRegistryAddress == address(0))
-            revert AddressZero({target: "_adapterRegistryAddress"});
+        if (_adaptersRegistryAddress == address(0))
+            revert AddressZero({target: "_adaptersRegistryAddress"});
 
-        emit AdapterRegistryAddressSet(_adapterRegistryAddress);
+        emit AdaptersRegistryAddressSet(_adaptersRegistryAddress);
 
-        adapterRegistryAddress = _adapterRegistryAddress;
+        adaptersRegistryAddress = _adaptersRegistryAddress;
+    }
+
+    function setDynamicValueAddress(
+        address _dynamicValueAddress
+    ) external onlyOwner {
+        if (_dynamicValueAddress == address(0))
+            revert AddressZero({target: "_dynamicValueAddress"});
+
+        emit DynamicValueAddressSet(_dynamicValueAddress);
+
+        dynamicValueAddress = _dynamicValueAddress;
     }
 
     function setContractsFactoryAddress(
@@ -147,13 +170,13 @@ contract TraderWallet is OwnableUpgradeable {
         );
 
         emit TraderAddressSet(_traderAddress);
-        contractsFactoryAddress = _traderAddress;
+        traderAddress = _traderAddress;
     }
 
     function addProtocolToUse(uint256 _protocolId) external onlyTrader {
         (bool isValidProtocol, ) = _isProtocolValid(_protocolId);
 
-        require(isValidProtocol, "Invalid Adapter");
+        require(isValidProtocol, "Invalid Protocol ID");
 
         emit ProtocolToUseAdded(_protocolId, _msgSender());
 
@@ -161,16 +184,19 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function removeProtocolToUse(uint256 _protocolId) external onlyTrader {
+        bool found = false;
         for (uint256 i = 0; i < traderSelectedProtocols.length; i++) {
             if (traderSelectedProtocols[i] == _protocolId) {
                 emit ProtocolToUseRemoved(_protocolId, _msgSender());
 
                 traderSelectedProtocols[i] = traderSelectedProtocols[
-                    traderSelectedProtocols[i] - 1
+                    traderSelectedProtocols.length - 1
                 ];
                 traderSelectedProtocols.pop();
+                found = true;
             }
         }
+        require(found, 'Protocol ID not found');
     }
 
     //
@@ -225,7 +251,6 @@ contract TraderWallet is OwnableUpgradeable {
         IAdapterOperations.AdapterOperation[] memory _traderOperations,
         bool _replicate
     ) external onlyTrader {
-
         // check if protocol id is valid
         (bool isValidProtocol, address adapterAddress) = _isProtocolValid(
             _protocolId
@@ -264,9 +289,20 @@ contract TraderWallet is OwnableUpgradeable {
         }
     }
 
+    /*
+
+        FUNCTION TO TRANSFER FUNDS TO TRADER WHEN ROLLOVER
+        BEING CALLED BY VAULT
+
+    */
+
     function totalAssets() public view returns (uint256) {
         // Balance of UNDERLYING ASSET + Value of positions on adapters
         // this will call to the DynamicValuationContract
+    }
+
+    function getTraderSelectedProtocolsLength() external view returns(uint256) {
+        return traderSelectedProtocols.length;
     }
 
     // not sure if the execution is here. Don't think so
@@ -280,13 +316,13 @@ contract TraderWallet is OwnableUpgradeable {
     function _isProtocolValid(
         uint256 _protocolId
     ) internal view returns (bool, address) {
-        address adapterAddress = IAdaptersRegistry(adapterRegistryAddress)
+        address adapterAddress = IAdaptersRegistry(adaptersRegistryAddress)
             .getAdapterAddressFromId(_protocolId);
 
         if (adapterAddress == address(0)) return (false, address(0));
 
         return (
-            IAdaptersRegistry(adapterRegistryAddress).isAdapterAllowed(
+            IAdaptersRegistry(adaptersRegistryAddress).isAdapterAllowed(
                 adapterAddress
             ),
             adapterAddress
@@ -305,5 +341,5 @@ contract TraderWallet is OwnableUpgradeable {
             scaledOperation[i].data = _traderOperations[i].data;
         }
         return scaledOperation;
-    }
+    }    
 }

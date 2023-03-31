@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { deployVault } from "./helpers/fixture";
+import { deployVault } from "./helpers/fixtures";
 import { BatchedVault } from "../typechain-types";
 
 

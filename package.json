@@ -12,10 +12,11 @@
   },
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
-    "@openzeppelin/contracts-upgradeable": "^4.8.1",
     "@uniswap/v3-periphery": "^1.4.3"
   },
   "devDependencies": {
+    "@openzeppelin/hardhat-upgrades": "^1.22.1",
+    "@openzeppelin/contracts-upgradeable": "^4.8.1",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
     "@nomicfoundation/hardhat-toolbox": "^2.0.0",
     "@typescript-eslint/eslint-plugin": "^5.55.0",
