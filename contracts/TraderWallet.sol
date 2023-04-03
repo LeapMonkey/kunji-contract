@@ -255,7 +255,7 @@ contract TraderWallet is OwnableUpgradeable {
         (bool isValidProtocol, address adapterAddress) = _isProtocolValid(
             _protocolId
         );
-        require(isValidProtocol, "Invalid Adapter");
+        require(isValidProtocol, "Invalid Protocol ID");
 
         // check if operations on adapters are valid
         require(
@@ -303,6 +303,14 @@ contract TraderWallet is OwnableUpgradeable {
 
     function getTraderSelectedProtocolsLength() external view returns(uint256) {
         return traderSelectedProtocols.length;
+    }
+
+    function getCumulativePendingWithdrawals()  external view returns(uint256) {
+        return cumulativePendingWithdrawals;
+    }
+
+    function getCumulativePendingDeposits()  external view returns(uint256) {
+        return cumulativePendingDeposits;
     }
 
     // not sure if the execution is here. Don't think so

@@ -8,10 +8,10 @@ interface IAdapterOperations {
         bytes data;
     }
 
+    function isOperationAllowed(AdapterOperation[] memory) external returns(bool);
     
     function executeOperation(AdapterOperation[] memory) external returns(bool);
 
-    function isOperationAllowed(AdapterOperation[] memory) external returns(bool);
 
     /*
     error InvalidOperation(uint8 platformId, uint8 actionId);

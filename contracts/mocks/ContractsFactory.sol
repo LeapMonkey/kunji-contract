@@ -9,7 +9,7 @@ contract ContractsFactory {
     }
 
     function isTraderAllowed(address _trader) external view returns (bool) {
-        _trader;
+        _trader;                    // just to avoid warnings
         return returnValue;
     }
 }

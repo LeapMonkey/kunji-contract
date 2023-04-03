@@ -14,18 +14,18 @@ contract AdaptersRegistry {
     }
 
     function isTraderAllowed(address _trader) external view returns (bool) {
-        _trader;
+        _trader;                    // just to avoid warnings
         return returnValue;
     }
 
 
     function getAdapterAddressFromId(uint256 _adapterId) external view returns (address) {
-        _adapterId;
+        _adapterId;                 // just to avoid warnings
         return returnAddress;
     }
 
     function isAdapterAllowed(address _adapterAddress) external view returns (bool) {
-        _adapterAddress;
+        _adapterAddress;            // just to avoid warnings
         return returnValue;
     }
 }

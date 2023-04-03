@@ -4,7 +4,6 @@ import {
   ContractFactory,
   ContractTransaction,
   BigNumber,
-  ContractReceipt,
 } from "ethers";
 import { expect } from "chai";
 import Reverter from "./helpers/reverter";
@@ -12,15 +11,21 @@ import {
   TraderWallet,
   ContractsFactory,
   AdaptersRegistry,
+  AdapterOperations,
+  ERC20Mock,
 } from "../typechain-types";
-import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS } from "./helpers/constants";
+import {
+  TEST_TIMEOUT,
+  ZERO_AMOUNT,
+  ZERO_ADDRESS,
+  AMOUNT_100,
+} from "./helpers/constants";
 
 const reverter = new Reverter();
 
 let deployer: Signer;
 let vault: Signer;
 let trader: Signer;
-let underlyingToken: Signer;
 let adaptersRegistry: Signer;
 let contractsFactory: Signer;
 let dynamicValue: Signer;
@@ -42,16 +47,29 @@ let ownerAddress: string;
 let txResult: ContractTransaction;
 let TraderWalletFactory: ContractFactory;
 let traderWalletContract: TraderWallet;
+let usdcTokenContract: ERC20Mock;
+let contractBalanceBefore: BigNumber;
+let contractBalanceAfter: BigNumber;
+let traderBalanceBefore: BigNumber;
+let traderBalanceAfter: BigNumber;
 
 describe("Trader Wallet Contract Tests", function () {
   this.timeout(TEST_TIMEOUT);
 
   before(async () => {
+    const ERC20MockFactory = await ethers.getContractFactory("ERC20Mock");
+    usdcTokenContract = (await ERC20MockFactory.deploy(
+      "USDC",
+      "USDC",
+      6
+    )) as ERC20Mock;
+    await usdcTokenContract.deployed();
+    underlyingTokenAddress = usdcTokenContract.address;
+
     [
       deployer,
       vault,
       trader,
-      underlyingToken,
       adaptersRegistry,
       contractsFactory,
       dynamicValue,
@@ -63,7 +81,6 @@ describe("Trader Wallet Contract Tests", function () {
       deployerAddress,
       vaultAddress,
       traderAddress,
-      underlyingTokenAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
       dynamicValueAddress,
@@ -73,7 +90,6 @@ describe("Trader Wallet Contract Tests", function () {
       deployer.getAddress(),
       vault.getAddress(),
       trader.getAddress(),
-      underlyingToken.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
       dynamicValue.getAddress(),
@@ -91,7 +107,7 @@ describe("Trader Wallet Contract Tests", function () {
         ownerAddress = deployerAddress;
       });
 
-      describe("WHEN trying to deploy with invalid parameters", function () {
+      describe("WHEN trying to deploy TraderWallet contract with invalid parameters", function () {
         it("THEN it should FAIL when _vaultAddress is ZERO", async () => {
           await expect(
             upgrades.deployProxy(TraderWalletFactory, [
@@ -171,7 +187,7 @@ describe("Trader Wallet Contract Tests", function () {
         });
       });
 
-      describe("WHEN trying to deploy with correct parameters", function () {
+      describe("WHEN trying to deploy TraderWallet contract with correct parameters", function () {
         before(async () => {
           traderWalletContract = (await upgrades.deployProxy(
             TraderWalletFactory,
@@ -186,10 +202,26 @@ describe("Trader Wallet Contract Tests", function () {
           )) as TraderWallet;
           await traderWalletContract.deployed();
 
+          // mint to trader
+          await usdcTokenContract.mint(traderAddress, AMOUNT_100);
+          await (
+            await usdcTokenContract
+              .connect(trader)
+              .approve(traderWalletContract.address, AMOUNT_100)
+          ).wait();
+
+          contractBalanceBefore = await usdcTokenContract.balanceOf(
+            traderWalletContract.address
+          );
+          traderBalanceBefore = await usdcTokenContract.balanceOf(
+            traderAddress
+          );
+
+          // take a snapshot
           await reverter.snapshot();
         });
 
-        it("THEN it should return the same ones after depployment", async () => {
+        it("THEN it should return the same ones after deployment", async () => {
           expect(await traderWalletContract.vaultAddress()).to.equal(
             vaultAddress
           );
@@ -592,7 +624,6 @@ describe("Trader Wallet Contract Tests", function () {
                   ).to.be.revertedWith("Caller not allowed");
                 });
               });
-
               describe("WHEN protocolID does not exist in registry", function () {
                 before(async () => {
                   // change returnAddress to return address(0) on function call
@@ -717,9 +748,6 @@ describe("Trader Wallet Contract Tests", function () {
                   .connect(trader)
                   .removeProtocolToUse(PROTOCOL_ID.add(2));
               });
-              after(async () => {
-                await reverter.revert();
-              });
 
               it("THEN new protocol id should be removed from array", async () => {
                 expect(
@@ -743,6 +771,339 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(txResult)
                   .to.emit(traderWalletContract, "ProtocolToUseRemoved")
                   .withArgs(PROTOCOL_ID.add(2), traderAddress);
+              });
+            });
+          });
+        });
+
+        describe("WHEN trying to make a depositRequest", async () => {
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not trader", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(nonAuthorized)
+                    .depositRequest(underlyingTokenAddress, AMOUNT_100)
+                ).to.be.revertedWith("Caller not allowed");
+              });
+            });
+
+            describe("WHEN Token is not the underlying", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .depositRequest(otherAddress, AMOUNT_100)
+                ).to.be.revertedWith("Asset not allowed");
+              });
+            });
+
+            describe("WHEN amount is ZERO", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .depositRequest(underlyingTokenAddress, ZERO_AMOUNT)
+                ).to.be.revertedWithCustomError(
+                  traderWalletContract,
+                  "ZeroAmount"
+                );
+              });
+            });
+
+            describe("WHEN transferFrom fails", function () {
+              before(async () => {
+                await usdcTokenContract.setReturnBoolValue(false);
+              });
+              after(async () => {
+                await reverter.revert();
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .depositRequest(underlyingTokenAddress, AMOUNT_100)
+                ).to.be.revertedWith("Token transfer failed");
+              });
+            });
+          });
+
+          describe("WHEN calling with correct caller and amount", function () {
+            const AMOUNT = AMOUNT_100.div(2);
+
+            before(async () => {
+              txResult = await traderWalletContract
+                .connect(trader)
+                .depositRequest(underlyingTokenAddress, AMOUNT);
+            });
+            after(async () => {
+              await reverter.revert();
+            });
+            it("THEN contract should return correct vaules", async () => {
+              expect(
+                await traderWalletContract.getCumulativePendingDeposits()
+              ).to.equal(AMOUNT);
+              expect(
+                await traderWalletContract.cumulativePendingDeposits()
+              ).to.equal(AMOUNT);
+            });
+            it("THEN it should emit an Event", async () => {
+              await expect(txResult)
+                .to.emit(traderWalletContract, "DepositRequest")
+                .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
+            });
+            it("THEN contract balance should increase", async () => {
+              contractBalanceAfter = await usdcTokenContract.balanceOf(
+                traderWalletContract.address
+              );
+              expect(contractBalanceAfter).to.equal(
+                contractBalanceBefore.add(AMOUNT)
+              );
+            });
+            it("THEN trader balance should decrease", async () => {
+              traderBalanceAfter = await usdcTokenContract.balanceOf(
+                traderAddress
+              );
+              expect(traderBalanceAfter).to.equal(
+                traderBalanceBefore.sub(AMOUNT)
+              );
+            });
+
+            describe("WHEN calling again with correct caller and amount", function () {
+              before(async () => {
+                txResult = await traderWalletContract
+                  .connect(trader)
+                  .depositRequest(underlyingTokenAddress, AMOUNT);
+              });
+
+              it("THEN contract should return correct vaules", async () => {
+                expect(
+                  await traderWalletContract.getCumulativePendingDeposits()
+                ).to.equal(AMOUNT_100);
+                expect(
+                  await traderWalletContract.cumulativePendingDeposits()
+                ).to.equal(AMOUNT_100);
+              });
+              it("THEN it should emit an Event", async () => {
+                await expect(txResult)
+                  .to.emit(traderWalletContract, "DepositRequest")
+                  .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
+              });
+              it("THEN contract balance should increase", async () => {
+                contractBalanceAfter = await usdcTokenContract.balanceOf(
+                  traderWalletContract.address
+                );
+                expect(contractBalanceAfter).to.equal(
+                  contractBalanceBefore.add(AMOUNT_100)
+                );
+              });
+              it("THEN trader balance should decrease", async () => {
+                traderBalanceAfter = await usdcTokenContract.balanceOf(
+                  traderAddress
+                );
+                expect(traderBalanceAfter).to.equal(
+                  traderBalanceBefore.sub(AMOUNT_100)
+                );
+              });
+            });
+          });
+        });
+
+        describe("WHEN trying to make a withdrawRequest", async () => {
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not trader", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(nonAuthorized)
+                    .withdrawRequest(underlyingTokenAddress, AMOUNT_100)
+                ).to.be.revertedWith("Caller not allowed");
+              });
+            });
+
+            describe("WHEN Token is not the underlying", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .withdrawRequest(otherAddress, AMOUNT_100)
+                ).to.be.revertedWith("Asset not allowed");
+              });
+            });
+
+            describe("WHEN amount is ZERO", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .withdrawRequest(underlyingTokenAddress, ZERO_AMOUNT)
+                ).to.be.revertedWithCustomError(
+                  traderWalletContract,
+                  "ZeroAmount"
+                );
+              });
+            });
+          });
+
+          describe("WHEN calling with correct caller and amount", function () {
+            const AMOUNT = AMOUNT_100.div(2);
+
+            before(async () => {
+              txResult = await traderWalletContract
+                .connect(trader)
+                .withdrawRequest(underlyingTokenAddress, AMOUNT);
+            });
+            after(async () => {
+              await reverter.revert();
+            });
+            it("THEN contract should return correct vaules", async () => {
+              expect(
+                await traderWalletContract.getCumulativePendingWithdrawals()
+              ).to.equal(AMOUNT);
+              expect(
+                await traderWalletContract.cumulativePendingWithdrawals()
+              ).to.equal(AMOUNT);
+            });
+            it("THEN it should emit an Event", async () => {
+              await expect(txResult)
+                .to.emit(traderWalletContract, "WithdrawalRequest")
+                .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
+            });
+
+            describe("WHEN calling again with correct caller and amount", function () {
+              before(async () => {
+                txResult = await traderWalletContract
+                  .connect(trader)
+                  .withdrawRequest(underlyingTokenAddress, AMOUNT);
+              });
+
+              it("THEN contract should return correct vaules", async () => {
+                expect(
+                  await traderWalletContract.getCumulativePendingWithdrawals()
+                ).to.equal(AMOUNT_100);
+                expect(
+                  await traderWalletContract.cumulativePendingWithdrawals()
+                ).to.equal(AMOUNT_100);
+              });
+              it("THEN it should emit an Event", async () => {
+                await expect(txResult)
+                  .to.emit(traderWalletContract, "WithdrawalRequest")
+                  .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
+              });
+            });
+          });
+        });
+
+        describe("WHEN trying to make an executeOnAdapter call", async () => {
+          let AdaptersRegistryFactory: ContractFactory;
+          let adaptersRegistryContract: AdaptersRegistry;
+          let AdapterOperationsFactory: ContractFactory;
+          let adapterOperationsContract: AdapterOperations;
+
+          const operationArray = [
+            { operationId: 1, data: ethers.utils.hexlify("0x1234") },
+            { operationId: 2, data: ethers.utils.hexlify("0xabcd") },
+            { operationId: 3, data: ethers.utils.hexlify("0x5678") },
+          ];
+          const PROTOCOL_ID = BigNumber.from(10);
+
+          before(async () => {
+            // deploy mocked adaptersRegistry
+            AdaptersRegistryFactory = await ethers.getContractFactory(
+              "AdaptersRegistry"
+            );
+            adaptersRegistryContract =
+              (await AdaptersRegistryFactory.deploy()) as AdaptersRegistry;
+            await adaptersRegistryContract.deployed();
+
+            // deploy mocked adapterOperations
+            AdapterOperationsFactory = await ethers.getContractFactory(
+              "AdapterOperations"
+            );
+            adapterOperationsContract =
+              (await AdapterOperationsFactory.deploy()) as AdapterOperations;
+            await adapterOperationsContract.deployed();
+
+            // change address to mocked adaptersRegistry
+            await (
+              await traderWalletContract
+                .connect(owner)
+                .setAdaptersRegistryAddress(adaptersRegistryContract.address)
+            ).wait();
+
+            // change returnValue to return true on function call on registry contract
+            await (
+              await adapterOperationsContract
+                .connect(owner)
+                .setReturnValue(false)
+            ).wait();
+          });
+
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not trader", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(nonAuthorized)
+                    .executeOnAdapter(PROTOCOL_ID, operationArray, false)
+                ).to.be.revertedWith("Caller not allowed");
+              });
+            });
+            describe("WHEN protocolID does not exist in registry", function () {
+              before(async () => {
+                // change returnAddress to return address(0) on function call
+                await adaptersRegistryContract.setReturnAddress(ZERO_ADDRESS);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      operationArray,
+                      false
+                    )
+                ).to.be.revertedWith("Invalid Protocol ID");
+              });
+            });
+            describe("WHEN protocolID exists but adapter is not allowed", function () {
+              before(async () => {
+                // change returnAddress to return an address on function call
+                await adaptersRegistryContract.setReturnAddress(adapterOperationsContract.address);
+
+                // change returnValue to return false on function call
+                await adaptersRegistryContract.setReturnValue(false);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      operationArray,
+                      false
+                    )
+                ).to.be.revertedWith("Invalid Protocol ID");
+              });
+            });
+            describe("WHEN protocolID exists adapter is allowed but operation is now allowed", function () {
+              before(async () => {
+                // change returnAddress to return the adapter address on function call
+                await adaptersRegistryContract.setReturnAddress(adapterOperationsContract.address);
+
+                // change returnValue to return true on function call on registry contract
+                await adaptersRegistryContract.setReturnValue(true);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      operationArray,
+                      false
+                    )
+                ).to.be.revertedWith("Invalid Operation on _traderOperations array");
               });
             });
           });
