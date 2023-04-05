@@ -1156,7 +1156,7 @@ describe("Trader Wallet Contract Tests", function () {
                     traderWalletContract,
                     "InvalidOperation"
                   )
-                  .withArgs("_traderOperationsArray");
+                  .withArgs("_traderOperationStruct");
               });
             });
             describe("WHEN protocolID exists, adapter is allowed, operation is allowed but execution fails", function () {

@@ -6,7 +6,7 @@ import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/
 
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
-import {IAdapterOperations} from "./interfaces/IAdapterOperations.sol";
+import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IUserVault} from "./interfaces/IUserVault.sol";
 
 // import "hardhat/console.sol";
@@ -21,11 +21,14 @@ contract TraderWallet is OwnableUpgradeable {
 
     uint256 public cumulativePendingDeposits;
     uint256 public cumulativePendingWithdrawals;
-    uint256 public initialBalance;
-    uint256 public afterRoundBalance;
+    uint256 public initialTraderAmount;
+    uint256 public initialVaultAmount;
+    uint256 public afterRoundTraderAmount;
+    uint256 public afterRoundVaultAmount;
     uint256 public traderFee;
-
     uint256[] public traderSelectedProtocols;
+
+    uint256[50] __gap;
 
     error ZeroAddrees(string _target);
     error ZeroAmount();
@@ -37,6 +40,7 @@ contract TraderWallet is OwnableUpgradeable {
     error AdapterOperationFailed(string _target);
     error TokenTransferFailed();
     error RolloverFailed();
+    error AmountToScaleNotFound();
 
     event VaultAddressSet(address indexed vaultAddress);
     event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
@@ -99,7 +103,6 @@ contract TraderWallet is OwnableUpgradeable {
         address _traderAddress,
         address _dynamicValueAddress
     ) external initializer {
-        // require(_vaultAddress != address(0), "INVALID address _vaultAddress");
         if (_vaultAddress == address(0))
             revert ZeroAddrees({_target: "_vaultAddress"});
         if (_underlyingTokenAddress == address(0))
@@ -125,8 +128,10 @@ contract TraderWallet is OwnableUpgradeable {
         traderFee = 0; // @TODO ASK IF THIS IS A THING OTHER THAN THE 30% FOR KUNJI
         cumulativePendingDeposits = 0;
         cumulativePendingWithdrawals = 0;
-        initialBalance = 0;
-        afterRoundBalance = 0;
+        initialTraderAmount = 0;
+        initialVaultAmount = 0;
+        afterRoundTraderAmount = 0;
+        afterRoundVaultAmount = 0;
     }
 
     function setVaultAddress(
@@ -265,11 +270,10 @@ contract TraderWallet is OwnableUpgradeable {
         cumulativePendingWithdrawals = cumulativePendingWithdrawals + _amount;
     }
 
-    /// @dev watch out if many operations are issued, maybe will fail
-    /// @dev consider one operation per time ? so replication can happen easily ?
     function executeOnAdapter(
         uint256 _protocolId,
-        IAdapterOperations.AdapterOperation[] memory _traderOperations,
+        IAdapter.AdapterOperation memory _traderOperation,
+        IAdapter.Parameters[] memory _parameters,
         bool _replicate
     ) external onlyTrader {
         // check if protocol id is valid
@@ -279,50 +283,58 @@ contract TraderWallet is OwnableUpgradeable {
         if (!isValidProtocol) revert InvalidProtocolID();
 
         // check if operations on adapters are valid
-        if (
-            !IAdapterOperations(adapterAddress).isOperationAllowed(
-                _traderOperations
-            )
-        ) revert InvalidOperation({_target: "_traderOperationsArray"});
+        if (!IAdapter(adapterAddress).isOperationAllowed(_traderOperation))
+            revert InvalidOperation({_target: "_traderOperationStruct"});
 
         // execute operation
-        bool success = IAdapterOperations(adapterAddress).executeOperation(
-            _traderOperations
-        );
+        // returns success and the amount to scale to the vault
+
+
+        // APPROVE THE ADAPTER TO PULL FUNDS
+
+
+        (bool success, uint256 toScaleAmount) = IAdapter(adapterAddress)
+            .executeOperations(_traderOperation, _parameters);
         // check operation success
         if (!success) revert AdapterOperationFailed({_target: "trader"});
-        
+
         // contract should receive funds in DIFFERENT TOKENS
         // contract should receive funds in DIFFERENT TOKENS
         // contract should receive funds in DIFFERENT TOKENS
         // contract should receive funds in DIFFERENT TOKENS
 
-        // THIS SHOULD BE THE AMOUNT USED FOR THE OPERATIONS
-        // NOT THE CONTRACT BALANCE
-        initialBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(
-            address(this)
-        );
+        if (toScaleAmount == 0) {
+            // revert if operation does not return an amouunt (?)
+            revert ZeroAmount();
+        } else {
+            // store the initial amount  of underlying
+            initialTraderAmount = toScaleAmount;
+        }
 
         emit OperationExecuted(
             _protocolId,
             block.timestamp,
             "trader wallet",
             _replicate,
-            initialBalance
+            initialTraderAmount
         );
 
         // if tx needs to be replicated on vault
         if (_replicate) {
             // scale parameters
-            IAdapterOperations.AdapterOperation[]
-                memory scaledOperation = _scaleTraderOperation(
-                    _traderOperations
+            IAdapter.Parameters[]
+                memory scaledParameters = _scaleTraderOperation(
+                    _parameters,
+                    initialTraderAmount
                 );
 
             // call user vault
-            success = IUserVault(vaultAddress).executeOnAdapter(
-                scaledOperation
-            );
+            (success, initialVaultAmount) = IUserVault(vaultAddress)
+                .executeOnAdapter(
+                    _protocolId,
+                    _traderOperation,
+                    scaledParameters
+                );
 
             if (!success) revert AdapterOperationFailed({_target: "user"});
 
@@ -331,7 +343,7 @@ contract TraderWallet is OwnableUpgradeable {
                 block.timestamp,
                 "user vault",
                 _replicate,
-                initialBalance
+                initialVaultAmount
             );
         }
     }
@@ -369,9 +381,9 @@ contract TraderWallet is OwnableUpgradeable {
         bool success = IUserVault(vaultAddress).rolloverFromTrader();
         if (!success) revert RolloverFailed();
 
-        afterRoundBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(
-                address(this)
-            );
+        // afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(
+        //         address(this)
+        //     );
 
         emit RolloverExecuted(block.timestamp);
     }
@@ -393,19 +405,68 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function _scaleTraderOperation(
-        IAdapterOperations.AdapterOperation[] memory _traderOperations
-    ) internal pure returns (IAdapterOperations.AdapterOperation[] memory) {
-        IAdapterOperations.AdapterOperation[]
-            memory scaledOperation = new IAdapterOperations.AdapterOperation[](
-                _traderOperations.length
+        IAdapter.Parameters[] memory _traderParameters,
+        uint256 _traderAmount
+    ) internal pure returns (IAdapter.Parameters[] memory) {
+        // flag to set when the scale value is found in the array
+        bool valueFound = false;
+
+        // new array with the scaled parameter
+        IAdapter.Parameters[]
+            memory scaledParameters = new IAdapter.Parameters[](
+                _traderParameters.length
             );
 
-        for (uint256 i; i < _traderOperations.length; i++) {
-            scaledOperation[i].operationId = _traderOperations[i].operationId;
+        for (uint256 i; i < _traderParameters.length; i++) {
 
-            // scale each operation here
-            scaledOperation[i].data = _traderOperations[i].data;
+            // always copy this variable
+            scaledParameters[i]._type = _traderParameters[i]._type;
+            
+            // if it's the value to scale, scale it
+            if (_traderParameters[i]._scale) {
+
+                // get the number from string
+                uint256 valueToScale = getNumberFromString(_traderParameters[i]._value);
+
+                // scale the number (not ready yet)
+                uint256 scaledValue = valueToScale * _traderAmount;
+
+                // convert the scaled number to string
+                string memory scaledValueString = uintToString(scaledValue);
+
+                // put it in the right index in the array
+                scaledParameters[i]._value = scaledValueString;
+
+                scaledParameters[i]._scale = true;
+
+                valueFound = true;
+            } else {
+                scaledParameters[i]._value = _traderParameters[i]._value;
+                scaledParameters[i]._scale = false;
+            }
+
         }
-        return scaledOperation;
+
+        // revert if no value to scale was found
+        if (!valueFound) revert AmountToScaleNotFound();
+        
+        // return the array with the 
+        return scaledParameters;
+    }
+
+    function getNumberFromString(string memory str) public pure returns (uint256) {
+        bytes memory strBytes = bytes(str);
+        uint256 num = 0;
+        for (uint i = 0; i < strBytes.length; i++) {
+            uint256 digit = uint256(uint8(strBytes[i])) - 48;
+            require(digit <= 9, "Invalid digit");
+            num = num * 10 + digit;
+        }
+        return num;
+    }
+
+    function uintToString(uint256 num) public pure returns (string memory) {
+        bytes memory numBytes = abi.encodePacked(num);
+        return string(numBytes);
     }
 }

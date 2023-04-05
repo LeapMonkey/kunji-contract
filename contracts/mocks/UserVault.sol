@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import {IAdapterOperations} from "../interfaces/IAdapterOperations.sol";
+import {IAdapter} from "../interfaces/IAdapter.sol";
 
 contract UserVault {
     bool public generalReturnValue;
     address public returnAddress;
     bool public operationAllowed;
     bool public executedOperation;
+    uint256 public returnAmount;
 
     // not used yet
     function setReturnValue(bool _value) external {
@@ -23,11 +24,19 @@ contract UserVault {
         executedOperation = _value;
     }
 
+    function setReturnAmount(uint256 _value) external {
+        returnAmount = _value;
+    }
+
     function executeOnAdapter(
-        IAdapterOperations.AdapterOperation[] memory adapterOperations
-    ) external returns (bool) {
-        adapterOperations;                              // just to avoid warnings
+        uint256 _protocolId,
+        IAdapter.AdapterOperation memory _vaultOperation,
+        IAdapter.Parameters[] memory _parameters        
+    ) external returns (bool, uint256) {
+        _protocolId;                                    // just to avoid warnings
+        _vaultOperation;                                // just to avoid warnings
+        _parameters;                                    // just to avoid warnings
         executedOperation = executedOperation;          // just to avoid warnings
-        return executedOperation;
+        return (executedOperation, returnAmount);
     }
 }

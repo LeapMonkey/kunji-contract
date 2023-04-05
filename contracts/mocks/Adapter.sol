@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import {IAdapterOperations} from "../interfaces/IAdapterOperations.sol";
+import {IAdapter} from "../interfaces/IAdapter.sol";
 
 contract AdapterOperations {
     bool public generalReturnValue;
@@ -26,17 +26,19 @@ contract AdapterOperations {
     }
 
     function isOperationAllowed(
-        IAdapterOperations.AdapterOperation[] memory adapterOperations
+        IAdapter.AdapterOperation memory adapterOperations
     ) external returns (bool) {
         adapterOperations;                              // just to avoid warnings
         operationAllowed = operationAllowed;            // just to avoid warnings
         return operationAllowed;
     }
 
-    function executeOperation(
-        IAdapterOperations.AdapterOperation[] memory adapterOperations
+    function executeOperations(
+        IAdapter.AdapterOperation memory adapterOperations,
+        IAdapter.Parameters[] memory parameters
     ) external returns (bool) {
         adapterOperations;                              // just to avoid warnings
+        parameters;                                     // just to avoid warnings
         executedOperation = executedOperation;          // just to avoid warnings
         return executedOperation;
     }

@@ -3,12 +3,14 @@
 pragma solidity ^0.8.9;
 
 import {IERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
-import {IAdapterOperations} from "./IAdapterOperations.sol";
+import {IAdapter} from "./IAdapter.sol";
 
 interface IUserVault is IERC4626Upgradeable {
     function executeOnAdapter(
-        IAdapterOperations.AdapterOperation[] memory
-    ) external returns (bool);
+        uint256 _protocolId,
+        IAdapter.AdapterOperation memory _vaultOperation,
+        IAdapter.Parameters[] memory _parameters        
+    ) external returns (bool, uint256);
 
     function rolloverFromTrader() external returns (bool);
 
