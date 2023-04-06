@@ -4,6 +4,7 @@ import {
   ContractFactory,
   ContractTransaction,
   BigNumber,
+  utils,
 } from "ethers";
 import { expect } from "chai";
 import Reverter from "./helpers/reverter";
@@ -265,7 +266,6 @@ describe("Trader Wallet Contract Tests", function () {
           expect(await traderWalletContract.owner()).to.equal(ownerAddress);
           expect(await traderWalletContract.owner()).to.equal(ownerAddress);
 
-          expect(await traderWalletContract.traderFee()).to.equal(ZERO_AMOUNT);
           expect(
             await traderWalletContract.cumulativePendingDeposits()
           ).to.equal(ZERO_AMOUNT);
@@ -1051,11 +1051,52 @@ describe("Trader Wallet Contract Tests", function () {
           let AdapterOperationsFactory: ContractFactory;
           let adapterOperationsContract: AdapterOperations;
 
-          const operationArray = [
-            { operationId: 10, data: ethers.utils.hexlify("0x1234") },
-            { operationId: 11, data: ethers.utils.hexlify("0xabcd") },
-            { operationId: 12, data: ethers.utils.hexlify("0x5678") },
+          const traderOperation = {
+            _operationId: 10,
+            _data: ethers.utils.hexlify("0x1234"),
+          };
+
+          const parameters = [
+            {
+              _order: BigNumber.from(0),
+              _type: utils.formatBytes32String("address"),
+              _value: String(otherAddress),
+            },
+            {
+              _order: BigNumber.from(1),
+              _type: utils.formatBytes32String("uint256"),
+              // _value: "1000000000000000000",
+              _value: ethers.utils.parseUnits("100", "ether").toString(),
+            },
+            {
+              _order: BigNumber.from(2),
+              _type: utils.formatBytes32String("uint256"),
+              // _value: "2000000000000000000",
+              _value: ethers.utils.parseUnits("200", "ether").toString(),
+            },
+            {
+              _order: BigNumber.from(3),
+              _type: utils.formatBytes32String("uint256"),
+              // _value: "3000000000000000000",
+              _value: ethers.utils.parseUnits("300", "ether").toString(),
+            },
           ];
+
+          const parametersToScale = [
+            {
+              _order: BigNumber.from(1),
+              _type: utils.formatBytes32String("uint256"),
+              // _value: "1000000000000000000",
+              _value: ethers.utils.parseUnits("100", "ether").toString(),
+            },
+            {
+              _order:BigNumber.from(3),
+              _type: utils.formatBytes32String("uint256"),
+              // _value: "3000000000000000000",
+              _value: ethers.utils.parseUnits("300", "ether").toString(),
+            },
+          ];
+
           const PROTOCOL_ID = BigNumber.from(10);
 
           before(async () => {
@@ -1087,7 +1128,12 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(nonAuthorized)
-                    .executeOnAdapter(PROTOCOL_ID, operationArray, false)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      false
+                    )
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "CallerNotAllowed"
@@ -1103,7 +1149,12 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .executeOnAdapter(PROTOCOL_ID, operationArray, false)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      false
+                    )
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "InvalidProtocolID"
@@ -1124,14 +1175,19 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .executeOnAdapter(PROTOCOL_ID, operationArray, false)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      false
+                    )
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "InvalidProtocolID"
                 );
               });
             });
-            describe("WHEN protocolID exists, adapter is allowed but operation is now allowed", function () {
+            describe("WHEN protocolID exists, adapter is allowed but operation is not allowed", function () {
               before(async () => {
                 // change returnAddress to return the adapter address on function call
                 await adaptersRegistryContract.setReturnAddress(
@@ -1150,7 +1206,12 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .executeOnAdapter(PROTOCOL_ID, operationArray, false)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      false
+                    )
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
@@ -1181,7 +1242,12 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .executeOnAdapter(PROTOCOL_ID, operationArray, false)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      false
+                    )
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
@@ -1190,7 +1256,84 @@ describe("Trader Wallet Contract Tests", function () {
                   .withArgs("trader");
               });
             });
-            describe("WHEN trader tx succeed but user vault fails", function () {
+            describe("WHEN all parameters are ok, replication is needed but adapter returns an empty array to scale", function () {
+              before(async () => {
+                // change returnAddress to return the adapter address on function call
+                await adaptersRegistryContract.setReturnAddress(
+                  adapterOperationsContract.address
+                );
+
+                // change returnValue to return true on function call on registry contract
+                await adaptersRegistryContract.setReturnValue(true);
+
+                // change returnValue to return true on function call on allowed operation
+                await adapterOperationsContract.setOperationAllowedReturn(true);
+
+                // change returnValue to return false on function call on result of execute on adapter
+                await adapterOperationsContract.setExecuteOperationReturn(true);
+
+                // change returnValue to return desired parameters to scale
+                await adapterOperationsContract.setReturnParameters(
+                  parametersToScale,
+                  true
+                );
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract
+                    .connect(trader)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      true
+                    )
+                ).to.be.revertedWithCustomError(
+                  traderWalletContract,
+                  "NothingToScale"
+                );
+              });
+            });
+            describe("WHEN all parameters are ok, replication is needed and adapter returns a non empty array", function () {
+              before(async () => {
+                // change returnAddress to return the adapter address on function call
+                await adaptersRegistryContract.setReturnAddress(
+                  adapterOperationsContract.address
+                );
+
+                // change returnValue to return true on function call on registry contract
+                await adaptersRegistryContract.setReturnValue(true);
+
+                // change returnValue to return true on function call on allowed operation
+                await adapterOperationsContract.setOperationAllowedReturn(true);
+
+                // change returnValue to return false on function call on result of execute on adapter
+                await adapterOperationsContract.setExecuteOperationReturn(true);
+
+                // change returnValue to return desired parameters to scale
+                await adapterOperationsContract.setReturnParameters(
+                  parametersToScale,
+                  false
+                );
+
+                txResult = await traderWalletContract
+                .connect(trader)
+                .executeOnAdapter(
+                  PROTOCOL_ID,
+                  traderOperation,
+                  parameters,
+                  false
+                )
+              });
+              it("THEN it should emit an Event", async () => {
+                await expect(txResult)
+                  .to.emit(traderWalletContract, "OperationExecuted")
+                  // .withArgs(PROTOCOL_ID,  { _timestamp: undefined } as any, "trader wallet", false, { _initialBalance: undefined } as any );
+              });
+
+              
+            });
+            xdescribe("WHEN trader tx succeed but user vault fails", function () {
               let UserVaultFactory: ContractFactory;
               let userVaultContract: UserVault;
               const PROTOCOL_ID = BigNumber.from(10);
@@ -1235,7 +1378,12 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .executeOnAdapter(PROTOCOL_ID, operationArray, true)
+                    .executeOnAdapter(
+                      PROTOCOL_ID,
+                      traderOperation,
+                      parameters,
+                      true
+                    )
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,

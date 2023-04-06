@@ -14,14 +14,14 @@ interface IAdapter {
     }
 
     struct Parameters {
+        // order in the function
+        uint8 _order;
+
         // type of the parameter (uint256, address, etc)
-        string _type;
+        bytes32 _type;
 
         // value of the parameter
         string _value;
-
-        // flag to tell 
-        bool _scale;
     }
 
     // receives the operation to perform in the adapter 
@@ -31,5 +31,5 @@ interface IAdapter {
     // receives the operation to perform in the adapter and the parameter list (type and value) of the function to be call 
     // answers if the operation was successfull and how much underlying was used
     // this uint256 will be used to scale the value in the vault
-    function executeOperations(AdapterOperation memory, Parameters[] memory) external returns(bool, uint256);
+    function executeOperations(AdapterOperation memory, Parameters[] memory) external returns(bool, Parameters[] memory);
 }
