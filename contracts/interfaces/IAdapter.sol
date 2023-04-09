@@ -6,11 +6,11 @@ interface IAdapter {
     struct AdapterOperation {
         // id to identify what type of operation the adapter should do
         // this is a generic operation
-        uint8 _operationId;
+        uint8 operationId;
 
         // signatura of the funcion
         // abi.encodeWithSignature
-        bytes _data;
+        bytes data;
     }
 
     struct Parameters {

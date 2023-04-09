@@ -425,6 +425,7 @@ contract TraderWallet is OwnableUpgradeable {
             // check operation success
             if (!success) revert UsersVaultOperationFailed();
 
+            _initialVaultBalance = initialVaultBalance;
             emit OperationExecuted(
                 _protocolId,
                 block.timestamp,
