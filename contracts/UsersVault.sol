@@ -8,19 +8,18 @@ import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/Ma
 import {SafeCastUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 
-import {IBatchedVault} from "./interfaces/IBatchedVault.sol";
-
 import {ERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
-contract BatchedVault is
+/// import its own interface as well
+
+contract UsersVault is
     ERC4626Upgradeable,
     OwnableUpgradeable,
-    PausableUpgradeable,
-    IBatchedVault
+    PausableUpgradeable
 {
     using MathUpgradeable for uint256;
     using MathUpgradeable for uint128;
@@ -189,7 +188,7 @@ contract BatchedVault is
         userWithdrawal.pendingShares = userWithdrawShares + shares.toUint128();
         pendingWithdrawShares += shares.toUint128();
     }
-
+/*
     function totalAssets()
         public
         view
@@ -203,7 +202,7 @@ contract BatchedVault is
             pendingDepositAssets -
             processedWithdrawAssets;
     }
-
+*/
     function rolloverBatch() external virtual {
         if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
             revert InvalidRolloverBatch();

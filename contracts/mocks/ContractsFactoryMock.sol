@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-contract ContractsFactory {
+contract ContractsFactoryMock {
     bool public returnValue;
 
     function setReturnValue(bool _value) external {

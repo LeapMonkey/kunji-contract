@@ -31,5 +31,5 @@ interface IAdapter {
     // receives the operation to perform in the adapter and the parameter list (type and value) of the function to be call 
     // answers if the operation was successfull and how much underlying was used
     // this uint256 will be used to scale the value in the vault
-    function executeOperations(AdapterOperation memory, Parameters[] memory) external returns(bool, Parameters[] memory);
+    function executeOperations(uint256, AdapterOperation memory) external returns(bool);
 }

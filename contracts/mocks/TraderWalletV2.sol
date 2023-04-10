@@ -7,7 +7,7 @@ import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/
 import {IContractsFactory} from "../interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "../interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
-import {IUserVault} from "../interfaces/IUserVault.sol";
+import {IUsersVault} from "../interfaces/IUsersVault.sol";
 
 contract TraderWalletV2 is OwnableUpgradeable {
     }

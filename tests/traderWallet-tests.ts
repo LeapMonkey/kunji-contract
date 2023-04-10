@@ -10,10 +10,10 @@ import { expect } from "chai";
 import Reverter from "./helpers/reverter";
 import {
   TraderWallet,
-  ContractsFactory,
-  AdaptersRegistry,
-  AdapterOperations,
-  UserVault,
+  ContractsFactoryMock,
+  AdaptersRegistryMock,
+  AdapterMock,
+  UsersVaultMock,
   ERC20Mock,
 } from "../typechain-types";
 import {
@@ -22,6 +22,7 @@ import {
   ZERO_ADDRESS,
   AMOUNT_100,
 } from "./helpers/constants";
+import { PromiseOrValue } from "../typechain-types/common";
 
 const reverter = new Reverter();
 
@@ -42,7 +43,6 @@ let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
 let traderAddress: string;
 let dynamicValueAddress: string;
-let nonAuthorizedAddress: string;
 let otherAddress: string;
 let ownerAddress: string;
 
@@ -54,17 +54,6 @@ let contractBalanceBefore: BigNumber;
 let contractBalanceAfter: BigNumber;
 let traderBalanceBefore: BigNumber;
 let traderBalanceAfter: BigNumber;
-
-const addProtocolsToUse = async (
-  _contract: TraderWallet,
-  _signer: Signer,
-  _baseProtocolID: BigNumber,
-  _loopQty: Number
-) => {
-  for (let i = 0; i < _loopQty; i++) {
-    await _contract.connect(_signer).addProtocolToUse(_baseProtocolID.add(i));
-  }
-};
 
 describe("Trader Wallet Contract Tests", function () {
   this.timeout(TEST_TIMEOUT);
@@ -97,7 +86,6 @@ describe("Trader Wallet Contract Tests", function () {
       adaptersRegistryAddress,
       contractsFactoryAddress,
       dynamicValueAddress,
-      nonAuthorizedAddress,
       otherAddress,
     ] = await Promise.all([
       deployer.getAddress(),
@@ -106,7 +94,6 @@ describe("Trader Wallet Contract Tests", function () {
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
       dynamicValue.getAddress(),
-      nonAuthorized.getAddress(),
       otherSigner.getAddress(),
     ]);
   });
@@ -132,7 +119,7 @@ describe("Trader Wallet Contract Tests", function () {
               dynamicValueAddress,
             ])
           )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddrees")
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_vaultAddress");
         });
 
@@ -147,7 +134,7 @@ describe("Trader Wallet Contract Tests", function () {
               dynamicValueAddress,
             ])
           )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddrees")
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_underlyingTokenAddress");
         });
 
@@ -162,7 +149,7 @@ describe("Trader Wallet Contract Tests", function () {
               dynamicValueAddress,
             ])
           )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddrees")
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_adaptersRegistryAddress");
         });
 
@@ -177,7 +164,7 @@ describe("Trader Wallet Contract Tests", function () {
               dynamicValueAddress,
             ])
           )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddrees")
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_contractsFactoryAddress");
         });
 
@@ -192,7 +179,7 @@ describe("Trader Wallet Contract Tests", function () {
               dynamicValueAddress,
             ])
           )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddrees")
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_traderAddress");
         });
 
@@ -207,7 +194,7 @@ describe("Trader Wallet Contract Tests", function () {
               ZERO_ADDRESS,
             ])
           )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddrees")
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_dynamicValueAddress");
         });
       });
@@ -295,7 +282,7 @@ describe("Trader Wallet Contract Tests", function () {
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "ZeroAddrees"
+                    "ZeroAddress"
                   )
                   .withArgs("_vaultAddress");
               });
@@ -345,7 +332,7 @@ describe("Trader Wallet Contract Tests", function () {
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "ZeroAddrees"
+                    "ZeroAddress"
                   )
                   .withArgs("_adaptersRegistryAddress");
               });
@@ -395,7 +382,7 @@ describe("Trader Wallet Contract Tests", function () {
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "ZeroAddrees"
+                    "ZeroAddress"
                   )
                   .withArgs("_contractsFactoryAddress");
               });
@@ -445,7 +432,7 @@ describe("Trader Wallet Contract Tests", function () {
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "ZeroAddrees"
+                    "ZeroAddress"
                   )
                   .withArgs("_dynamicValueAddress");
               });
@@ -498,7 +485,7 @@ describe("Trader Wallet Contract Tests", function () {
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "ZeroAddrees"
+                    "ZeroAddress"
                   )
                   .withArgs("_underlyingTokenAddress");
               });
@@ -529,15 +516,15 @@ describe("Trader Wallet Contract Tests", function () {
 
         describe("WHEN trying to set the traderAddress", async () => {
           let FactoryOfContractsFactory: ContractFactory;
-          let contractsFactoryContract: ContractsFactory;
+          let contractsFactoryContract: ContractsFactoryMock;
 
           before(async () => {
             // deploy mocked factory
             FactoryOfContractsFactory = await ethers.getContractFactory(
-              "ContractsFactory"
+              "ContractsFactoryMock"
             );
             contractsFactoryContract =
-              (await FactoryOfContractsFactory.deploy()) as ContractsFactory;
+              (await FactoryOfContractsFactory.deploy()) as ContractsFactoryMock;
             await contractsFactoryContract.deployed();
 
             // change address to mocked factory
@@ -565,7 +552,7 @@ describe("Trader Wallet Contract Tests", function () {
                 )
                   .to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "ZeroAddrees"
+                    "ZeroAddress"
                   )
                   .withArgs("_traderAddress");
               });
@@ -614,18 +601,17 @@ describe("Trader Wallet Contract Tests", function () {
           });
         });
 
-        describe("WHEN trying to add/remove protocol id to traderSelectedProtocols array", async () => {
+        describe("WHEN trying to add/remove adapter to be used by trader", async () => {
           let AdaptersRegistryFactory: ContractFactory;
-          let adaptersRegistryContract: AdaptersRegistry;
-          const PROTOCOL_ID = BigNumber.from(10);
+          let adaptersRegistryContract: AdaptersRegistryMock;
 
           before(async () => {
             // deploy mocked adaptersRegistry
             AdaptersRegistryFactory = await ethers.getContractFactory(
-              "AdaptersRegistry"
+              "AdaptersRegistryMock"
             );
             adaptersRegistryContract =
-              (await AdaptersRegistryFactory.deploy()) as AdaptersRegistry;
+              (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
             await adaptersRegistryContract.deployed();
 
             // change address to mocked adaptersRegistry
@@ -637,117 +623,141 @@ describe("Trader Wallet Contract Tests", function () {
             await reverter.revert();
           });
 
-          describe("WHEN trying to add a protocol to use (addProtocolToUse)", async () => {
+          describe("WHEN trying to add an adapter to use (addAdapterToUse)", async () => {
             describe("WHEN calling with invalid caller or parameters", function () {
               describe("WHEN caller is not trader", function () {
                 it("THEN it should fail", async () => {
                   await expect(
                     traderWalletContract
                       .connect(nonAuthorized)
-                      .addProtocolToUse(PROTOCOL_ID)
+                      .addAdapterToUse(otherAddress)
                   ).to.be.revertedWithCustomError(
                     traderWalletContract,
                     "CallerNotAllowed"
                   );
                 });
               });
-              describe("WHEN protocolID does not exist in registry", function () {
+              describe("WHEN adapter does not exist in registry", function () {
                 before(async () => {
-                  // change returnAddress to return address(0) on function call
-                  await adaptersRegistryContract.setReturnAddress(ZERO_ADDRESS);
-                });
-                it("THEN it should fail", async () => {
-                  await expect(
-                    traderWalletContract
-                      .connect(trader)
-                      .addProtocolToUse(PROTOCOL_ID)
-                  ).to.be.revertedWithCustomError(
-                    traderWalletContract,
-                    "InvalidProtocolID"
-                  );
-                });
-              });
-              describe("WHEN protocolID exists but adapter is not allowed", function () {
-                before(async () => {
-                  // change returnAddress to return an address on function call
-                  await adaptersRegistryContract.setReturnAddress(otherAddress);
-
-                  // change returnValue to return false on function call
+                  // change returnValue to adapter registry to fail on function call
                   await adaptersRegistryContract.setReturnValue(false);
                 });
                 it("THEN it should fail", async () => {
                   await expect(
                     traderWalletContract
                       .connect(trader)
-                      .addProtocolToUse(PROTOCOL_ID)
+                      .addAdapterToUse(otherAddress)
                   ).to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "InvalidProtocolID"
+                    "InvalidAdapter"
                   );
                 });
               });
             });
 
             describe("WHEN calling with correct caller and address", function () {
-              before(async () => {
-                // change returnAddress to return an address on function call
-                await adaptersRegistryContract.setReturnAddress(otherAddress);
+              let adapter1Address: string;
 
+              before(async () => {
                 // change returnValue to return true on function call
                 await adaptersRegistryContract.setReturnValue(true);
 
+                adapter1Address = otherAddress;
                 txResult = await traderWalletContract
                   .connect(trader)
-                  .addProtocolToUse(PROTOCOL_ID);
+                  .addAdapterToUse(adapter1Address);
               });
 
-              it("THEN new protocol id should be added to array", async () => {
+              it("THEN new adapter should be added to array", async () => {
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(0)
-                ).to.equal(PROTOCOL_ID);
+                  await traderWalletContract.traderSelectedAdaptersArray(0)
+                ).to.equal(adapter1Address);
               });
               it("THEN it should emit an Event", async () => {
                 await expect(txResult)
-                  .to.emit(traderWalletContract, "ProtocolToUseAdded")
-                  .withArgs(PROTOCOL_ID, traderAddress);
+                  .to.emit(traderWalletContract, "AdapterToUseAdded")
+                  .withArgs(adapter1Address, traderAddress);
+              });
+              it("THEN new adapter should be added to mapping", async () => {
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter1Address
+                  )
+                ).to.be.true;
               });
             });
           });
 
-          describe("WHEN trying to remove a protocol (removeProtocolToUse)", async () => {
+          describe("WHEN trying to remove an adapter (removeAdapterToUse)", async () => {
+            // otherAddress is already added from previous flow (addAdapterToUse)
+            // to add now deployerAddress, contractsFactoryAddress, dynamicValueAddress
+            // just to store something and test the function
+            let adapter1Address: string;
+            let adapter2Address: string;
+            let adapter3Address: string;
+            let adapter4Address: string;
+
             before(async () => {
-              // 10 is already added from previous flow (addProtocolToUse)
-              // to add 11-12-13
-              await addProtocolsToUse(
-                traderWalletContract,
-                trader,
-                PROTOCOL_ID.add(1),
-                3
-              );
+              adapter1Address = otherAddress;
+              adapter2Address = deployerAddress;
+              adapter3Address = contractsFactoryAddress;
+              adapter4Address = dynamicValueAddress;
+
+              await traderWalletContract
+                .connect(trader)
+                .addAdapterToUse(adapter2Address);
+              await traderWalletContract
+                .connect(trader)
+                .addAdapterToUse(adapter3Address);
+              await traderWalletContract
+                .connect(trader)
+                .addAdapterToUse(adapter4Address);
             });
 
-            describe("WHEN checking protocols IDs", function () {
+            describe("WHEN checking adapters", function () {
               it("THEN it should return correct values", async () => {
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(0)
-                ).to.equal(PROTOCOL_ID);
+                  await traderWalletContract.traderSelectedAdaptersArray(0)
+                ).to.equal(adapter1Address);
 
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(1)
-                ).to.equal(PROTOCOL_ID.add(1));
+                  await traderWalletContract.traderSelectedAdaptersArray(1)
+                ).to.equal(adapter2Address);
 
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(2)
-                ).to.equal(PROTOCOL_ID.add(2));
+                  await traderWalletContract.traderSelectedAdaptersArray(2)
+                ).to.equal(adapter3Address);
 
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(3)
-                ).to.equal(PROTOCOL_ID.add(3));
+                  await traderWalletContract.traderSelectedAdaptersArray(3)
+                ).to.equal(adapter4Address);
               });
               it("THEN it should return correct array length", async () => {
                 expect(
-                  await traderWalletContract.getTraderSelectedProtocolsLength()
+                  await traderWalletContract.getTraderSelectedAdaptersLength()
                 ).to.equal(BigNumber.from(4));
+              });
+              it("THEN adapters mapping should return correct vaules", async () => {
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter1Address
+                  )
+                ).to.be.true;
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter2Address
+                  )
+                ).to.be.true;
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter3Address
+                  )
+                ).to.be.true;
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter4Address
+                  )
+                ).to.be.true;
               });
             });
 
@@ -757,22 +767,22 @@ describe("Trader Wallet Contract Tests", function () {
                   await expect(
                     traderWalletContract
                       .connect(nonAuthorized)
-                      .removeProtocolToUse(PROTOCOL_ID)
+                      .removeAdapterToUse(adapter1Address)
                   ).to.be.revertedWithCustomError(
                     traderWalletContract,
                     "CallerNotAllowed"
                   );
                 });
               });
-              describe("WHEN protocolID does not exist in array", function () {
+              describe("WHEN adapter does not exist in array", function () {
                 it("THEN it should fail", async () => {
                   await expect(
                     traderWalletContract
                       .connect(trader)
-                      .removeProtocolToUse(PROTOCOL_ID.sub(1))
+                      .removeAdapterToUse(vaultAddress)
                   ).to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "InvalidProtocolID"
+                    "InvalidAdapter"
                   );
                 });
               });
@@ -782,31 +792,53 @@ describe("Trader Wallet Contract Tests", function () {
               before(async () => {
                 txResult = await traderWalletContract
                   .connect(trader)
-                  .removeProtocolToUse(PROTOCOL_ID.add(2));
+                  .removeAdapterToUse(adapter3Address);
               });
 
-              it("THEN new protocol id should be removed from array", async () => {
+              it("THEN adapter should be removed from array", async () => {
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(0)
-                ).to.equal(PROTOCOL_ID);
+                  await traderWalletContract.traderSelectedAdaptersArray(0)
+                ).to.equal(adapter1Address);
 
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(1)
-                ).to.equal(PROTOCOL_ID.add(1));
+                  await traderWalletContract.traderSelectedAdaptersArray(1)
+                ).to.equal(adapter2Address);
 
                 expect(
-                  await traderWalletContract.traderSelectedProtocols(2)
-                ).to.equal(PROTOCOL_ID.add(3));
+                  await traderWalletContract.traderSelectedAdaptersArray(2)
+                ).to.equal(adapter4Address);
               });
               it("THEN it should return correct array length", async () => {
                 expect(
-                  await traderWalletContract.getTraderSelectedProtocolsLength()
+                  await traderWalletContract.getTraderSelectedAdaptersLength()
                 ).to.equal(BigNumber.from(3));
               });
               it("THEN it should emit an Event", async () => {
                 await expect(txResult)
-                  .to.emit(traderWalletContract, "ProtocolToUseRemoved")
-                  .withArgs(PROTOCOL_ID.add(2), traderAddress);
+                  .to.emit(traderWalletContract, "AdapterToUseRemoved")
+                  .withArgs(adapter3Address, traderAddress);
+              });
+              it("THEN adapters mapping should return correct vaules", async () => {
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter1Address
+                  )
+                ).to.be.true;
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter2Address
+                  )
+                ).to.be.true;
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter3Address
+                  )
+                ).to.be.false;
+                expect(
+                  await traderWalletContract.traderSelectedAdaptersMapping(
+                    adapter4Address
+                  )
+                ).to.be.true;
               });
             });
           });
@@ -1047,9 +1079,9 @@ describe("Trader Wallet Contract Tests", function () {
 
         describe("WHEN trying to make an executeOnAdapter call", async () => {
           let AdaptersRegistryFactory: ContractFactory;
-          let adaptersRegistryContract: AdaptersRegistry;
-          let AdapterOperationsFactory: ContractFactory;
-          let adapterOperationsContract: AdapterOperations;
+          let adaptersRegistryContract: AdaptersRegistryMock;
+          let AdapterFactory: ContractFactory;
+          let adapterContract: AdapterMock;
 
           const traderOperation = {
             _operationId: 10,
@@ -1090,7 +1122,7 @@ describe("Trader Wallet Contract Tests", function () {
               _value: ethers.utils.parseUnits("100", "ether").toString(),
             },
             {
-              _order:BigNumber.from(3),
+              _order: BigNumber.from(3),
               _type: utils.formatBytes32String("uint256"),
               // _value: "3000000000000000000",
               _value: ethers.utils.parseUnits("300", "ether").toString(),
@@ -1157,7 +1189,7 @@ describe("Trader Wallet Contract Tests", function () {
                     )
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
-                  "InvalidProtocolID"
+                  "InvalidAdapter"
                 );
               });
             });
@@ -1183,7 +1215,7 @@ describe("Trader Wallet Contract Tests", function () {
                     )
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
-                  "InvalidProtocolID"
+                  "InvalidAdapter"
                 );
               });
             });
@@ -1317,22 +1349,23 @@ describe("Trader Wallet Contract Tests", function () {
                 );
 
                 txResult = await traderWalletContract
-                .connect(trader)
-                .executeOnAdapter(
-                  PROTOCOL_ID,
-                  traderOperation,
-                  parameters,
-                  false
-                )
+                  .connect(trader)
+                  .executeOnAdapter(
+                    PROTOCOL_ID,
+                    traderOperation,
+                    parameters,
+                    false
+                  );
               });
               it("THEN it should emit an Event", async () => {
-                await expect(txResult)
-                  .to.emit(traderWalletContract, "OperationExecuted")
-                  // .withArgs(PROTOCOL_ID,  { _timestamp: undefined } as any, "trader wallet", false, { _initialBalance: undefined } as any );
+                await expect(txResult).to.emit(
+                  traderWalletContract,
+                  "OperationExecuted"
+                );
+                // .withArgs(PROTOCOL_ID,  { _timestamp: undefined } as any, "trader wallet", false, { _initialBalance: undefined } as any );
               });
-
-              
             });
+            /*
             xdescribe("WHEN trader tx succeed but user vault fails", function () {
               let UserVaultFactory: ContractFactory;
               let userVaultContract: UserVault;
@@ -1392,6 +1425,7 @@ describe("Trader Wallet Contract Tests", function () {
                   .withArgs("user");
               });
             });
+            */
           });
         });
       });

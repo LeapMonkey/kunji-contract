@@ -3,7 +3,7 @@ pragma solidity ^0.8.9;
 
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
-contract AdapterOperations {
+contract AdapterMock {
     bool public generalReturnValue;
     address public returnAddress;
     bool public operationAllowed;

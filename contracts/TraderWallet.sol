@@ -7,7 +7,9 @@ import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
-import {IUserVault} from "./interfaces/IUserVault.sol";
+import {IUsersVault} from "./interfaces/IUsersVault.sol";
+
+/// import its own interface as well
 
 // import "hardhat/console.sol";
 
@@ -27,25 +29,24 @@ contract TraderWallet is OwnableUpgradeable {
     uint256 public afterRoundVaultBalance;
     uint256 public ratioPropotions;
     uint256 public ratioShares;
-    uint256[] public traderSelectedProtocols;
+    address[] public traderSelectedAdaptersArray;
+    mapping(address => bool) public traderSelectedAdaptersMapping;
 
     uint256[50] __gap;
 
-    error ZeroAddrees(string _target);
+    error ZeroAddress(string target);
     error ZeroAmount();
     error UnderlyingAssetNotAllowed();
     error CallerNotAllowed();
     error NewTraderNotAllowed();
-    error InvalidProtocolID();
-    error InvalidOperation(string _target);
-    error AdapterOperationFailed(string _target);
+    error InvalidAdapter();
+    error InvalidOperation(string target);
+    error AdapterOperationFailed(string target);
     error ApproveFailed(address caller, address token, uint256 amount);
     error TokenTransferFailed();
     error RolloverFailed();
     error SendToTraderFailed();
     error AmountToScaleNotFound();
-    error NothingToScale();
-
 
     event VaultAddressSet(address indexed vaultAddress);
     event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
@@ -53,12 +54,9 @@ contract TraderWallet is OwnableUpgradeable {
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
     event DynamicValueAddressSet(address indexed dynamicValueAddress);
-    event ProtocolToUseAdded(
-        uint256 indexed protocolId,
-        address indexed trader
-    );
-    event ProtocolToUseRemoved(
-        uint256 indexed protocolId,
+    event AdapterToUseAdded(address indexed adapter, address indexed trader);
+    event AdapterToUseRemoved(
+        address indexed adapter,
         address indexed trader
     );
 
@@ -75,14 +73,15 @@ contract TraderWallet is OwnableUpgradeable {
     );
 
     event OperationExecuted(
-        uint256 _protocolId,
-        uint256 _timestamp,
-        string _contract,
-        bool _replicate,
-        uint256 _initialBalance
+        address adapterAddress,
+        uint256 timestamp,
+        string target,
+        bool replicate,
+        uint256 initialBalance,
+        uint256 walletRatio
     );
 
-    event RolloverExecuted(uint256 _timestamp, uint256 _round);
+    event RolloverExecuted(uint256 timestamp, uint256 round);
 
     modifier onlyUnderlying(address _tokenAddress) {
         if (_tokenAddress != underlyingTokenAddress)
@@ -95,8 +94,8 @@ contract TraderWallet is OwnableUpgradeable {
         _;
     }
 
-    modifier onlyValidAddress(address _variable, string memory _message) {
-        if (_variable == address(0)) revert ZeroAddrees({_target: _message});
+    modifier notZeroAddress(address _variable, string memory _message) {
+        if (_variable == address(0)) revert ZeroAddress({target: _message});
         _;
     }
 
@@ -108,18 +107,22 @@ contract TraderWallet is OwnableUpgradeable {
         address _traderAddress,
         address _dynamicValueAddress
     ) external initializer {
+        // CHECK CALLER IS THE FACTORY
+
         if (_vaultAddress == address(0))
-            revert ZeroAddrees({_target: "_vaultAddress"});
+            revert ZeroAddress({target: "_vaultAddress"});
         if (_underlyingTokenAddress == address(0))
-            revert ZeroAddrees({_target: "_underlyingTokenAddress"});
+            revert ZeroAddress({target: "_underlyingTokenAddress"});
         if (_adaptersRegistryAddress == address(0))
-            revert ZeroAddrees({_target: "_adaptersRegistryAddress"});
+            revert ZeroAddress({target: "_adaptersRegistryAddress"});
         if (_contractsFactoryAddress == address(0))
-            revert ZeroAddrees({_target: "_contractsFactoryAddress"});
+            revert ZeroAddress({target: "_contractsFactoryAddress"});
         if (_traderAddress == address(0))
-            revert ZeroAddrees({_target: "_traderAddress"});
+            revert ZeroAddress({target: "_traderAddress"});
+        // CHECK TRADER IS ALLOWED
+
         if (_dynamicValueAddress == address(0))
-            revert ZeroAddrees({_target: "_dynamicValueAddress"});
+            revert ZeroAddress({target: "_dynamicValueAddress"});
 
         __Ownable_init();
 
@@ -140,7 +143,7 @@ contract TraderWallet is OwnableUpgradeable {
 
     function setVaultAddress(
         address _vaultAddress
-    ) external onlyOwner onlyValidAddress(_vaultAddress, "_vaultAddress") {
+    ) external onlyOwner notZeroAddress(_vaultAddress, "_vaultAddress") {
         emit VaultAddressSet(_vaultAddress);
         vaultAddress = _vaultAddress;
     }
@@ -150,7 +153,7 @@ contract TraderWallet is OwnableUpgradeable {
     )
         external
         onlyOwner
-        onlyValidAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress")
+        notZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress")
     {
         emit AdaptersRegistryAddressSet(_adaptersRegistryAddress);
         adaptersRegistryAddress = _adaptersRegistryAddress;
@@ -161,7 +164,7 @@ contract TraderWallet is OwnableUpgradeable {
     )
         external
         onlyOwner
-        onlyValidAddress(_dynamicValueAddress, "_dynamicValueAddress")
+        notZeroAddress(_dynamicValueAddress, "_dynamicValueAddress")
     {
         emit DynamicValueAddressSet(_dynamicValueAddress);
         dynamicValueAddress = _dynamicValueAddress;
@@ -172,7 +175,7 @@ contract TraderWallet is OwnableUpgradeable {
     )
         external
         onlyOwner
-        onlyValidAddress(_contractsFactoryAddress, "_contractsFactoryAddress")
+        notZeroAddress(_contractsFactoryAddress, "_contractsFactoryAddress")
     {
         emit ContractsFactoryAddressSet(_contractsFactoryAddress);
         contractsFactoryAddress = _contractsFactoryAddress;
@@ -183,7 +186,7 @@ contract TraderWallet is OwnableUpgradeable {
     )
         external
         onlyTrader
-        onlyValidAddress(_underlyingTokenAddress, "_underlyingTokenAddress")
+        notZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress")
     {
         emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
         underlyingTokenAddress = _underlyingTokenAddress;
@@ -191,7 +194,7 @@ contract TraderWallet is OwnableUpgradeable {
 
     function setTraderAddress(
         address _traderAddress
-    ) external onlyOwner onlyValidAddress(_traderAddress, "_traderAddress") {
+    ) external onlyOwner notZeroAddress(_traderAddress, "_traderAddress") {
         if (
             !IContractsFactory(contractsFactoryAddress).isTraderAllowed(
                 _traderAddress
@@ -202,30 +205,78 @@ contract TraderWallet is OwnableUpgradeable {
         traderAddress = _traderAddress;
     }
 
-    function addProtocolToUse(uint256 _protocolId) external onlyTrader {
-        (bool isValidProtocol, ) = _isProtocolValid(_protocolId);
+    function addAdapterToUse(address _adapterAddress) external onlyTrader {
+        if (
+            !IAdaptersRegistry(adaptersRegistryAddress).isValidAdapter(
+                _adapterAddress
+            )
+        ) revert InvalidAdapter();
+        emit AdapterToUseAdded(_adapterAddress, _msgSender());
 
-        if (!isValidProtocol) revert InvalidProtocolID();
+        /* 
+        MAKES APPROVAL OF UNDERLYING HERE ???
+        MAKES APPROVAL OF UNDERLYING HERE ???
 
-        emit ProtocolToUseAdded(_protocolId, _msgSender());
+        if (
+            !IERC20Upgradeable(underlyingTokenAddress).approve(
+                _adapterAddress,
+                type(uint256).max
+            )
+        ) {
+            revert ApproveFailed({
+                caller: _msgSender(),
+                token: underlyingTokenAddress,
+                amount: type(uint256).max
+            });
+        }
+        */
 
-        traderSelectedProtocols.push(_protocolId);
+        // store the adapter on the array
+        traderSelectedAdaptersArray.push(_adapterAddress);
+        // store the adapter in the mapping
+        traderSelectedAdaptersMapping[_adapterAddress] = true;
     }
 
-    function removeProtocolToUse(uint256 _protocolId) external onlyTrader {
+    function removeAdapterToUse(address _adapterAddress) external onlyTrader {
         bool found = false;
-        for (uint256 i = 0; i < traderSelectedProtocols.length; i++) {
-            if (traderSelectedProtocols[i] == _protocolId) {
-                emit ProtocolToUseRemoved(_protocolId, _msgSender());
 
-                traderSelectedProtocols[i] = traderSelectedProtocols[
-                    traderSelectedProtocols.length - 1
+        for (uint256 i = 0; i < traderSelectedAdaptersArray.length; i++) {
+            if (traderSelectedAdaptersArray[i] == _adapterAddress) {
+                emit AdapterToUseRemoved(_adapterAddress, _msgSender());
+
+                // put the last in the found index
+                traderSelectedAdaptersArray[i] = traderSelectedAdaptersArray[
+                    traderSelectedAdaptersArray.length - 1
                 ];
-                traderSelectedProtocols.pop();
+                // remove the last one because it was alredy put in found index
+                traderSelectedAdaptersArray.pop();
+                // flag
                 found = true;
+                // remove from the mapping
+                delete traderSelectedAdaptersMapping[_adapterAddress];
+                // // disable on mapping
+                // traderSelectedAdaptersMapping[_adapterAddress] = false;
             }
         }
-        if (!found) revert InvalidProtocolID();
+        if (!found) revert InvalidAdapter();
+
+        // REMOVE ALLOWANCE OF UNDERLYING ????
+        // REMOVE ALLOWANCE OF UNDERLYING ????
+        // REMOVE ALLOWANCE OF UNDERLYING ????
+        /*
+        if (
+            !IERC20Upgradeable(underlyingTokenAddress).approve(
+                _adapterAddress,
+                0
+            )
+        ) {
+            revert ApproveFailed({
+                caller: _msgSender(),
+                token: underlyingTokenAddress,
+                amount: 0
+            });
+        }
+        */
     }
 
     //
@@ -274,29 +325,31 @@ contract TraderWallet is OwnableUpgradeable {
         cumulativePendingWithdrawals = cumulativePendingWithdrawals + _amount;
     }
 
-    function getApproval(
-        uint256 _protocolId,
-        address _token,
-        uint256 _amount
-    ) external returns (bool) {
-        // check if protocol id is valid
-        (bool isValidProtocol, address adapterAddress) = _isProtocolValid(
-            _protocolId
-        );
-        if (!isValidProtocol) revert InvalidProtocolID();
+    function setAdapterAllowanceOnToken(
+        address _adapterAddress,
+        address _tokenAddress,
+        bool _revoke
+    ) external onlyTrader returns (bool) {
+        if (
+            !IAdaptersRegistry(adaptersRegistryAddress).isValidAdapter(
+                _adapterAddress
+            )
+        ) revert InvalidAdapter();
+
+        uint256 amount;
+        if (!_revoke) amount = type(uint256).max;
+        else amount = 0;
 
         if (
-            !IERC20Upgradeable(underlyingTokenAddress).approve(
-                adapterAddress,
-                _amount
-            )
+            !IERC20Upgradeable(_tokenAddress).approve(_adapterAddress, amount)
         ) {
             revert ApproveFailed({
                 caller: _msgSender(),
-                token: _token,
-                amount: _amount
+                token: _tokenAddress,
+                amount: amount
             });
         }
+
         return true;
     }
 
@@ -308,116 +361,83 @@ contract TraderWallet is OwnableUpgradeable {
     // FIRST TRADE FLAG
 
     function executeOnAdapter(
-        uint256 _protocolId,
+        address _adapterAddress,
         IAdapter.AdapterOperation memory _traderOperation,
-        IAdapter.Parameters[] memory _parameters,
         bool _replicate
-    ) external onlyTrader {
-        // check if protocol id is valid
-        (bool isValidProtocol, address adapterAddress) = _isProtocolValid(
-            _protocolId
+    ) external onlyTrader returns(bool) {
+        // check if adapter is selected by trader
+        if (!traderSelectedAdaptersMapping[_adapterAddress])
+            revert InvalidAdapter();
+
+    
+        uint256 walletRatio = 1e18;
+        // execute operation with ratio equals to 1 because it is for trader, not scaling
+        // returns success or not
+        bool success = IAdapter(_adapterAddress).executeOperations(
+            walletRatio,
+            _traderOperation
         );
-        if (!isValidProtocol) revert InvalidProtocolID();
-
-        // check if operations on adapters are valid
-        if (!IAdapter(adapterAddress).isOperationAllowed(_traderOperation))
-            revert InvalidOperation({_target: "_traderOperationStruct"});
-
-        // DELEGATE CALL        
-        /*
-            // IAdapter adapter = IAdapter(adapterAddress);
-            // (bool success, bytes memory returnedData) = address(adapter)
-            //     .delegatecall(
-            //         abi.encodeWithSignature(
-            //             "executeOperations((uint8,bytes),Parameters[])",
-            //             _traderOperation,
-            //             _parameters
-            //         )
-            //     );
-            // IAdapter.Parameters[] memory toScaleParameters;
-            // (success, toScaleParameters) = abi.decode(
-            //     returnedData,
-            //     (bool, IAdapter.Parameters[])
-            // );
-        */
-
-        // execute operation
-        // returns success and the params to be scaled
-        (
-            bool success,
-            IAdapter.Parameters[] memory toScaleParameters
-        ) = IAdapter(adapterAddress).executeOperations(
-                _traderOperation,
-                _parameters
-            );
 
         // check operation success
-        if (!success) revert AdapterOperationFailed({_target: "trader"});
+        if (!success) revert AdapterOperationFailed({target: "trader"});
 
-        // contract should receive funds HERE
-        // contract should receive funds HERE
-        // contract should receive funds HERE
-
-        if (_replicate && toScaleParameters.length == 0) {
-            // revert if operation does not return an array to scale values
-            revert NothingToScale();
-        }
+        // contract should receive tokens HERE
 
         emit OperationExecuted(
-            _protocolId,
+            _adapterAddress,
             block.timestamp,
             "trader wallet",
             _replicate,
-            initialTraderBalance
+            initialTraderBalance,
+            walletRatio
         );
 
         // if tx needs to be replicated on vault
         if (_replicate) {
-            // scale parameters
-            IAdapter.Parameters[]
-                memory scaledParameters = _scaleTraderOperation(
-                    toScaleParameters,
-                    _parameters
-                );
+            
+            ////////////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////////////
+            walletRatio = 1e18;
+            ////////////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////////////
+            success = IUsersVault(vaultAddress).executeOnAdapter(_adapterAddress, _traderOperation, walletRatio);
+                
 
-            // call user vault
-            (success, initialVaultBalance) = IUserVault(vaultAddress)
-                .executeOnAdapter(
-                    _protocolId,
-                    _traderOperation,
-                    scaledParameters
-                );
+            /* 
+            FLOW IS NOW ON VAULT, MAYBE IT NEEDS TO CHECK THERE FOR ALL THIS BELOW
 
-            if (!success) revert AdapterOperationFailed({_target: "user"});
+            // check operation success
+            if (!success) revert AdapterOperationFailed({target: "vault"});
+
+            // contract should receive tokens HERE
 
             emit OperationExecuted(
-                _protocolId,
+                _adapterAddress,
                 block.timestamp,
-                "user vault",
+                "users vault",
                 _replicate,
-                initialVaultBalance
+                initialVaultBalance,
+                walletRatio
             );
+            */
         }
+        return true;
     }
 
-    /*
-
-        FUNCTION TO TRANSFER FUNDS TO TRADER WHEN ROLLOVER
-        BEING CALLED BY VAULT
-
-    */
 
     function totalAssets() public view returns (uint256) {
         // Balance of UNDERLYING ASSET + Value of positions on adapters
         // this will call to the DynamicValuationContract
     }
 
-    function getTraderSelectedProtocolsLength()
+    function getTraderSelectedAdaptersLength()
         external
         view
         returns (uint256)
     {
-        return traderSelectedProtocols.length;
+        return traderSelectedAdaptersArray.length;
     }
 
     function getCumulativePendingWithdrawals() external view returns (uint256) {
@@ -428,6 +448,13 @@ contract TraderWallet is OwnableUpgradeable {
         return cumulativePendingDeposits;
     }
 
+    /*
+
+        FUNCTION TO TRANSFER FUNDS TO TRADER WHEN ROLLOVER
+        BEING CALLED BY VAULT
+
+    */
+
     // not sure if the execution is here. Don't think so
     function rollover() external onlyTrader {
         bool firstRollover = true;
@@ -435,14 +462,14 @@ contract TraderWallet is OwnableUpgradeable {
         if (!firstRollover) {
             afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
                 .balanceOf(address(this));
-            afterRoundVaultBalance = IUserVault(vaultAddress)
+            afterRoundVaultBalance = IUsersVault(vaultAddress)
                 .getVaultInitialBalance();
         } else {
             // store the first ratio between shares and deposit
             ratioShares = 1;
         }
 
-        bool success = IUserVault(vaultAddress).rolloverFromTrader();
+        bool success = IUsersVault(vaultAddress).rolloverFromTrader();
         if (!success) revert RolloverFailed();
 
         // send to trader account
@@ -454,83 +481,17 @@ contract TraderWallet is OwnableUpgradeable {
 
         emit RolloverExecuted(
             block.timestamp,
-            IUserVault(vaultAddress).getRound()
+            IUsersVault(vaultAddress).getRound()
         );
 
         // get values for next round proportions
         initialTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
             .balanceOf(address(this));
-        initialVaultBalance = IUserVault(vaultAddress).getVaultInitialBalance();
-        ratioPropotions = initialVaultBalance / initialTraderBalance;
+        initialVaultBalance = IUsersVault(vaultAddress).getVaultInitialBalance();
+        ratioPropotions = getRatio();
     }
 
-    function _isProtocolValid(
-        uint256 _protocolId
-    ) internal view returns (bool, address) {
-        address adapterAddress = IAdaptersRegistry(adaptersRegistryAddress)
-            .getAdapterAddressFromId(_protocolId);
-
-        if (adapterAddress == address(0)) return (false, address(0));
-
-        return (
-            IAdaptersRegistry(adaptersRegistryAddress).isAdapterAllowed(
-                adapterAddress
-            ),
-            adapterAddress
-        );
-    }
-
-    function _scaleTraderOperation(
-        IAdapter.Parameters[] memory _toScaleParameters,
-        IAdapter.Parameters[] memory _traderParameters
-    ) internal returns (IAdapter.Parameters[] memory) {
-        // new array with the scaled parameter
-        IAdapter.Parameters[]
-            memory scaledParameters = new IAdapter.Parameters[](
-                _traderParameters.length
-            );
-
-        // copy the array completely
-        for (uint256 i; i < _traderParameters.length; i++) {
-            scaledParameters[i]._order = _traderParameters[i]._order;
-            scaledParameters[i]._type = _traderParameters[i]._type;
-            scaledParameters[i]._value = _traderParameters[i]._value;
-        }
-
-        // copy the array completely
-        for (uint256 i; i < _toScaleParameters.length; i++) {
-            scaledParameters[_toScaleParameters[i]._order]
-                ._value = _getScaledValue(_toScaleParameters[i]._value);
-        }
-
-        // return the array with the
-        return scaledParameters;
-    }
-
-    function _getScaledValue(
-        string memory _toScaleValue
-    ) internal returns (string memory) {
-        uint256 value = getNumberFromString(_toScaleValue);
-        ratioPropotions = initialVaultBalance / initialTraderBalance;
-        uint256 scaledValue = value * ratioPropotions;
-        return uintToString(scaledValue);
-    }
-
-    function getNumberFromString(
-        string memory str
-    ) public pure returns (uint256) {
-        bytes memory strBytes = bytes(str);
-        uint256 num = 0;
-        for (uint i = 0; i < strBytes.length; i++) {
-            uint256 digit = uint256(uint8(strBytes[i])) - 48;
-            require(digit <= 9, "Invalid digit");
-            num = num * 10 + digit;
-        }
-        return uint256(num);
-    }
-
-    function uintToString(uint256 num) public pure returns (string memory) {
-        bytes memory numBytes = abi.encodePacked(num);
-        return string(numBytes);
-    }
+    function getRatio() public view returns(uint256) {
+        return initialVaultBalance / initialTraderBalance;
+    }    
 }

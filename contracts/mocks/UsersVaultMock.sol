@@ -4,7 +4,7 @@ pragma solidity ^0.8.9;
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
-contract UserVault {
+contract UsersVaultMock {
     bool public generalReturnValue;
     address public returnAddress;
     bool public operationAllowed;
