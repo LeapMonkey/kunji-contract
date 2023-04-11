@@ -42,6 +42,7 @@ contract TraderWallet is OwnableUpgradeable {
     error InvalidAdapter();
     error InvalidOperation(string target);
     error AdapterOperationFailed(string target);
+    error UsersVaultOperationFailed();
     error ApproveFailed(address caller, address token, uint256 amount);
     error TokenTransferFailed();
     error RolloverFailed();
@@ -403,15 +404,10 @@ contract TraderWallet is OwnableUpgradeable {
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
             success = IUsersVault(vaultAddress).executeOnAdapter(_adapterAddress, _traderOperation, walletRatio);
-                
 
-            /* 
-            FLOW IS NOW ON VAULT, MAYBE IT NEEDS TO CHECK THERE FOR ALL THIS BELOW
-
+            // FLOW IS NOW ON VAULT
             // check operation success
-            if (!success) revert AdapterOperationFailed({target: "vault"});
-
-            // contract should receive tokens HERE
+            if (!success) revert UsersVaultOperationFailed();
 
             emit OperationExecuted(
                 _adapterAddress,
@@ -421,7 +417,6 @@ contract TraderWallet is OwnableUpgradeable {
                 initialVaultBalance,
                 walletRatio
             );
-            */
         }
         return true;
     }

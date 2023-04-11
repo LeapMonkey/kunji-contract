@@ -7,7 +7,6 @@ import {IAdapter} from "../interfaces/IAdapter.sol";
 contract UsersVaultMock {
     bool public generalReturnValue;
     address public returnAddress;
-    bool public operationAllowed;
     bool public executedOperation;
     uint256 public returnAmount;
     address public underlyingTokenAddress;
@@ -36,15 +35,15 @@ contract UsersVaultMock {
     }
 
     function executeOnAdapter(
-        uint256 _protocolId,
+        address _adapterAddress,
         IAdapter.AdapterOperation memory _vaultOperation,
-        IAdapter.Parameters[] memory _parameters        
-    ) external returns (bool, uint256) {
-        _protocolId;                                    // just to avoid warnings
+        uint256 _walletRatio
+    ) external returns (bool) {
+        _adapterAddress;                                    // just to avoid warnings
         _vaultOperation;                                // just to avoid warnings
-        _parameters;                                    // just to avoid warnings
+        _walletRatio;                                    // just to avoid warnings
         executedOperation = executedOperation;          // just to avoid warnings
-        return (executedOperation, returnAmount);
+        return (executedOperation);
     }
 
     function getVaultInitialBalance() external view returns(uint256) {

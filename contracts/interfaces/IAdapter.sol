@@ -24,12 +24,8 @@ interface IAdapter {
         string _value;
     }
 
-    // receives the operation to perform in the adapter 
-    // answers if the operation is one of the generic ones before sending it to the adapter
-    function isOperationAllowed(AdapterOperation memory) external returns(bool);
-    
-    // receives the operation to perform in the adapter and the parameter list (type and value) of the function to be call 
-    // answers if the operation was successfull and how much underlying was used
-    // this uint256 will be used to scale the value in the vault
+  
+    // receives the operation to perform in the adapter and the ratio to scale whatever needed
+    // answers if the operation was successfull 
     function executeOperations(uint256, AdapterOperation memory) external returns(bool);
 }
