@@ -27,7 +27,7 @@ contract TraderWallet is OwnableUpgradeable {
     uint256 public initialVaultBalance;
     uint256 public afterRoundTraderBalance;
     uint256 public afterRoundVaultBalance;
-    uint256 public ratioPropotions;
+    uint256 public ratioProportions;
     uint256 public ratioShares;
     address[] public traderSelectedAdaptersArray;
     mapping(address => bool) public traderSelectedAdaptersMapping;
@@ -56,10 +56,7 @@ contract TraderWallet is OwnableUpgradeable {
     event TraderAddressSet(address indexed traderAddress);
     event DynamicValueAddressSet(address indexed dynamicValueAddress);
     event AdapterToUseAdded(address indexed adapter, address indexed trader);
-    event AdapterToUseRemoved(
-        address indexed adapter,
-        address indexed trader
-    );
+    event AdapterToUseRemoved(address indexed adapter, address indexed trader);
 
     event DepositRequest(
         address indexed account,
@@ -285,14 +282,14 @@ contract TraderWallet is OwnableUpgradeable {
 
     //
     function depositRequest(
-        address _token,
+        address _underlying,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_token) {
+    ) external onlyTrader onlyUnderlying(_underlying) {
         if (_amount == 0) revert ZeroAmount();
 
         if (
             !(
-                IERC20Upgradeable(_token).transferFrom(
+                IERC20Upgradeable(_underlying).transferFrom(
                     _msgSender(),
                     address(this),
                     _amount
@@ -300,28 +297,28 @@ contract TraderWallet is OwnableUpgradeable {
             )
         ) revert TokenTransferFailed();
 
-        emit DepositRequest(_msgSender(), _token, _amount);
+        emit DepositRequest(_msgSender(), _underlying, _amount);
 
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
     function withdrawRequest(
-        address _token,
+        address _underlying,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_token) {
+    ) external onlyTrader onlyUnderlying(_underlying) {
         if (_amount == 0) revert ZeroAmount();
 
         // require(
-        //     IERC20Upgradeable(_token).balanceOf(address(this)) >= _amount,
+        //     IERC20Upgradeable(_underlying).balanceOf(address(this)) >= _amount,
         //     "Insufficient balance to withdraw"
         // );
 
         // require(
-        //     IERC20Upgradeable(_token).transfer(_msgSender(), _amount),
+        //     IERC20Upgradeable(_underlying).transfer(_msgSender(), _amount),
         //     "Token transfer failed"
         // );
 
-        emit WithdrawalRequest(_msgSender(), _token, _amount);
+        emit WithdrawalRequest(_msgSender(), _underlying, _amount);
 
         cumulativePendingWithdrawals = cumulativePendingWithdrawals + _amount;
     }
@@ -365,12 +362,11 @@ contract TraderWallet is OwnableUpgradeable {
         address _adapterAddress,
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
-    ) external onlyTrader returns(bool) {
+    ) external onlyTrader returns (bool) {
         // check if adapter is selected by trader
         if (!traderSelectedAdaptersMapping[_adapterAddress])
             revert InvalidAdapter();
 
-    
         uint256 walletRatio = 1e18;
         // execute operation with ratio equals to 1 because it is for trader, not scaling
         // returns success or not
@@ -395,7 +391,6 @@ contract TraderWallet is OwnableUpgradeable {
 
         // if tx needs to be replicated on vault
         if (_replicate) {
-            
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
@@ -403,7 +398,11 @@ contract TraderWallet is OwnableUpgradeable {
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
-            success = IUsersVault(vaultAddress).executeOnAdapter(_adapterAddress, _traderOperation, walletRatio);
+            success = IUsersVault(vaultAddress).executeOnAdapter(
+                _adapterAddress,
+                _traderOperation,
+                walletRatio
+            );
 
             // FLOW IS NOW ON VAULT
             // check operation success
@@ -421,17 +420,12 @@ contract TraderWallet is OwnableUpgradeable {
         return true;
     }
 
-
     function totalAssets() public view returns (uint256) {
         // Balance of UNDERLYING ASSET + Value of positions on adapters
         // this will call to the DynamicValuationContract
     }
 
-    function getTraderSelectedAdaptersLength()
-        external
-        view
-        returns (uint256)
-    {
+    function getTraderSelectedAdaptersLength() external view returns (uint256) {
         return traderSelectedAdaptersArray.length;
     }
 
@@ -455,13 +449,11 @@ contract TraderWallet is OwnableUpgradeable {
         bool firstRollover = true;
 
         if (!firstRollover) {
-            afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
-                .balanceOf(address(this));
-            afterRoundVaultBalance = IUsersVault(vaultAddress)
-                .getVaultInitialBalance();
+            (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
         } else {
             // store the first ratio between shares and deposit
             ratioShares = 1;
+            firstRollover = false;
         }
 
         bool success = IUsersVault(vaultAddress).rolloverFromTrader();
@@ -469,10 +461,10 @@ contract TraderWallet is OwnableUpgradeable {
 
         // send to trader account
 
-        (bool sent, ) = traderAddress.call{value: cumulativePendingWithdrawals}(
+        (success, ) = traderAddress.call{value: cumulativePendingWithdrawals}(
             ""
         );
-        if (!sent) revert SendToTraderFailed();
+        if (!success) revert SendToTraderFailed();
 
         emit RolloverExecuted(
             block.timestamp,
@@ -480,13 +472,23 @@ contract TraderWallet is OwnableUpgradeable {
         );
 
         // get values for next round proportions
-        initialTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
-            .balanceOf(address(this));
-        initialVaultBalance = IUsersVault(vaultAddress).getVaultInitialBalance();
-        ratioPropotions = getRatio();
+        (initialTraderBalance, initialVaultBalance) = getBalances();
+
+        ratioProportions = calculateRatio();
     }
 
-    function getRatio() public view returns(uint256) {
+    function getBalances() public view returns (uint256, uint256) {
+        return (
+            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)),
+            IUsersVault(vaultAddress).getVaultInitialBalance()
+        );
+    }
+
+    function calculateRatio() public view returns (uint256) {
         return initialVaultBalance / initialTraderBalance;
-    }    
+    }
+
+    function getRatio() public view returns (uint256) {
+        return ratioProportions;
+    }
 }
