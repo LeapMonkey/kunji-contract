@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-// import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-// import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
+// import {SafeERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
-import {SafeERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import {IERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
+import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {ERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
+import {IERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
 
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import {SafeCastUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -25,6 +23,7 @@ contract UsersVault is
     using MathUpgradeable for uint128;
     using SafeCastUpgradeable for uint256;
 
+    error ZeroAddress(string target);
     error ZeroAmount();
 
     error InvalidTime(uint256 timestamp);
@@ -33,7 +32,7 @@ contract UsersVault is
     error ExistingWithdraw();
     error InsufficientShares(uint256 unclaimedShareBalance);
     error InsufficientAssets(uint256 unclaimedAssetBalance);
-
+    error UnderlyingAssetNotAllowed();
     error BatchNotClosed();
     error WithdrawNotInitiated();
     error InvalidRolloverBatch();
@@ -67,6 +66,12 @@ contract UsersVault is
         uint128 unclaimedAssets;
     }
 
+    address public underlyingTokenAddress;
+    address public adaptersRegistryAddress;
+    address public contractsFactoryAddress;
+    address public traderAddress;
+    address public dynamicValueAddress;
+
     uint256 public currentRound = 1;
     // Total amount of total deposit assets in mapped round
     uint128 public pendingDepositAssets;
@@ -82,11 +87,46 @@ contract UsersVault is
 
     uint256 internal constant Q128 = 1 << 128;
 
+    modifier onlyUnderlying(address _tokenAddress) {
+        if (_tokenAddress != underlyingTokenAddress)
+            revert UnderlyingAssetNotAllowed();
+        _;
+    }
+
     // this is the shares token
     // constructor() ERC20("name", "symbol) ERC4626(...) {}
-    function initialize() external initializer {
+    function initialize(
+        address _underlyingTokenAddress,
+        address _adaptersRegistryAddress,
+        address _contractsFactoryAddress,
+        address _traderAddress,
+        address _dynamicValueAddress,
+        IERC4626Upgradeable _sharesToken
+    ) external initializer {
+        // CHECK CALLER IS THE FACTORY
+        // CHECK TRADER IS ALLOWED
+
+        if (_underlyingTokenAddress == address(0))
+            revert ZeroAddress({target: "_underlyingTokenAddress"});
+        if (_adaptersRegistryAddress == address(0))
+            revert ZeroAddress({target: "_adaptersRegistryAddress"});
+        if (_contractsFactoryAddress == address(0))
+            revert ZeroAddress({target: "_contractsFactoryAddress"});
+        if (_traderAddress == address(0))
+            revert ZeroAddress({target: "_traderAddress"});
+
+        if (_dynamicValueAddress == address(0))
+            revert ZeroAddress({target: "_dynamicValueAddress"});
+
         __Ownable_init();
         __Pausable_init();
+        __ERC4626_init(_sharesToken);
+
+        underlyingTokenAddress = _underlyingTokenAddress;
+        adaptersRegistryAddress = _adaptersRegistryAddress;
+        contractsFactoryAddress = _contractsFactoryAddress;
+        traderAddress = _traderAddress;
+        dynamicValueAddress = _dynamicValueAddress;
     }
 
     /**
@@ -190,7 +230,8 @@ contract UsersVault is
         userWithdrawal.pendingShares = userWithdrawShares + shares.toUint128();
         pendingWithdrawShares += shares.toUint128();
     }
-/*
+
+    /*
     function totalAssets()
         public
         view
@@ -212,10 +253,8 @@ contract UsersVault is
         uint256 assetsPerShareX128 = totalAssets().mulDiv(Q128, totalSupply());
         batchAssetsPerShareX128[currentRound] = assetsPerShareX128;
 
-
         // mint the shares (?)
         // TO EACH USER ?
-
 
         // Accept all pending deposits
         pendingDepositAssets = 0;
