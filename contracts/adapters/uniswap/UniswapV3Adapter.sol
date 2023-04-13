@@ -30,7 +30,7 @@ contract UniswapV3Adapter is OwnableUpgradeable {
     uint128 constant public slippageAllowanceMin = 1e15;  // 0.1%
     
     /// @notice The current slippage allowance
-    uint256 public slippage = 1e17;  // 10%
+    uint256 public slippage;
 
 
     error AddressZero();
@@ -40,8 +40,10 @@ contract UniswapV3Adapter is OwnableUpgradeable {
     event SlippageAllowance(uint256 slippage);
 
 
-    function initialize() external initializer{
+    function initialize() external initializer {
         __Ownable_init();
+        uint256 _slippage = 1e17;
+        setSlippageAllowance(_slippage);
     }
 
     /// @notice Executes operation with external protocol
@@ -207,7 +209,7 @@ contract UniswapV3Adapter is OwnableUpgradeable {
 
     /// @notice Sets new slippage allowance value for scaling operations
     /// @param _slippage Slippage value represented in wei (1e17 means 10% slippage allowance)
-    function setSlippageAllowance(uint256 _slippage) external onlyOwner {
+    function setSlippageAllowance(uint256 _slippage) public onlyOwner {
         if (_slippage < slippageAllowanceMin ||
             _slippage > slippageAllowanceMax) revert InvalidSlippage();
         

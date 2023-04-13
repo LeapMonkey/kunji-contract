@@ -33,3 +33,10 @@ export const tokenHolders = {
     "0xc31e54c7a869b9fcbecc14363cf510d1c41fa443",
   ]
 };
+
+export const uniswap = {
+  routerAddress: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+  positionManagerAddress: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+  factoryAddress: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+  quoterAddress: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+}
