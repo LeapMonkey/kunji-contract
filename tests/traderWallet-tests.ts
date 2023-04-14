@@ -96,7 +96,7 @@ describe("Trader Wallet Contract Tests", function () {
     ]);
   });
 
-  describe("Asset Token Deployment Tests", function () {
+  describe("TraderWallet contract Deployment Tests", function () {
     describe("GIVEN a Trader Wallet Factory", function () {
       before(async () => {
         TraderWalletFactory = await ethers.getContractFactory("TraderWallet");
@@ -248,7 +248,6 @@ describe("Trader Wallet Contract Tests", function () {
           expect(await traderWalletContract.dynamicValueAddress()).to.equal(
             dynamicValueAddress
           );
-          expect(await traderWalletContract.owner()).to.equal(ownerAddress);
           expect(await traderWalletContract.owner()).to.equal(ownerAddress);
 
           expect(
@@ -842,14 +841,14 @@ describe("Trader Wallet Contract Tests", function () {
           });
         });
 
-        describe("WHEN trying to make a depositRequest", async () => {
+        describe("WHEN trying to make a traderDeposit", async () => {
           describe("WHEN calling with invalid caller or parameters", function () {
             describe("WHEN caller is not trader", function () {
               it("THEN it should fail", async () => {
                 await expect(
                   traderWalletContract
                     .connect(nonAuthorized)
-                    .depositRequest(underlyingTokenAddress, AMOUNT_100)
+                    .traderDeposit(underlyingTokenAddress, AMOUNT_100)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "CallerNotAllowed"
@@ -862,7 +861,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .depositRequest(otherAddress, AMOUNT_100)
+                    .traderDeposit(otherAddress, AMOUNT_100)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "UnderlyingAssetNotAllowed"
@@ -875,7 +874,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .depositRequest(underlyingTokenAddress, ZERO_AMOUNT)
+                    .traderDeposit(underlyingTokenAddress, ZERO_AMOUNT)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "ZeroAmount"
@@ -894,7 +893,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .depositRequest(underlyingTokenAddress, AMOUNT_100)
+                    .traderDeposit(underlyingTokenAddress, AMOUNT_100)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "TokenTransferFailed"
@@ -909,7 +908,7 @@ describe("Trader Wallet Contract Tests", function () {
             before(async () => {
               txResult = await traderWalletContract
                 .connect(trader)
-                .depositRequest(underlyingTokenAddress, AMOUNT);
+                .traderDeposit(underlyingTokenAddress, AMOUNT);
             });
             after(async () => {
               await reverter.revert();
@@ -924,7 +923,7 @@ describe("Trader Wallet Contract Tests", function () {
             });
             it("THEN it should emit an Event", async () => {
               await expect(txResult)
-                .to.emit(traderWalletContract, "DepositRequest")
+                .to.emit(traderWalletContract, "TraderDeposit")
                 .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
             });
             it("THEN contract balance should increase", async () => {
@@ -948,7 +947,7 @@ describe("Trader Wallet Contract Tests", function () {
               before(async () => {
                 txResult = await traderWalletContract
                   .connect(trader)
-                  .depositRequest(underlyingTokenAddress, AMOUNT);
+                  .traderDeposit(underlyingTokenAddress, AMOUNT);
               });
 
               it("THEN contract should return correct vaules", async () => {
@@ -961,7 +960,7 @@ describe("Trader Wallet Contract Tests", function () {
               });
               it("THEN it should emit an Event", async () => {
                 await expect(txResult)
-                  .to.emit(traderWalletContract, "DepositRequest")
+                  .to.emit(traderWalletContract, "TraderDeposit")
                   .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
               });
               it("THEN contract balance should increase", async () => {

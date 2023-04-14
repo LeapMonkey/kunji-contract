@@ -12,4 +12,9 @@ contract ContractsFactoryMock {
         _trader;                    // just to avoid warnings
         return returnValue;
     }
+
+    function isInvestorAllowed(address _investor) external view returns (bool) {
+        _investor;                    // just to avoid warnings
+        return returnValue;
+    }
 }

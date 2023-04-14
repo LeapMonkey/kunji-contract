@@ -27,5 +27,5 @@ interface IAdapter {
   
     // receives the operation to perform in the adapter and the ratio to scale whatever needed
     // answers if the operation was successfull 
-    function executeOperations(uint256, AdapterOperation memory) external returns(bool);
+    function executeOperation(uint256, AdapterOperation memory) external returns(bool);
 }

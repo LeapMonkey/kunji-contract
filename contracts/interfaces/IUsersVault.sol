@@ -6,8 +6,8 @@ import {IERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/interface
 import {IAdapter} from "./IAdapter.sol";
 
 interface IUsersVault is IERC4626Upgradeable {
-    function executeOnAdapter(
-        address,
+    function executeOnProtocol(
+        uint256,
         IAdapter.AdapterOperation memory,
         uint256
         
