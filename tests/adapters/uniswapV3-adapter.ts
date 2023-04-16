@@ -7,8 +7,9 @@ import {
   ContractTransaction,
   BigNumber,
   utils,
+  constants
 } from "ethers";
-import { ContractsFactory, IQuoterV2, UniswapV3Adapter } from "../../typechain-types";
+import { ContractsFactory, IQuoterV2, UniswapV3Adapter, ERC20Mock, IUniswapV3Pool, IAdapter, IUniswapV3Router, IUniswapV3Factory, INonfungiblePositionManager } from "../../typechain-types";
 import {
     TEST_TIMEOUT,
     ZERO_AMOUNT,
@@ -17,8 +18,13 @@ import {
   } from "../helpers/constants";
 import { tokens, uniswap } from "../helpers/arbitrumAddresses";
 import Reverter from "../helpers/reverter";
+import { deployERC20 } from "../helpers/ERC20Mock/ERC20Mock";
+import { addLiquidity, createPool, initializePool } from "../helpers/UniswapV3/createPool";
+
+
 
 const reverter = new Reverter();
+const abiCoder = new utils.AbiCoder();
 
 let deployer: Signer;
 let vault: Signer;
@@ -57,6 +63,9 @@ let uniswapRouter: IUniswapV3Router;
 let uniswapQuoter: IQuoterV2;
 let uniswapFactory: IUniswapV3Factory;
 let uniswapPositionManager: INonfungiblePositionManager;
+
+let contractUSDT: ERC20Mock;
+let contractUSDC: ERC20Mock;
 
 
 describe("UniswapAdapter", function() {
@@ -199,6 +208,7 @@ describe("UniswapAdapter", function() {
         const newSlippage = utils.parseUnits("0.2", 18);
 
         before(async () => {
+          await reverter.snapshot();
           txResult = await uniswapAdapterContract.setSlippageAllowance(newSlippage);
         });
         after(async () => {
@@ -221,7 +231,7 @@ describe("UniswapAdapter", function() {
         uniswapAdapterContract = await loadFixture(deploy);
       });
 
-      it("Should return amountOut from uniswap", async() => {
+      it("Should return amountOut from uniswap", async () => {
         const fee = 100;
         const path = utils.solidityPack(
             ["address", "uint24", "address"],
@@ -234,7 +244,7 @@ describe("UniswapAdapter", function() {
         expect(amountOut).to.be.gt(amountIn.sub(utils.parseUnits("1", 5)));
       });
 
-      it("Should return amountIn from uniswap", async() => {
+      it("Should return amountIn from uniswap", async () => {
         const fee = 100;
         const path = utils.solidityPack(
             ["address", "uint24", "address"],
@@ -248,10 +258,300 @@ describe("UniswapAdapter", function() {
       });
     });
 
-    describe("Trading tokens", function () {
-      // crate pool
-      // describe trade without ratio
-      // describe trade with ratio
+    describe("Trade operations", async () => {
+
+      let pool: IUniswapV3Pool; 
+      const fee = 100;
+
+      before(async () => {
+        contractUSDT = (await deployERC20("USDT_Mock", "USDT", 6)) as ERC20Mock;
+        contractUSDC = (await deployERC20("USDC_Mock", "USDC", 6)) as ERC20Mock;
+        await contractUSDT.mint(deployerAddress, utils.parseUnits("5000000", 6));
+        await contractUSDC.mint(deployerAddress, utils.parseUnits("5000000", 6));
+
+        await createPool(contractUSDC.address, contractUSDT.address, fee);
+        const poolAddress = await uniswapFactory.getPool(contractUSDT.address, contractUSDC.address, fee);
+        pool = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+
+        const initSqrtPrice = BigNumber.from("79207954401793479052443056521");
+        await initializePool(poolAddress, initSqrtPrice);
+        
+        // token order is important when adding liquidity
+        const token0 = await pool.token0();
+        const token1 = await pool.token1();
+        const tickLower = -5000;
+        const tickUpper = 5000;
+        const amountDesired = utils.parseUnits("100000", 6);
+        await addLiquidity(token0, token1, tickLower, tickUpper, fee, amountDesired, amountDesired);
+      });
+
+      describe("Executing trade operations", function () {
+        describe("Trade with non allowed operation", function () {
+          const ratio = 1;
+
+          it("Should revert if operation is not allowed for adapter", async () => {
+            const operationId = 3;
+            const tradeData = utils.hexlify("0x12345678");
+            const tradeOperation = { operationId, data: tradeData }
+            await expect(uniswapAdapterContract.executeOperation(ratio, tradeOperation))
+              .to.be.revertedWithCustomError(uniswapAdapterContract, "InvalidOperationId");
+          });
+          it("Should revert if operation is not allowed for adapter", async () => {
+            const operationId = 6;
+            const tradeData = utils.hexlify("0x12345678");
+            const tradeOperation = { operationId, data: tradeData }
+            await expect(uniswapAdapterContract.executeOperation(ratio, tradeOperation))
+              .to.be.revertedWithCustomError(uniswapAdapterContract, "InvalidOperationId");
+          });
+        });
+
+        describe("Sell execution WITHOUT scaling (ratio 1e18)", function () {
+          describe("Failing sell operation due to slippage 0%", function () {
+            const operationId = 1;
+            const ratio = utils.parseUnits("1", 18);
+            const amountIn = utils.parseUnits("500", 6);
+            let tradeOperation: IAdapter.AdapterOperationStruct;
+
+            before(async () => {
+              const path = utils.solidityPack(
+                ["address", "uint24", "address"],
+                [contractUSDT.address, fee, contractUSDC.address]
+              );
+              const [ expectedAmountOut ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
+              const amountOutMin = expectedAmountOut.add(1);
+
+              const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
+              tradeOperation = { operationId, data: tradeData };
+              
+              await reverter.snapshot();
+            });
+
+            after(async () => {
+              await reverter.revert();
+            });  
+
+            it("Should revert swap due to slippage", async () => {
+              await contractUSDT.connect(trader).mint(traderAddress, amountIn);
+              await contractUSDT.connect(trader).approve(uniswapAdapterContract.address, amountIn);
+              
+              await expect(uniswapAdapterContract.connect(trader).executeOperation(ratio, tradeOperation))
+                .to.be.revertedWith("Too little received");
+            });
+          });
+
+          describe("Sell execution with trader ratio", function () {
+            const operationId = 1;
+            const ratio = utils.parseUnits("1", 18);
+            const amountIn = utils.parseUnits("500", 6);
+            const amountOutMin = utils.parseUnits("450", 6);
+
+            let balanceUsdt: BigNumber;
+            let balanceUsdc: BigNumber;
+            let expectedAmountOut: BigNumber;
+
+            before(async () => {
+              await reverter.snapshot();
+
+              const path = utils.solidityPack(
+                ["address", "uint24", "address"],
+                [contractUSDT.address, fee, contractUSDC.address]
+              );
+              const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
+              const tradeOperation = { operationId, data: tradeData };
+  
+              await contractUSDT.connect(trader).mint(traderAddress, amountIn);
+              await contractUSDT.connect(trader).approve(uniswapAdapterContract.address, amountIn);
+              balanceUsdt = await contractUSDT.balanceOf(traderAddress);
+              balanceUsdc = await contractUSDC.balanceOf(traderAddress);
+              
+              [ expectedAmountOut ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
+              txResult = await uniswapAdapterContract.connect(trader).executeOperation(ratio, tradeOperation);
+            });
+
+            after(async () => {
+              await reverter.revert();
+            });  
+
+            it("Should sell all USDT tokens of the trader", async () => {
+              const balanceUsdtNew = await contractUSDT.balanceOf(traderAddress);
+              expect(balanceUsdtNew).to.be.lt(balanceUsdt);
+              expect(balanceUsdtNew).to.equal(0);
+            });
+
+            it("Should increase trader USDC balance", async () => {
+              const balanceUsdcNew = await contractUSDC.balanceOf(traderAddress);
+              expect(balanceUsdcNew).to.be.gte(amountOutMin);
+              expect(balanceUsdcNew).to.equal(expectedAmountOut);
+            });
+          });
+        });
+
+        describe("Sell execution WITH scaling (ratio > 1e18)", function () {
+          describe("Failing sell operation due to slippage 0%", function () {
+            const operationId = 1;
+            const multiplier = "3";
+            const ratio = utils.parseUnits(multiplier, 18);
+            const amountIn = utils.parseUnits("500", 6);
+            let tradeOperation: IAdapter.AdapterOperationStruct;
+
+            before(async () => {
+              const path = utils.solidityPack(
+                ["address", "uint24", "address"],
+                [contractUSDT.address, fee, contractUSDC.address]
+              );
+              const [ expectedAmountOut ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
+              const amountOutMin = expectedAmountOut.mul(110).div(100);
+
+              const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
+              tradeOperation = { operationId, data: tradeData };
+              
+              await reverter.snapshot();
+            });
+
+            after(async () => {
+              await reverter.revert();
+            });  
+
+            it("Should revert vault swap due to slippage", async () => {
+              await contractUSDT.connect(vault).mint(vaultAddress, amountIn.mul(multiplier));
+              await contractUSDT.connect(vault).approve(uniswapAdapterContract.address, constants.MaxUint256);
+              await expect(uniswapAdapterContract.connect(vault).executeOperation(ratio, tradeOperation))
+                .to.be.revertedWith("Too little received");
+            });
+          });
+
+          describe("Sell execution with vault ratio", function () {
+            const operationId = 1;
+            const multiplier = "3";
+            const ratio = utils.parseUnits(multiplier, 18);
+            const amountIn = utils.parseUnits("500", 6);
+             // will be executed due to slippage increase in the contract
+            const amountOutMin = utils.parseUnits("500", 6);
+
+            let balanceUsdt: BigNumber;
+            let balanceUsdc: BigNumber;
+            let expectedAmountOut: BigNumber;
+
+            before(async () => {
+              await reverter.snapshot();
+
+              const path = utils.solidityPack(
+                ["address", "uint24", "address"],
+                [contractUSDT.address, fee, contractUSDC.address]
+              );
+              const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
+              const tradeOperation = { operationId, data: tradeData };
+  
+              await contractUSDT.connect(vault).mint(vaultAddress, amountIn.mul(multiplier));
+              await contractUSDT.connect(vault).approve(uniswapAdapterContract.address, constants.MaxUint256);
+              balanceUsdt = await contractUSDT.balanceOf(vaultAddress);
+              balanceUsdc = await contractUSDC.balanceOf(vaultAddress);
+              
+              [ expectedAmountOut ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn.mul(multiplier));
+              txResult = await uniswapAdapterContract.connect(vault).executeOperation(ratio, tradeOperation);
+            });
+
+            after(async () => {
+              await reverter.revert();
+            });  
+
+            it("Should sell all USDT tokens of the vault", async () => {
+              const balanceUsdtNew = await contractUSDT.balanceOf(vaultAddress);
+              expect(balanceUsdtNew).to.be.lt(balanceUsdt);
+              expect(balanceUsdtNew).to.equal(0);
+            });
+
+            it("Should increase trader USDC balance", async () => {
+              const balanceUsdcNew = await contractUSDC.balanceOf(vaultAddress);
+              expect(balanceUsdcNew).to.be.gte(amountOutMin);
+              expect(balanceUsdcNew).to.equal(expectedAmountOut);
+            });
+          });
+        });
+
+        // @todo 
+        xdescribe("Buy execution WITHOUT scaling (ratio 1e18)", function () {
+          xdescribe("Failing buy operation due to slippage 0%", function () {
+            const operationId = 1;
+            const ratio = utils.parseUnits("1", 18);
+            const amountIn = utils.parseUnits("500", 6);
+            let tradeOperation: IAdapter.AdapterOperationStruct;
+
+            before(async () => {
+              const path = utils.solidityPack(
+                ["address", "uint24", "address"],
+                [contractUSDT.address, fee, contractUSDC.address]
+              );
+              const [ expectedAmountOut ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
+              const amountOutMin = expectedAmountOut.add(1);
+
+              const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
+              tradeOperation = { operationId, data: tradeData };
+              
+              await reverter.snapshot();
+            });
+
+            after(async () => {
+              await reverter.revert();
+            });  
+
+            it("Should revert swap due to slippage", async () => {
+              await contractUSDT.connect(trader).mint(traderAddress, amountIn);
+              await contractUSDT.connect(trader).approve(uniswapAdapterContract.address, amountIn);
+              
+              await expect(uniswapAdapterContract.connect(trader).executeOperation(ratio, tradeOperation))
+                .to.be.revertedWith("Too little received");
+            });
+          });
+
+          xdescribe("Sell execution with trader ratio", function () {
+            const operationId = 1;
+            const ratio = utils.parseUnits("1", 18);
+            const amountIn = utils.parseUnits("500", 6);
+            const amountOutMin = utils.parseUnits("450", 6);
+
+            let balanceUsdt: BigNumber;
+            let balanceUsdc: BigNumber;
+            let expectedAmountOut: BigNumber;
+
+            before(async () => {
+              await reverter.snapshot();
+
+              const path = utils.solidityPack(
+                ["address", "uint24", "address"],
+                [contractUSDT.address, fee, contractUSDC.address]
+              );
+              const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
+              const tradeOperation = { operationId, data: tradeData };
+  
+              await contractUSDT.connect(trader).mint(traderAddress, amountIn);
+              await contractUSDT.connect(trader).approve(uniswapAdapterContract.address, amountIn);
+              balanceUsdt = await contractUSDT.balanceOf(traderAddress);
+              balanceUsdc = await contractUSDC.balanceOf(traderAddress);
+              
+              [ expectedAmountOut ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
+              txResult = await uniswapAdapterContract.connect(trader).executeOperation(ratio, tradeOperation);
+            });
+
+            after(async () => {
+              await reverter.revert();
+            });  
+
+            it("Should sell all USDT tokens of the trader", async () => {
+              const balanceUsdtNew = await contractUSDT.balanceOf(traderAddress);
+              expect(balanceUsdtNew).to.be.lt(balanceUsdt);
+              expect(balanceUsdtNew).to.equal(0);
+            });
+
+            it("Should increase trader USDC balance", async () => {
+              const balanceUsdcNew = await contractUSDC.balanceOf(traderAddress);
+              expect(balanceUsdcNew).to.be.gte(amountOutMin);
+              expect(balanceUsdcNew).to.equal(expectedAmountOut);
+            });
+          });
+        });
+
+      });
     });
   });
 });
