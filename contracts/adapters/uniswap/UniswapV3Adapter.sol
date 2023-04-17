@@ -11,6 +11,7 @@ import "./interfaces/IUniswapV3Adapter.sol";
 import "./interfaces/IUniswapV3Router.sol";
 import "./interfaces/IQuoterV2.sol";
 import "./libraries/BytesLib.sol";
+// import "hardhat/console.sol";
 
 
 contract UniswapV3Adapter is OwnableUpgradeable {
@@ -82,19 +83,21 @@ contract UniswapV3Adapter is OwnableUpgradeable {
         (bytes memory path, uint256 amountOut, uint256 amountInMaximum) = abi.decode(
             tradeData, (bytes, uint256, uint256)
         );
-
         // output swaps requires reversed path, thus 'tokenIn' is last one
         address tokenIn = path.toAddress(path.length - 20);
 
         if (ratio != ratioDenominator) {
             // scaling for Vault
             amountOut = amountOut * ratio / ratioDenominator;
+            
+            // @todo consider using 'slippage' as parameter of the _buy (or _sell) function
             // increasing slippage allowance due to higher amounts
             amountInMaximum = amountInMaximum * ratio / (ratioDenominator - slippage);
-
+            
             // @todo complex slippage regulation 
             uint256 amountInAvailable = IERC20(tokenIn).balanceOf(msg.sender);
-            if (amountInAvailable > amountInMaximum) {
+            // trying to decrease amountIn according to current balance
+            if (amountInAvailable <= amountInMaximum) {
                 amountInMaximum = amountInAvailable;
             }
         }
@@ -202,7 +205,8 @@ contract UniswapV3Adapter is OwnableUpgradeable {
         uint256 amount
     ) internal {
         if (IERC20(token).allowance(address(this), spender) < amount) {
-            IERC20(token).approve(spender, type(uint256).max);
+            IERC20(token).approve(spender, amount);
+            // IERC20(token).approve(spender, type(uint256).max);
         }
     }
 
