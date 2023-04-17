@@ -30,6 +30,7 @@ contract TraderWallet is OwnableUpgradeable {
     uint256 public afterRoundVaultBalance;
     uint256 public ratioProportions;
     uint256 public ratioShares;
+    uint256 public currentRound;
     mapping(uint256 => address) public adaptersPerProtocol;
     address[] public traderSelectedAdaptersArray;
 
@@ -148,6 +149,7 @@ contract TraderWallet is OwnableUpgradeable {
         initialVaultBalance = 0;
         afterRoundTraderBalance = 0;
         afterRoundVaultBalance = 0;
+        currentRound = 0;
     }
 
     function setVaultAddress(
@@ -390,7 +392,7 @@ contract TraderWallet is OwnableUpgradeable {
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
-            walletRatio = 1e18;
+            walletRatio = 1e18; // (????)
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////
@@ -461,15 +463,12 @@ contract TraderWallet is OwnableUpgradeable {
     */
 
     // not sure if the execution is here. Don't think so
-    function rollover() external onlyTrader {
-        bool firstRollover = true;
-
-        if (!firstRollover) {
+    function rollover() external onlyTrader {        
+        if (currentRound != 0) {
             (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
         } else {
             // store the first ratio between shares and deposit
-            ratioShares = 1;
-            firstRollover = false;
+            ratioShares = 1e18;
         }
 
         bool success = IUsersVault(vaultAddress).rolloverFromTrader();

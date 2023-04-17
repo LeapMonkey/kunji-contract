@@ -19,6 +19,7 @@ import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
+  AMOUNT_1E18,
   AMOUNT_100,
   AMOUNT_1000,
 } from "./helpers/constants";
@@ -162,27 +163,27 @@ describe("User Vault Contract Tests", function () {
         await usersVaultContract.deployed();
 
         // approve and mint to users
-        await usdcTokenContract.mint(user1Address, AMOUNT_1000);
-        await usdcTokenContract.mint(user2Address, AMOUNT_1000);
-        await usdcTokenContract.mint(user3Address, AMOUNT_1000);
-        await usdcTokenContract.mint(user4Address, AMOUNT_1000);
-        await usdcTokenContract.mint(user5Address, AMOUNT_1000);
+        await usdcTokenContract.mint(user1Address, AMOUNT_1E18.mul(1000));
+        await usdcTokenContract.mint(user2Address, AMOUNT_1E18.mul(1000));
+        await usdcTokenContract.mint(user3Address, AMOUNT_1E18.mul(1000));
+        await usdcTokenContract.mint(user4Address, AMOUNT_1E18.mul(1000));
+        await usdcTokenContract.mint(user5Address, AMOUNT_1E18.mul(1000));
 
         await usdcTokenContract
           .connect(user1)
-          .approve(usersVaultContract.address, AMOUNT_1000);
+          .approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
         await usdcTokenContract
           .connect(user2)
-          .approve(usersVaultContract.address, AMOUNT_1000);
+          .approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
         await usdcTokenContract
           .connect(user3)
-          .approve(usersVaultContract.address, AMOUNT_1000);
+          .approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
         await usdcTokenContract
           .connect(user4)
-          .approve(usersVaultContract.address, AMOUNT_1000);
+          .approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
         await usdcTokenContract
           .connect(user5)
-          .approve(usersVaultContract.address, AMOUNT_1000);
+          .approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
 
         // contractBalanceBefore = await usdcTokenContract.balanceOf(
         //   usersVaultContract.address
@@ -216,22 +217,130 @@ describe("User Vault Contract Tests", function () {
         expect(await usersVaultContract.owner()).to.equal(ownerAddress);
       });
 
-      it("THEN general contract tests DRAFT !!!!", async () => {
+      it("THEN ==> DEPOSIT ON ROUND 0 ==> NOT STARTED YET !!!!", async () => {
         await usersVaultContract
           .connect(user1)
-          .userDeposit(BigNumber.from("10"));
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(10)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
         await usersVaultContract
           .connect(user1)
-          .userDeposit(BigNumber.from("20"));
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(20)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+          await usersVaultContract
+          .connect(user2)
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(30)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        await usersVaultContract
+          .connect(user2)
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(40)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        await usersVaultContract
+          .connect(user3)
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(50)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+      });
+
+      it("THEN ==> Balanaces before and after FIRST rollover", async () => {
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
+        console.log("pendingWithdrawShares  : ", await usersVaultContract.pendingWithdrawShares());
+        console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
+        console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
+        console.log("userDeposits 3         : ", await usersVaultContract.userDeposits(user3Address));
+        // console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
+        // console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
+        // console.log("userWithdrawals 3      : ", await usersVaultContract.userWithdrawals(user3Address));
+        console.log("assetsPerShareXRound(0)  : ", await usersVaultContract.assetsPerShareXRound(0));
+        console.log("assetsPerShareXRound(1)  : ", await usersVaultContract.assetsPerShareXRound(1));
+        console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
+
+        console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
+        
+        console.log("--------------------------------------------------------------------------") 
+        console.log("--------------------------------------------------------------------------") 
+        await usersVaultContract.rolloverFromTrader();
+        console.log("--------------------------------------------------------------------------") 
+        console.log("--------------------------------------------------------------------------") 
+        
+        console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
+
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
+        console.log("pendingWithdrawShares  : ", await usersVaultContract.pendingWithdrawShares());
+        console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
+        console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
+        console.log("userDeposits 3         : ", await usersVaultContract.userDeposits(user3Address));
+        // console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
+        // console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
+        // console.log("userWithdrawals 3      : ", await usersVaultContract.userWithdrawals(user3Address));
+        console.log("assetsPerShareXRound(0)  : ", await usersVaultContract.assetsPerShareXRound(0));
+        console.log("assetsPerShareXRound(1)  : ", await usersVaultContract.assetsPerShareXRound(1));
+        console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
+      });
+
+      it("THEN ==> DEPOSIT ON ROUND 1 ==> VALID FOR ROUND 2", async () => {
         await usersVaultContract
           .connect(user1)
-          .userDeposit(BigNumber.from("30"));
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(1)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
         await usersVaultContract
           .connect(user1)
-          .userDeposit(BigNumber.from("40"));
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(2)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+          await usersVaultContract
+          .connect(user2)
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(3)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
         await usersVaultContract
-          .connect(user1)
-          .userDeposit(BigNumber.from("50"));
+          .connect(user2)
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(4)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        await usersVaultContract
+          .connect(user3)
+          .userDeposit(BigNumber.from(AMOUNT_1E18.mul(5)));
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+      });
+
+      it("THEN ==> Balanaces before and after SECOND rollover PROFIT OF 35", async () => {
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
+        console.log("pendingWithdrawShares  : ", await usersVaultContract.pendingWithdrawShares());
+        console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
+        console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
+        console.log("userDeposits 3         : ", await usersVaultContract.userDeposits(user3Address));
+        // console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
+        // console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
+        // console.log("userWithdrawals 3      : ", await usersVaultContract.userWithdrawals(user3Address));
+        console.log("assetsPerShareXRound(0)  : ", await usersVaultContract.assetsPerShareXRound(0));
+        console.log("assetsPerShareXRound(1)  : ", await usersVaultContract.assetsPerShareXRound(1));
+        console.log("assetsPerShareXRound(2)  : ", await usersVaultContract.assetsPerShareXRound(2));
+        console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
+
+        console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
+        
+        console.log("--------------------------------------------------------------------------") 
+        console.log("--------------------------------------------------------------------------") 
+
+        await usdcTokenContract.mint(usersVaultContract.address, AMOUNT_1E18.mul(35));
+        await usersVaultContract.rolloverFromTrader();
+        console.log("--------------------------------------------------------------------------") 
+        console.log("--------------------------------------------------------------------------") 
+        
+        console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
+
+        console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+        console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
+        console.log("pendingWithdrawShares  : ", await usersVaultContract.pendingWithdrawShares());
+        console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
+        console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
+        console.log("userDeposits 3         : ", await usersVaultContract.userDeposits(user3Address));
+        // console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
+        // console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
+        // console.log("userWithdrawals 3      : ", await usersVaultContract.userWithdrawals(user3Address));
+        console.log("assetsPerShareXRound(0)  : ", await usersVaultContract.assetsPerShareXRound(0));
+        console.log("assetsPerShareXRound(1)  : ", await usersVaultContract.assetsPerShareXRound(1));
+        console.log("assetsPerShareXRound(2)  : ", await usersVaultContract.assetsPerShareXRound(2));
+        console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
       });
     });
   });
