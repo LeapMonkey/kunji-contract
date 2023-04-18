@@ -2,15 +2,14 @@
 pragma solidity ^0.8.9;
 
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {SafeERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-
-import {ERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
-import {IERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC4626Upgradeable.sol";
 
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import {SafeCastUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-// import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import "./adapters/gmx/GMXAdapter.sol";
@@ -19,7 +18,11 @@ import "hardhat/console.sol";
 
 /// import its own interface as well
 
-contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
+contract UsersVault is
+    ERC20Upgradeable,
+    OwnableUpgradeable,
+    PausableUpgradeable
+{
     using MathUpgradeable for uint256;
     using SafeCastUpgradeable for uint256;
 
@@ -34,6 +37,7 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         uint256 unclaimedAssets;
     }
 
+    address public underlyingTokenAddress;
     address public adaptersRegistryAddress;
     address public contractsFactoryAddress;
     address public traderWalletAddress;
@@ -42,6 +46,8 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
     address[] public traderSelectedAdaptersArray;
 
     uint256 public currentRound;
+    uint256 public initialVaultBalance;
+    uint256 public afterRoundVaultBalance;
 
     // Total amount of total deposit assets in mapped round
     uint256 public pendingDepositAssets;
@@ -65,15 +71,15 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
     error UserNotAllowed();
     error SafeTransferFailed();
 
-    error InvalidTime(uint256 timestamp);
+    // error InvalidTime(uint256 timestamp);
     error InvalidRound();
 
-    error ExistingWithdraw();
+    // error ExistingWithdraw();
     error InsufficientShares(uint256 unclaimedShareBalance);
     error InsufficientAssets(uint256 unclaimedAssetBalance);
     error UnderlyingAssetNotAllowed();
-    error BatchNotClosed();
-    error WithdrawNotInitiated();
+    // error BatchNotClosed();
+    // error WithdrawNotInitiated();
     error InvalidRollover();
     error NewTraderNotAllowed();
     error InvalidProtocol();
@@ -86,6 +92,7 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
     event DynamicValueAddressSet(address indexed dynamicValueAddress);
+    event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
 
     event AdapterToUseAdded(
         uint256 protocolId,
@@ -94,10 +101,13 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
     );
     event AdapterToUseRemoved(address indexed adapter, address indexed trader);
 
+    event UserDeposited(address indexed caller, uint256 assetsAmount);
+    event WithdrawRequest(address indexed caller, uint256 sharesAmount);
+
     event SharesClaimed(
         uint256 round,
         uint256 shares,
-        address owner,
+        address caller,
         address receiver
     );
     event AssetsClaimed(
@@ -111,6 +121,15 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         uint256 newDeposit,
         uint256 newWithdrawal
     );
+
+    event OperationExecuted(
+        uint256 protocolId,
+        uint256 timestamp,
+        string target,
+        uint256 initialBalance,
+        uint256 walletRatio
+    );
+
 
     // if (_tokenAddress != asset()) revert UnderlyingAssetNotAllowed();
 
@@ -141,55 +160,16 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
             revert ZeroAddress({target: "_dynamicValueAddress"});
 
         __Ownable_init();
-        // __Pausable_init();
-        __ERC4626_init(IERC20Upgradeable(_underlyingTokenAddress));
+        __Pausable_init();
         __ERC20_init(_sharesName, _sharesSymbol);
 
+        underlyingTokenAddress = _underlyingTokenAddress;
         adaptersRegistryAddress = _adaptersRegistryAddress;
         contractsFactoryAddress = _contractsFactoryAddress;
         traderWalletAddress = _traderWalletAddress;
         dynamicValueAddress = _dynamicValueAddress;
         currentRound = 0;
-    }
-
-    function deposit(
-        uint256 _assetsAmount,
-        address _receiver
-    ) public virtual override returns (uint256) {
-        _assetsAmount; // avoid warnings
-        _receiver; // avoid warnings
-        revert FunctionCallNotAllowed();
-    }
-
-    function mint(
-        uint256 _sharesAmount,
-        address _receiver
-    ) public virtual override returns (uint256) {
-        _sharesAmount; // avoid warnings
-        _receiver; // avoid warnings
-        revert FunctionCallNotAllowed();
-    }
-
-    function withdraw(
-        uint256 _assetsAmount,
-        address _receiver,
-        address _owner
-    ) public virtual override returns (uint256) {
-        _assetsAmount; // avoid warnings
-        _receiver; // avoid warnings
-        _owner; // avoid warnings
-        revert FunctionCallNotAllowed();
-    }
-
-    function redeem(
-        uint256 _sharesAmount,
-        address _receiver,
-        address _owner
-    ) public virtual override returns (uint256) {
-        _sharesAmount; // avoid warnings
-        _receiver; // avoid warnings
-        _owner; // avoid warnings
-        revert FunctionCallNotAllowed();
+        // currentRound = 1;
     }
 
     function setAdaptersRegistryAddress(
@@ -230,86 +210,92 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         traderWalletAddress = _traderWalletAddress;
     }
 
+    function setUnderlyingTokenAddress(
+        address _underlyingTokenAddress
+    ) external {
+        _checkOwner();
+        _checkAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
+        emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
+        underlyingTokenAddress = _underlyingTokenAddress;
+    }
+
     function userDeposit(uint256 _assetsAmount) external {
         _onlyValidInvestors(_msgSender());
 
         SafeERC20Upgradeable.safeTransferFrom(
-            IERC20Upgradeable(asset()),
+            IERC20Upgradeable(underlyingTokenAddress),
             _msgSender(),
             address(this),
             _assetsAmount
         );
 
-        emit Deposit(_msgSender(), _msgSender(), _assetsAmount, 0);
+        emit UserDeposited(_msgSender(), _assetsAmount);
 
         // good only for first time (round zero)
         uint256 assetPerShare = 1e18;
         // uint256 assetPerShare = 500000000000000000;
 
-        if (currentRound != 0) {
-            if (
-                userDeposits[_msgSender()].round < currentRound &&
-                userDeposits[_msgSender()].pendingAssets > 0
-            ) {
-                assetPerShare = assetsPerShareXRound[
-                    userDeposits[_msgSender()].round
-                ];
-            }
+        // converts previous pending assets to shares using assetsPerShare value from rollover
+        // set pending asset to zero
+        if (
+            userDeposits[_msgSender()].round < currentRound &&
+            userDeposits[_msgSender()].pendingAssets > 0
+        ) {
+            assetPerShare = assetsPerShareXRound[
+                userDeposits[_msgSender()].round
+            ];
+
+            userDeposits[_msgSender()].unclaimedShares =
+                userDeposits[_msgSender()].unclaimedShares +
+                userDeposits[_msgSender()].pendingAssets.mulDiv(
+                    1e18,
+                    assetPerShare
+                );
+
+            userDeposits[_msgSender()].pendingAssets = 0;
         }
+
+        userDeposits[_msgSender()].round = currentRound;
 
         userDeposits[_msgSender()].pendingAssets =
             userDeposits[_msgSender()].pendingAssets +
             _assetsAmount;
 
-        userDeposits[_msgSender()].unclaimedShares =
-            userDeposits[_msgSender()].unclaimedShares +
-            _assetsAmount.mulDiv(1e18, assetPerShare);
-
-        userDeposits[_msgSender()].round = currentRound;
-
         pendingDepositAssets += _assetsAmount;
     }
 
-    /**
-     * @dev Withdraw/redeem common workflow.
-     */
-    function withdrawalRequest(
-        // address _caller,
-        // address _receiver,
-        // address _owner,
-        uint256 _assetsAmount,
-        uint256 _sharesAmount
-    ) external {
+    function withdrawRequest(uint256 _sharesAmount) external {
         _onlyValidInvestors(_msgSender());
         _checkRound();
+
+        // CHECK QTY ??
+        emit WithdrawRequest(_msgSender(), _sharesAmount);
         _burn(_msgSender(), _sharesAmount);
 
-        emit Withdraw(
-            _msgSender(),
-            _msgSender(),
-            _msgSender(),
-            _assetsAmount,
-            _sharesAmount
-        );
-
-        uint256 userWithdrawShares = userWithdrawals[_msgSender()]
-            .pendingShares;
-
-        //Convert previous round glp balance into unredeemed shares
-        uint256 userWithdrawalRound = userWithdrawals[_msgSender()].round;
-        if (userWithdrawalRound < currentRound && userWithdrawShares > 0) {
-            uint256 assetsPerShare = assetsPerShareXRound[userWithdrawalRound];
-            userWithdrawals[_msgSender()].unclaimedAssets += userWithdrawShares
-                .mulDiv(assetsPerShare, 1e18);
-            userWithdrawShares = 0;
+        // Convert previous round pending shares into unclaimed assets
+        if (
+            userWithdrawals[_msgSender()].round < currentRound &&
+            userWithdrawals[_msgSender()].pendingShares > 0
+        ) {
+            uint256 assetsPerShare = assetsPerShareXRound[
+                userWithdrawals[_msgSender()].round
+            ];
+            userWithdrawals[_msgSender()].unclaimedAssets =
+                userWithdrawals[_msgSender()].unclaimedAssets +
+                userWithdrawals[_msgSender()].pendingShares.mulDiv(
+                    assetsPerShare,
+                    1e18
+                );
+            userWithdrawals[_msgSender()].pendingShares = 0;
         }
 
-        //Update round and glp balance for current round
+        // Update round and glp balance for current round
         userWithdrawals[_msgSender()].round = currentRound;
         userWithdrawals[_msgSender()].pendingShares =
-            userWithdrawShares +
+            userWithdrawals[_msgSender()].pendingShares +
             _sharesAmount;
-        pendingWithdrawShares += _sharesAmount;
+
+        pendingWithdrawShares = pendingWithdrawShares + _sharesAmount;
     }
 
     function setAdapterAllowanceOnToken(
@@ -337,18 +323,79 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         return true;
     }
 
-    //
-    //
-    function underlyingLiquidity() public view returns (uint256) {
+    function executeOnProtocol(
+        uint256 _protocolId,
+        IAdapter.AdapterOperation memory _traderOperation,
+        uint256 _walletRatio
+    ) external returns (bool) {
+        /*
+            onlyTrader
+            onlyValidProtocolId(_protocolId)
+        */
+
+        // check if protocolId is valid
+        address adapterAddress = adaptersPerProtocol[_protocolId];
+        if (adapterAddress == address(0)) revert InvalidAdapter();
+
+        bool success = false;
+        if (_protocolId == 1) {
+            success = _executeOnGmx(_walletRatio, _traderOperation);
+        } else {
+            success = _executeOnAdapter(
+                adapterAddress,
+                _walletRatio,
+                _traderOperation
+            );
+        }
+
+        // check operation success
+        if (!success) revert AdapterOperationFailed({target: "vault"});
+
+        // contract should receive tokens HERE
+
+        emit OperationExecuted(
+            _protocolId,
+            block.timestamp,
+            "trader wallet",
+            initialVaultBalance,
+            _walletRatio
+        );
+        return true;
+    }
+
+    function _executeOnGmx(
+        uint256 _ratio,
+        IAdapter.AdapterOperation memory _traderOperation
+    ) internal pure returns (bool) {
+        return GMXAdapter.executeOperation(_ratio, _traderOperation);
+    }
+
+    // @todo add implementation
+    function _executeOnAdapter(
+        address _adapterAddress,
+        uint256 _ratio,
+        IAdapter.AdapterOperation memory _traderOperation
+    ) internal returns (bool) {
         return
-            IERC20Upgradeable(asset()).balanceOf(address(this)) -
+            IAdapter(_adapterAddress).executeOperation(
+                _ratio,
+                _traderOperation
+            );
+    }
+
+    //
+    //
+    function getUnderlyingLiquidity() public view returns (uint256) {
+        return
+            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -
             processedWithdrawAssets;
     }
 
     //
     //
-    function rolloverFromTrader() external {
+    function rolloverFromTrader() external returns (bool) {
+        // CALLER IS ONLY VAULT
         if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
             revert InvalidRollover();
 
@@ -356,14 +403,14 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         uint256 sharesToMint;
 
         if (currentRound != 0) {
-            /////////////////////////////////////////////////////////////////////
-            assetsPerShare = underlyingLiquidity().mulDiv(1e18, totalSupply());
+            assetsPerShare = getUnderlyingLiquidity().mulDiv(1e18, totalSupply());
             sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
-            /////////////////////////////////////////////////////////////////////
         } else {
             // store the first ratio between shares and deposit
             assetsPerShare = 1e18;
-            sharesToMint = IERC20Upgradeable(asset()).balanceOf(address(this));
+            sharesToMint = IERC20Upgradeable(underlyingTokenAddress).balanceOf(
+                address(this)
+            );
         }
 
         // mint the shares for the contract so users can claim their shares
@@ -382,8 +429,9 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         // Revert if the assets required for withdrawals < asset balance present in the vault
         if (processedWithdrawAssets > 0) {
             require(
-                IERC20Upgradeable(asset()).balanceOf(address(this)) <
-                    processedWithdrawAssets,
+                IERC20Upgradeable(underlyingTokenAddress).balanceOf(
+                    address(this)
+                ) < processedWithdrawAssets,
                 "Not enough assets for withdrawal"
             );
         }
@@ -398,37 +446,60 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         );
 
         currentRound++;
+
+        return true;
+    }
+    
+    function previewShares(address _receiver) external view returns (uint256) {
+        _checkRound();
+
+        if (
+            userDeposits[_receiver].round < currentRound &&
+            userDeposits[_receiver].pendingAssets > 0
+        ) {
+            uint256 assetsPerShare = assetsPerShareXRound[
+                userDeposits[_receiver].round
+            ];
+
+            return
+                userDeposits[_receiver].unclaimedShares +
+                userDeposits[_receiver].pendingAssets.mulDiv(
+                    1e18,
+                    assetsPerShare > 0 ? assetsPerShare : 1e18
+                );
+        }
+
+        return userDeposits[_receiver].unclaimedShares;
     }
 
     function claimShares(uint256 _sharesAmount, address _receiver) public {
         _checkRound();
+        // CHECK CALLER
 
-        //Convert previous round glp balance into unredeemed shares
+        // Convert previous round glp balance into unredeemed shares
         if (
-            userDeposits[_msgSender()].round < currentRound &&
-            userDeposits[_msgSender()].pendingAssets > 0
+            userDeposits[_receiver].round < currentRound &&
+            userDeposits[_receiver].pendingAssets > 0
         ) {
             uint256 assetsPerShare = assetsPerShareXRound[
-                userDeposits[_msgSender()].round
+                userDeposits[_receiver].round
             ];
 
-            userDeposits[_msgSender()].unclaimedShares =
-                userDeposits[_msgSender()].unclaimedShares +
-                userDeposits[_msgSender()].pendingAssets.mulDiv(
+            userDeposits[_receiver].unclaimedShares =
+                userDeposits[_receiver].unclaimedShares +
+                userDeposits[_receiver].pendingAssets.mulDiv(
                     1e18,
                     assetsPerShare
                 );
-            
-            userDeposits[_msgSender()].pendingAssets = 0;
+
+            userDeposits[_receiver].pendingAssets = 0;
         }
 
-        if (userDeposits[_msgSender()].unclaimedShares < _sharesAmount)
-            revert InsufficientShares(
-                userDeposits[_msgSender()].unclaimedShares
-            );
+        if (userDeposits[_receiver].unclaimedShares < _sharesAmount)
+            revert InsufficientShares(userDeposits[_receiver].unclaimedShares);
 
-        userDeposits[_msgSender()].unclaimedShares =
-            userDeposits[_msgSender()].unclaimedShares -
+        userDeposits[_receiver].unclaimedShares =
+            userDeposits[_receiver].unclaimedShares -
             _sharesAmount;
 
         emit SharesClaimed(
@@ -442,29 +513,29 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
     }
 
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
-        uint256 userUnclaimedAssets = userWithdrawals[_msgSender()]
-            .unclaimedAssets;
-        uint256 userWithdrawShares = userWithdrawals[_msgSender()]
-            .pendingShares;
-        {
-            uint256 userWithdrawalRound = userWithdrawals[_msgSender()].round;
-            if (userWithdrawalRound < currentRound && userWithdrawShares > 0) {
-                uint256 assetsPerShare = assetsPerShareXRound[
-                    userWithdrawalRound
-                ];
-                userUnclaimedAssets += userWithdrawShares.mulDiv(
-                    assetsPerShare,
-                    1e18
-                );
-                userWithdrawals[_msgSender()].pendingShares = 0;
-            }
+
+        // check caller
+
+        if (
+            userWithdrawals[_msgSender()].round < currentRound &&
+            userWithdrawals[_msgSender()].pendingShares > 0
+        ) {
+            uint256 assetsPerShare = assetsPerShareXRound[
+                userWithdrawals[_msgSender()].round
+            ];
+            userWithdrawals[_msgSender()].unclaimedAssets += userWithdrawals[
+                _msgSender()
+            ].pendingShares.mulDiv(assetsPerShare, 1e18);
+            userWithdrawals[_msgSender()].pendingShares = 0;
         }
 
-        if (userUnclaimedAssets < _assetsAmount)
-            revert InsufficientAssets(userUnclaimedAssets);
+        if (userWithdrawals[_msgSender()].unclaimedAssets < _assetsAmount)
+            revert InsufficientAssets(
+                userWithdrawals[_msgSender()].unclaimedAssets
+            );
 
         userWithdrawals[_msgSender()].unclaimedAssets =
-            userUnclaimedAssets -
+            userWithdrawals[_msgSender()].unclaimedAssets -
             _assetsAmount;
 
         emit AssetsClaimed(
@@ -475,25 +546,25 @@ contract UsersVault is ERC4626Upgradeable, OwnableUpgradeable {
         );
 
         SafeERC20Upgradeable.safeTransfer(
-            IERC20Upgradeable(asset()),
+            IERC20Upgradeable(underlyingTokenAddress),
             _receiver,
             _assetsAmount
         );
     }
 
-    // function claimAllShares(
-    //     address _receiver
-    // ) external returns (uint256 _sharesAmount) {
-    //     _sharesAmount = balanceOf(_msgSender());
-    //     claimShares(_sharesAmount, _receiver);
-    // }
+    function claimAllShares(
+        address _receiver
+    ) external returns (uint256 _sharesAmount) {
+        _sharesAmount = balanceOf(_msgSender());
+        claimShares(_sharesAmount, _receiver);
+    }
 
-    // function claimAllAssets(
-    //     address _receiver
-    // ) external returns (uint256 _assetsAmount) {
-    //     _assetsAmount = balanceOf(_msgSender());
-    //     claimAssets(_assetsAmount, _receiver);
-    // }
+    function claimAllAssets(
+        address _receiver
+    ) external returns (uint256 _assetsAmount) {
+        _assetsAmount = balanceOf(_msgSender());
+        claimAssets(_assetsAmount, _receiver);
+    }
 
     function getSharesContractBalance() external view returns (uint256) {
         return this.balanceOf(address(this));

@@ -21,7 +21,6 @@ import {
   ZERO_ADDRESS,
   AMOUNT_1E18,
   AMOUNT_100,
-  AMOUNT_1000,
 } from "./helpers/constants";
 
 const reverter = new Reverter();
@@ -198,7 +197,7 @@ describe("User Vault Contract Tests", function () {
       });
 
       it("THEN it should return the same ones after deployment", async () => {
-        expect(await usersVaultContract.asset()).to.equal(
+        expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
           underlyingTokenAddress
         );
         expect(await usersVaultContract.adaptersRegistryAddress()).to.equal(
@@ -240,6 +239,13 @@ describe("User Vault Contract Tests", function () {
         console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
       });
 
+      it("THEN ==> FAIL WHEN CLAIMING SHARES --> InvalidRound because is ROUND 0", async () => {
+        await expect(
+          usersVaultContract.claimShares(AMOUNT_100, user1Address)
+          )
+          .to.be.revertedWithCustomError(usersVaultContract, "InvalidRound");
+      });
+
       it("THEN ==> Balanaces before and after FIRST rollover", async () => {
         console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
         console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
@@ -255,13 +261,14 @@ describe("User Vault Contract Tests", function () {
         console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
 
         console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
-        
+
         console.log("--------------------------------------------------------------------------") 
         console.log("--------------------------------------------------------------------------") 
         await usersVaultContract.rolloverFromTrader();
         console.log("--------------------------------------------------------------------------") 
         console.log("--------------------------------------------------------------------------") 
         
+        console.log("ROUND        : ", await usersVaultContract.currentRound());
         console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
 
         console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
@@ -276,6 +283,15 @@ describe("User Vault Contract Tests", function () {
         console.log("assetsPerShareXRound(0)  : ", await usersVaultContract.assetsPerShareXRound(0));
         console.log("assetsPerShareXRound(1)  : ", await usersVaultContract.assetsPerShareXRound(1));
         console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
+
+        console.log('\n\nUser 1 Shares PRV    :>> ', await usersVaultContract.previewShares(user1Address));
+      });
+
+      it("THEN ==> FAIL WHEN CLAIMING SHARES", async () => {
+        await expect(
+            usersVaultContract.claimShares(AMOUNT_1E18.mul(100), user1Address)
+          )
+          .to.be.revertedWithCustomError(usersVaultContract, "InsufficientShares");
       });
 
       it("THEN ==> DEPOSIT ON ROUND 1 ==> VALID FOR ROUND 2", async () => {
@@ -299,6 +315,8 @@ describe("User Vault Contract Tests", function () {
           .connect(user3)
           .userDeposit(BigNumber.from(AMOUNT_1E18.mul(5)));
         console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
+
+        console.log('\n\nUser 1 Shares PRV    :>> ', await usersVaultContract.previewShares(user1Address));
       });
 
       it("THEN ==> Balanaces before and after SECOND rollover PROFIT OF 35", async () => {
@@ -325,7 +343,7 @@ describe("User Vault Contract Tests", function () {
         await usersVaultContract.rolloverFromTrader();
         console.log("--------------------------------------------------------------------------") 
         console.log("--------------------------------------------------------------------------") 
-        
+        console.log("ROUND        : ", await usersVaultContract.currentRound());
         console.log("Shares Contract        : ", await usersVaultContract.getSharesContractBalance());
 
         console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
@@ -341,6 +359,12 @@ describe("User Vault Contract Tests", function () {
         console.log("assetsPerShareXRound(1)  : ", await usersVaultContract.assetsPerShareXRound(1));
         console.log("assetsPerShareXRound(2)  : ", await usersVaultContract.assetsPerShareXRound(2));
         console.log("contractBalance        : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
+      });
+
+      it("THEN ==> CLAIMING SHARES", async () => {
+
+        console.log('User 1 Shares PRV    :>> ', await usersVaultContract.previewShares(user1Address));
+        
       });
     });
   });

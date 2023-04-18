@@ -11,6 +11,7 @@ contract UsersVaultMock {
     uint256 public returnAmount;
     address public underlyingTokenAddress;
     uint256 public round;
+    uint256 public liquidity;
 
     // not used yet
     function setReturnValue(bool _value) external {
@@ -34,6 +35,10 @@ contract UsersVaultMock {
         round = _value;
     }
 
+    function setLiquidity(uint256 _value) external {
+        liquidity = _value;
+    }
+
     function executeOnAdapter(
         address _adapterAddress,
         IAdapter.AdapterOperation memory _vaultOperation,
@@ -46,8 +51,8 @@ contract UsersVaultMock {
         return (executedOperation);
     }
 
-    function getVaultInitialBalance() external view returns(uint256) {
-        return IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this));
+    function getUnderlyingLiquidity() external view returns(uint256) {
+        return liquidity;
     }
 
     function getRound() external view returns(uint256) {

@@ -61,7 +61,11 @@ contract TraderWallet is OwnableUpgradeable {
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
     event DynamicValueAddressSet(address indexed dynamicValueAddress);
-    event AdapterToUseAdded(uint256 protocolId, address indexed adapter, address indexed trader);
+    event AdapterToUseAdded(
+        uint256 protocolId,
+        address indexed adapter,
+        address indexed trader
+    );
     event AdapterToUseRemoved(address indexed adapter, address indexed trader);
 
     event TraderDeposit(
@@ -219,8 +223,12 @@ contract TraderWallet is OwnableUpgradeable {
     function addAdapterToUse(
         uint256 _protocolId,
         address _adapterAddress
-    ) external onlyTrader notZeroAddress(_adapterAddress, "_adapterAddress") onlyValidProtocolId(_protocolId) {
-
+    )
+        external
+        onlyTrader
+        notZeroAddress(_adapterAddress, "_adapterAddress")
+        onlyValidProtocolId(_protocolId)
+    {
         emit AdapterToUseAdded(_protocolId, _adapterAddress, _msgSender());
         adaptersPerProtocol[_protocolId] = _adapterAddress;
         // store the adapter on the array
@@ -248,8 +256,12 @@ contract TraderWallet is OwnableUpgradeable {
     function removeAdapterToUse(
         uint256 _protocolId,
         address _adapterAddress
-    ) external onlyTrader notZeroAddress(_adapterAddress, "_adapterAddress") onlyValidProtocolId(_protocolId) {
-
+    )
+        external
+        onlyTrader
+        notZeroAddress(_adapterAddress, "_adapterAddress")
+        onlyValidProtocolId(_protocolId)
+    {
         emit AdapterToUseRemoved(_adapterAddress, _msgSender());
         delete adaptersPerProtocol[_protocolId];
 
@@ -329,9 +341,7 @@ contract TraderWallet is OwnableUpgradeable {
         if (!_revoke) amount = type(uint256).max;
         else amount = 0;
 
-        if (
-            !IERC20Upgradeable(_tokenAddress).approve(adapterAddress, amount)
-        ) {
+        if (!IERC20Upgradeable(_tokenAddress).approve(adapterAddress, amount)) {
             revert ApproveFailed({
                 caller: _msgSender(),
                 token: _tokenAddress,
@@ -463,7 +473,7 @@ contract TraderWallet is OwnableUpgradeable {
     */
 
     // not sure if the execution is here. Don't think so
-    function rollover() external onlyTrader {        
+    function rollover() external onlyTrader {
         if (currentRound != 0) {
             (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
         } else {
@@ -494,8 +504,10 @@ contract TraderWallet is OwnableUpgradeable {
 
     function getBalances() public view returns (uint256, uint256) {
         return (
-            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)),
-            IUsersVault(vaultAddress).getVaultInitialBalance()
+            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
+                cumulativePendingDeposits -
+                cumulativePendingWithdrawals,
+            IUsersVault(vaultAddress).getUnderlyingLiquidity()
         );
     }
 

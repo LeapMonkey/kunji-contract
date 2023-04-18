@@ -15,7 +15,7 @@ interface IUsersVault is IERC4626Upgradeable {
 
     function rolloverFromTrader() external returns (bool);
 
-    function getVaultInitialBalance() external view returns(uint256);
+    function getUnderlyingLiquidity() external view returns(uint256);
 
     function getRound() external view returns(uint256);
 
