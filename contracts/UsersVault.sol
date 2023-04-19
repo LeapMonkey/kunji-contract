@@ -67,11 +67,9 @@ contract UsersVault is
 
     error ZeroAddress(string target);
     error ZeroAmount();
-    error FunctionCallNotAllowed();
     error UserNotAllowed();
     error SafeTransferFailed();
 
-    // error InvalidTime(uint256 timestamp);
     error InvalidRound();
 
     // error ExistingWithdraw();
@@ -79,9 +77,7 @@ contract UsersVault is
     error InsufficientAssets(uint256 unclaimedAssetBalance);
     error UnderlyingAssetNotAllowed();
     // error BatchNotClosed();
-    // error WithdrawNotInitiated();
     error InvalidRollover();
-    error NewTraderNotAllowed();
     error InvalidProtocol();
     error InvalidAdapter();
     error AdapterOperationFailed(string target);
@@ -100,6 +96,7 @@ contract UsersVault is
         address indexed trader
     );
     event AdapterToUseRemoved(address indexed adapter, address indexed trader);
+    event TraderWalletAddressSet(address indexed traderWalletAddress);
 
     event UserDeposited(address indexed caller, uint256 assetsAmount);
     event WithdrawRequest(address indexed caller, uint256 sharesAmount);
@@ -129,7 +126,6 @@ contract UsersVault is
         uint256 initialBalance,
         uint256 walletRatio
     );
-
 
     // if (_tokenAddress != asset()) revert UnderlyingAssetNotAllowed();
 
@@ -169,21 +165,20 @@ contract UsersVault is
         traderWalletAddress = _traderWalletAddress;
         dynamicValueAddress = _dynamicValueAddress;
         currentRound = 0;
-        // currentRound = 1;
     }
 
     function setAdaptersRegistryAddress(
         address _adaptersRegistryAddress
     ) external {
         _checkOwner();
-        _checkAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress");
+        _checkZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress");
         emit AdaptersRegistryAddressSet(_adaptersRegistryAddress);
         adaptersRegistryAddress = _adaptersRegistryAddress;
     }
 
     function setDynamicValueAddress(address _dynamicValueAddress) external {
         _checkOwner();
-        _checkAddress(_dynamicValueAddress, "_dynamicValueAddress");
+        _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
         emit DynamicValueAddressSet(_dynamicValueAddress);
         dynamicValueAddress = _dynamicValueAddress;
     }
@@ -192,21 +187,16 @@ contract UsersVault is
         address _contractsFactoryAddress
     ) external {
         _checkOwner();
-        _checkAddress(_contractsFactoryAddress, "_contractsFactoryAddress");
+        _checkZeroAddress(_contractsFactoryAddress, "_contractsFactoryAddress");
         emit ContractsFactoryAddressSet(_contractsFactoryAddress);
         contractsFactoryAddress = _contractsFactoryAddress;
     }
 
     function setTraderWalletAddress(address _traderWalletAddress) external {
         _checkOwner();
-        _checkAddress(_traderWalletAddress, "_traderWalletAddress");
-        if (
-            !IContractsFactory(contractsFactoryAddress).isTraderAllowed(
-                _traderWalletAddress
-            )
-        ) revert NewTraderNotAllowed();
+        _checkZeroAddress(_traderWalletAddress, "_traderWalletAddress");
 
-        emit TraderAddressSet(_traderWalletAddress);
+        emit TraderWalletAddressSet(_traderWalletAddress);
         traderWalletAddress = _traderWalletAddress;
     }
 
@@ -214,13 +204,17 @@ contract UsersVault is
         address _underlyingTokenAddress
     ) external {
         _checkOwner();
-        _checkAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
+        _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
         emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
         underlyingTokenAddress = _underlyingTokenAddress;
     }
 
-    function userDeposit(uint256 _assetsAmount) external {
+    function userDeposit(
+        address _tokenAddress,
+        uint256 _assetsAmount
+    ) external {
         _onlyValidInvestors(_msgSender());
+        _onlyUnderlying(_tokenAddress);
 
         SafeERC20Upgradeable.safeTransferFrom(
             IERC20Upgradeable(underlyingTokenAddress),
@@ -233,7 +227,6 @@ contract UsersVault is
 
         // good only for first time (round zero)
         uint256 assetPerShare = 1e18;
-        // uint256 assetPerShare = 500000000000000000;
 
         // converts previous pending assets to shares using assetsPerShare value from rollover
         // set pending asset to zero
@@ -266,9 +259,8 @@ contract UsersVault is
 
     function withdrawRequest(uint256 _sharesAmount) external {
         _onlyValidInvestors(_msgSender());
-        _checkRound();
+        _checkZeroRound();
 
-        // CHECK QTY ??
         emit WithdrawRequest(_msgSender(), _sharesAmount);
         _burn(_msgSender(), _sharesAmount);
 
@@ -328,10 +320,7 @@ contract UsersVault is
         IAdapter.AdapterOperation memory _traderOperation,
         uint256 _walletRatio
     ) external returns (bool) {
-        /*
-            onlyTrader
-            onlyValidProtocolId(_protocolId)
-        */
+        _onlyTraderWallet(_msgSender());
 
         // check if protocolId is valid
         address adapterAddress = adaptersPerProtocol[_protocolId];
@@ -386,6 +375,13 @@ contract UsersVault is
     //
     //
     function getUnderlyingLiquidity() public view returns (uint256) {
+        console.log(
+            "CNT - USDC Balance           : ",
+            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this))
+        );
+        console.log("CNT - pendingDepositAssets   : ", pendingDepositAssets);
+        console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
+        console.log("CNT - totalSupply()          : ", totalSupply());
         return
             IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -
@@ -395,7 +391,8 @@ contract UsersVault is
     //
     //
     function rolloverFromTrader() external returns (bool) {
-        // CALLER IS ONLY VAULT
+        _onlyTraderWallet(_msgSender());
+
         if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
             revert InvalidRollover();
 
@@ -403,14 +400,27 @@ contract UsersVault is
         uint256 sharesToMint;
 
         if (currentRound != 0) {
-            assetsPerShare = getUnderlyingLiquidity().mulDiv(1e18, totalSupply());
-            sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
-        } else {
-            // store the first ratio between shares and deposit
-            assetsPerShare = 1e18;
-            sharesToMint = IERC20Upgradeable(underlyingTokenAddress).balanceOf(
-                address(this)
+            afterRoundVaultBalance = getUnderlyingLiquidity();
+
+            assetsPerShare = getUnderlyingLiquidity().mulDiv(
+                1e18,
+                totalSupply()
             );
+            sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
+            console.log(
+                "CNT - getUnderlyingLiquidity : ",
+                getUnderlyingLiquidity()
+            );
+            console.log("CNT - assetsPerShare         : ", assetsPerShare);
+            console.log("CNT - sharesToMint           : ", sharesToMint);
+        } else {
+            
+            // first round dont consider pendings            
+            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this));
+            // first ratio between shares and deposit = 1
+            assetsPerShare = 1e18;
+            // since ratio is 1 shares to mint is equal to actual balance
+            sharesToMint = afterRoundVaultBalance; 
         }
 
         // mint the shares for the contract so users can claim their shares
@@ -426,18 +436,31 @@ contract UsersVault is
             1e18
         );
 
+        console.log("CNT - assetsPerShare         : ", assetsPerShare);
+        console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
+
         // Revert if the assets required for withdrawals < asset balance present in the vault
         if (processedWithdrawAssets > 0) {
             require(
                 IERC20Upgradeable(underlyingTokenAddress).balanceOf(
                     address(this)
-                ) < processedWithdrawAssets,
+                ) > processedWithdrawAssets,
                 "Not enough assets for withdrawal"
             );
         }
 
+        int256 vaultProfit = int256(afterRoundVaultBalance) - int256(initialVaultBalance);
+        /*
+
+        DO SOMETHING HERE WITH PROFIT ?
+
+        */
+
         // Make pending withdrawals 0
         pendingWithdrawShares = 0;
+        vaultProfit = 0;
+
+        initialVaultBalance = getUnderlyingLiquidity();
 
         emit BatchRollover(
             currentRound,
@@ -449,9 +472,9 @@ contract UsersVault is
 
         return true;
     }
-    
+
     function previewShares(address _receiver) external view returns (uint256) {
-        _checkRound();
+        _checkZeroRound();
 
         if (
             userDeposits[_receiver].round < currentRound &&
@@ -472,34 +495,35 @@ contract UsersVault is
         return userDeposits[_receiver].unclaimedShares;
     }
 
+    // anybody can call this
     function claimShares(uint256 _sharesAmount, address _receiver) public {
-        _checkRound();
-        // CHECK CALLER
+        _checkZeroRound();
+        _onlyValidInvestors(_msgSender());
 
         // Convert previous round glp balance into unredeemed shares
         if (
-            userDeposits[_receiver].round < currentRound &&
-            userDeposits[_receiver].pendingAssets > 0
+            userDeposits[_msgSender()].round < currentRound &&
+            userDeposits[_msgSender()].pendingAssets > 0
         ) {
             uint256 assetsPerShare = assetsPerShareXRound[
-                userDeposits[_receiver].round
+                userDeposits[_msgSender()].round
             ];
 
-            userDeposits[_receiver].unclaimedShares =
-                userDeposits[_receiver].unclaimedShares +
-                userDeposits[_receiver].pendingAssets.mulDiv(
+            userDeposits[_msgSender()].unclaimedShares =
+                userDeposits[_msgSender()].unclaimedShares +
+                userDeposits[_msgSender()].pendingAssets.mulDiv(
                     1e18,
                     assetsPerShare
                 );
 
-            userDeposits[_receiver].pendingAssets = 0;
+            userDeposits[_msgSender()].pendingAssets = 0;
         }
 
-        if (userDeposits[_receiver].unclaimedShares < _sharesAmount)
-            revert InsufficientShares(userDeposits[_receiver].unclaimedShares);
+        if (userDeposits[_msgSender()].unclaimedShares < _sharesAmount)
+            revert InsufficientShares(userDeposits[_msgSender()].unclaimedShares);
 
-        userDeposits[_receiver].unclaimedShares =
-            userDeposits[_receiver].unclaimedShares -
+        userDeposits[_msgSender()].unclaimedShares =
+            userDeposits[_msgSender()].unclaimedShares -
             _sharesAmount;
 
         emit SharesClaimed(
@@ -509,12 +533,12 @@ contract UsersVault is
             _receiver
         );
 
-        transfer(_receiver, _sharesAmount);
+        _transfer(address(this), _receiver, _sharesAmount);
     }
 
+    // anybody can call this
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
-
-        // check caller
+        _onlyValidInvestors(_msgSender());
 
         if (
             userWithdrawals[_msgSender()].round < currentRound &&
@@ -523,9 +547,12 @@ contract UsersVault is
             uint256 assetsPerShare = assetsPerShareXRound[
                 userWithdrawals[_msgSender()].round
             ];
-            userWithdrawals[_msgSender()].unclaimedAssets += userWithdrawals[
-                _msgSender()
-            ].pendingShares.mulDiv(assetsPerShare, 1e18);
+            userWithdrawals[_msgSender()].unclaimedAssets =
+                userWithdrawals[_msgSender()].unclaimedAssets +
+                userWithdrawals[_msgSender()].pendingShares.mulDiv(
+                    assetsPerShare,
+                    1e18
+                );
             userWithdrawals[_msgSender()].pendingShares = 0;
         }
 
@@ -552,16 +579,25 @@ contract UsersVault is
         );
     }
 
+    // THIS FUNCTION SEEMS INCORRECT
+    // USES BALANCE OF SENDER SHARES TO CALCULATE AMOUNT TO CLAIM
+    // SO USER ALREADY HAS THAT
+    // THEN CALL CLAIMSHARES WITH THE RECEIVER WHICH CAN BE ANYONE
+    // IF USER EXECUTES WILL TRY TO GET FOR HIMSELF
+    // WHAT HE ALREADY HAS
+    /*
     function claimAllShares(
         address _receiver
     ) external returns (uint256 _sharesAmount) {
         _sharesAmount = balanceOf(_msgSender());
         claimShares(_sharesAmount, _receiver);
     }
+    */
 
     function claimAllAssets(
         address _receiver
     ) external returns (uint256 _assetsAmount) {
+        _onlyValidInvestors(_msgSender());
         _assetsAmount = balanceOf(_msgSender());
         claimAssets(_assetsAmount, _receiver);
     }
@@ -570,11 +606,16 @@ contract UsersVault is
         return this.balanceOf(address(this));
     }
 
-    function _checkAddress(
+    function _checkZeroAddress(
         address _variable,
         string memory _message
     ) internal pure {
         if (_variable == address(0)) revert ZeroAddress({target: _message});
+    }
+
+    function _onlyUnderlying(address _tokenAddress) internal view {
+        if (_tokenAddress != underlyingTokenAddress)
+            revert UnderlyingAssetNotAllowed();
     }
 
     function _onlyValidInvestors(address _account) internal view {
@@ -585,7 +626,11 @@ contract UsersVault is
         ) revert UserNotAllowed();
     }
 
-    function _checkRound() internal view {
+    function _onlyTraderWallet(address _account) internal view {
+        if (_account != traderWalletAddress) revert UserNotAllowed();
+    }
+
+    function _checkZeroRound() internal view {
         if (currentRound == 0) revert InvalidRound();
     }
 }

@@ -22,6 +22,8 @@ contract TraderWallet is OwnableUpgradeable {
     address public traderAddress;
     address public dynamicValueAddress;
 
+    int256 public traderProfit;
+    int256 public vaultProfit;
     uint256 public cumulativePendingDeposits;
     uint256 public cumulativePendingWithdrawals;
     uint256 public initialTraderBalance;
@@ -29,7 +31,6 @@ contract TraderWallet is OwnableUpgradeable {
     uint256 public afterRoundTraderBalance;
     uint256 public afterRoundVaultBalance;
     uint256 public ratioProportions;
-    uint256 public ratioShares;
     uint256 public currentRound;
     mapping(uint256 => address) public adaptersPerProtocol;
     address[] public traderSelectedAdaptersArray;
@@ -51,6 +52,7 @@ contract TraderWallet is OwnableUpgradeable {
     error UsersVaultOperationFailed();
     error ApproveFailed(address caller, address token, uint256 amount);
     error TokenTransferFailed();
+    error InvalidRollover();
     error RolloverFailed();
     error SendToTraderFailed();
     error AmountToScaleNotFound();
@@ -352,13 +354,7 @@ contract TraderWallet is OwnableUpgradeable {
         return true;
     }
 
-    // FIRST TRADE FLAG
-    // FIRST TRADE FLAG
-    // FIRST TRADE FLAG
-    // FIRST TRADE FLAG
-    // FIRST TRADE FLAG
-    // FIRST TRADE FLAG
-
+    
     function executeOnProtocol(
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
@@ -399,13 +395,8 @@ contract TraderWallet is OwnableUpgradeable {
 
         // if tx needs to be replicated on vault
         if (_replicate) {
-            ////////////////////////////////////////////////////////////
-            ////////////////////////////////////////////////////////////
-            ////////////////////////////////////////////////////////////
-            walletRatio = 1e18; // (????)
-            ////////////////////////////////////////////////////////////
-            ////////////////////////////////////////////////////////////
-            ////////////////////////////////////////////////////////////
+            walletRatio = ratioProportions;
+            
             success = IUsersVault(vaultAddress).executeOnProtocol(
                 _protocolId,
                 _traderOperation,
@@ -429,21 +420,21 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function _executeOnGmx(
-        uint256 _ratio,
+        uint256 _walletRatio,
         IAdapter.AdapterOperation memory _traderOperation
     ) internal pure returns (bool) {
-        return GMXAdapter.executeOperation(_ratio, _traderOperation);
+        return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
     }
 
     // @todo add implementation
     function _executeOnAdapter(
         address _adapterAddress,
-        uint256 _ratio,
+        uint256 _walletRatio,
         IAdapter.AdapterOperation memory _traderOperation
     ) internal returns (bool) {
         return
             IAdapter(_adapterAddress).executeOperation(
-                _ratio,
+                _walletRatio,
                 _traderOperation
             );
     }
@@ -465,40 +456,53 @@ contract TraderWallet is OwnableUpgradeable {
         return cumulativePendingDeposits;
     }
 
-    /*
-
-        FUNCTION TO TRANSFER FUNDS TO TRADER WHEN ROLLOVER
-        BEING CALLED BY VAULT
-
-    */
-
     // not sure if the execution is here. Don't think so
     function rollover() external onlyTrader {
+        if (cumulativePendingDeposits == 0 && cumulativePendingWithdrawals == 0)
+            revert InvalidRollover();
+
         if (currentRound != 0) {
             (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
-        } else {
-            // store the first ratio between shares and deposit
-            ratioShares = 1e18;
+        } else{
+            afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(traderAddress);
+            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(vaultAddress);
         }
 
         bool success = IUsersVault(vaultAddress).rolloverFromTrader();
         if (!success) revert RolloverFailed();
-
-        // send to trader account
-
-        (success, ) = traderAddress.call{value: cumulativePendingWithdrawals}(
-            ""
-        );
-        if (!success) revert SendToTraderFailed();
-
         emit RolloverExecuted(
             block.timestamp,
             IUsersVault(vaultAddress).getRound()
         );
 
+
+        if (cumulativePendingWithdrawals > 0) {
+            // send to trader account
+            success = IERC20Upgradeable(underlyingTokenAddress).transferFrom(
+                address(this),
+                traderAddress,
+                cumulativePendingWithdrawals
+            );
+            if (!success) revert SendToTraderFailed();
+        }
+
+        // get profits ?
+        traderProfit = int256(afterRoundTraderBalance) - int256(initialTraderBalance);
+        vaultProfit = int256(afterRoundVaultBalance) - int256(initialVaultBalance);
+        /*
+
+        DO SOMETHING HERE WITH PROFIT ?
+
+        */
+
+        
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
 
+        cumulativePendingDeposits = 0;
+        cumulativePendingWithdrawals = 0;
+        traderProfit = 0;
+        vaultProfit = 0;
         ratioProportions = calculateRatio();
     }
 
@@ -512,7 +516,7 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function calculateRatio() public view returns (uint256) {
-        return initialVaultBalance / initialTraderBalance;
+        return (1e18 * initialVaultBalance) / initialTraderBalance;
     }
 
     function getRatio() public view returns (uint256) {

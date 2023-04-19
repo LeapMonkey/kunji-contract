@@ -14,7 +14,15 @@ const config: HardhatUserConfig = {
     sources: "./contracts",
     tests: "./tests",
   },
-  solidity: "0.8.9",
+  solidity: {
+    version: "0.8.9",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 170
+      }
+    }
+  },
   networks: {
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
