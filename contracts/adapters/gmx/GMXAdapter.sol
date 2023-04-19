@@ -6,99 +6,78 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import "../../interfaces/IPlatformAdapter.sol";
 import "../../interfaces/IAdapter.sol";
-import "./interfaces/IGMXAdapter.sol";
+import "./interfaces/IGmxAdapter.sol";
+import "./interfaces/IGmxOrderBook.sol";
+import "./interfaces/IGmxReader.sol";
+import "./interfaces/IGmxRouter.sol";
+import "./interfaces/IGmxVault.sol";
+
 
 library GMXAdapter {
     error AddressZero();
     error InvalidOperationId();
+    error CreateSwapOrderFail();
 
-    IGmxReader public gmxReader;
-    IGmxRouter public gmxRouter;
-    IGmxPositionRouter public gmxPositionRouter;
-    IGmxVault public gmxVault;
+    IGmxReader constant public gmxReader = IGmxReader(0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064);
+    IGmxRouter constant public gmxRouter = IGmxRouter(0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868);
+    IGmxPositionRouter constant public gmxPositionRouter = IGmxPositionRouter(0x22199a49A999c351eF7927602CFB187ec3cae489);
+    IGmxVault constant public gmxVault = IGmxVault(0x489ee077994B6658eAfA855C308275EAd8097C4A);
+    IGmxOrderBook constant public gmxOrderBook = IGmxOrderBook(0x09f77E8A13De9a35a7231028187e9fD5DB8a2ACB);
+    IGmxOrderBookReader constant public gmxOrderBookReader = IGmxOrderBookReader(0xa27C20A7CF0e1C68C0460706bB674f98F362Bc21);
 
-    struct AdapterOperation {
-        uint8 operationId;
-        bytes data;
-    }
+    uint256 constant public ratioDenominator = 1e18;
 
-    function initialize(
-        address _gmxRouter,
-        address _gmxPositionRouter,
-        address _gmxReader,
-        address _gmxVault
-    ) external initializer {
-        if (
-            _gmxRouter == address(0) ||
-            _gmxPositionRouter == address(0) ||
-            _gmxReader == address(0) ||
-            _gmxVault == address(0)
-        ) revert AddressZero();
-        gmxRouter = IGmxRouter(_gmxRouter);
-        gmxPositionRouter = IGmxPositionRouter(_gmxPositionRouter);
-        gmxReader = IGmxReader(_gmxReader);
-        gmxVault = IGmxVault(_gmxVault);
-    }
+    /// @notice The maximum slippage allowance
+    uint256 constant public slippageMax = 1e17;  // 10%
 
     /// @notice Gives approve to operate with gmxPositionRouter
-    /// @dev Needs to be called with delegatecall from wallet and vault in initialization
+    /// @dev Needs to be called from wallet and vault in initialization
+    // @todo move to contract constructor
     function initApprove() external {
         gmxRouter.approvePlugin(address(gmxPositionRouter));
     }
 
-    // @todo refactor input params according updates in the Wallet
+
+    /// @notice Executes operation with external protocol
+    /// @param ratio Scaling ratio to
+    /// @param tradeOperation Encoded operation data 
     function executeOperation(
         uint256 ratio,
-        IAdapter.AdapterOperation memory traderOperation
+        IAdapter.AdapterOperation memory tradeOperation
     ) external returns (bytes32) {
-        if (traderOperation.operationId == 0) {
-            uint256 outputAmount = _swap(ratio, traderOperation.data);
-            return bytes32(abi.encodePacked(outputAmount));
-        } else if (traderOperation.operationId == 1) {
-            return _increasePosition(ratio, traderOperation.data);
-        } else if (traderOperation.operationId == 2) {
-            return _decreasePosition(ratio, traderOperation.data);
-        }
+        if (uint256(tradeOperation.operationId) == 0) {
+            return _increasePosition(ratio, tradeOperation.data);
 
+        } else if (tradeOperation.operationId == 1) {
+            return _decreasePosition(ratio, tradeOperation.data);
+
+        } else if (tradeOperation.operationId == 2) {
+            return _createIncreaseOrder(ratio, tradeOperation.data);
+
+        } else if (tradeOperation.operationId == 3) {
+            return _updateIncreaseOrder(ratio, tradeOperation.data);
+
+        } else if (tradeOperation.operationId == 4) {
+            return _cancelIncreaseOrder(ratio, tradeOperation.data);
+
+        } else if (tradeOperation.operationId == 5) {
+            return _createDecreaseOrder(ratio, tradeOperation.data);
+        
+        } else if (tradeOperation.operationId == 6) {
+            return _updateDecreaseOrder(ratio, tradeOperation.data);
+
+        } else if (tradeOperation.operationId == 7) {
+            return _cancelDecreaseOrder(ratio, tradeOperation.data);
+
+        } else if (tradeOperation.operationId == 8) {
+            return _cancelMultipleOrder(ratio, tradeOperation.data);
+        } 
         revert InvalidOperationId();
     }
 
-    /* 
-    @notice Performs swap along the path
-    @dev Must be executed using delegate call, that's why we use address(this)
-    @param tradeData - swap data, must contain:
-        path:       the swap path as array: [tokenIn, tokenOut]
-        amountIn:   the amount of tokenIn to swap
-        minOut:     minimum expected output amount
-        receiver:   address of the receiver of tokenOut (will be address(this) in terms of delegate call)
-    @return boughtAmount - bought amount of target swap token
-    */
-    function _swap(uint256 ratio, bytes memory tradeData) internal returns (uint256) {
-        (address[] memory path, uint256 amountIn, uint256 minOut) = abi.decode(
-            tradeData,
-            (address[], uint256, uint256)
-        );
-
-        address tokenOut = path[path.length - 1];
-        uint256 balance = IERC20(tokenOut).balanceOf(address(this));
-
-        if (ratio != ratioDenominator) {
-            // scaling for Vault
-            amountIn = amountIn * ratio / ratioDenominator;
-            // increasing slippage allowance due to higher amounts
-            minOut = minOut * ratio / (ratioDenominator + slippageMax);
-        }
-
-        _checkUpdateAllowance(tokenOut, address(gmxRouter), amountIn);
-        gmxRouter.swap(path, amountIn, minOut, address(this));
-        uint256 boughtAmount = IERC20(tokenOut).balanceOf(address(this)) -
-            balance;
-        return boughtAmount;
-    }
 
     /* 
     @notice Opens new or increases the size of an existing position
-    @dev Must be executed using delegate call, that's why we use address(this)
     @param tradeData must contain packed parameters:
         path:       [collateralToken] or [tokenIn, collateralToken] if a swap is needed
         indexToken: the address of the token to long or short
@@ -159,7 +138,6 @@ library GMXAdapter {
 
     /* 
     @notice Closes or decreases an existing position
-    @dev Must be executed using delegate call, that's why we use address(this)
     @param tradeData must contain packed parameters:
         path:            [collateralToken] or [collateralToken, tokenOut] if a swap is needed
         indexToken:      the address of the token that was longed (or shorted)
@@ -224,6 +202,51 @@ library GMXAdapter {
         );
     }
 
+
+    /// /// /// ///
+    /// Orders
+    /// /// /// ///
+
+    function _createIncreaseOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+    function _updateIncreaseOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+    function _cancelIncreaseOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+    function _createDecreaseOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+    function _updateDecreaseOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+    function _cancelDecreaseOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+    function _cancelMultipleOrder(
+        uint256 ratio,
+        bytes memory tradeData
+    ) internal returns (bytes32 requestKey) {}
+
+
+    /// /// /// /// /// ///
+    /// View functions
+    /// /// /// /// /// ///
+
     /// @notice Calculates the max amount of tokenIn that can be swapped
     /// @param tokenIn The address of input token
     /// @param tokenOut The address of output token
@@ -278,7 +301,7 @@ library GMXAdapter {
         uint256 amount
     ) internal {
         if (IERC20(token).allowance(address(this), spender) < amount) {
-            IERC20(token).approve(spender, type(uint256).max);
+            IERC20(token).approve(spender, amount);
         }
     }
 }
