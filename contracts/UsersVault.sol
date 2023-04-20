@@ -3,14 +3,12 @@ pragma solidity ^0.8.9;
 
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {SafeERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import {SafeCastUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
+import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import "./adapters/gmx/GMXAdapter.sol";
 
@@ -24,7 +22,6 @@ contract UsersVault is
     PausableUpgradeable
 {
     using MathUpgradeable for uint256;
-    using SafeCastUpgradeable for uint256;
 
     struct UserDeposit {
         uint256 round;
@@ -42,13 +39,9 @@ contract UsersVault is
     address public contractsFactoryAddress;
     address public traderWalletAddress;
     address public dynamicValueAddress;
-    mapping(uint256 => address) public adaptersPerProtocol;
-    address[] public traderSelectedAdaptersArray;
-
     uint256 public currentRound;
     uint256 public initialVaultBalance;
     uint256 public afterRoundVaultBalance;
-
     // Total amount of total deposit assets in mapped round
     uint256 public pendingDepositAssets;
 
@@ -57,50 +50,57 @@ contract UsersVault is
     uint256 public processedWithdrawAssets;
     uint256 public ratioShares;
 
+    address[] public traderSelectedAdaptersArray;
+    mapping(uint256 => address) public adaptersPerProtocol;
+
     // user specific deposits accounting
     mapping(address => UserDeposit) public userDeposits;
 
     // user specific withdrawals accounting
     mapping(address => UserWithdrawal) public userWithdrawals;
 
+    // ratio per round
     mapping(uint256 => uint256) public assetsPerShareXRound;
+
+    uint256[50] __gap;
 
     error ZeroAddress(string target);
     error ZeroAmount();
     error UserNotAllowed();
-    error SafeTransferFailed();
-
+    error TokenTransferFailed();
     error InvalidRound();
-
-    // error ExistingWithdraw();
     error InsufficientShares(uint256 unclaimedShareBalance);
     error InsufficientAssets(uint256 unclaimedAssetBalance);
     error UnderlyingAssetNotAllowed();
-    // error BatchNotClosed();
     error InvalidRollover();
     error InvalidProtocol();
+    error AdapterPresent();
+    error AdapterNotPresent();
     error InvalidAdapter();
     error AdapterOperationFailed(string target);
     error UsersVaultOperationFailed();
     error ApproveFailed(address caller, address token, uint256 amount);
+    // error ExistingWithdraw();
+    // error BatchNotClosed();
 
     event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
     event DynamicValueAddressSet(address indexed dynamicValueAddress);
     event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
-
     event AdapterToUseAdded(
         uint256 protocolId,
         address indexed adapter,
         address indexed trader
     );
-    event AdapterToUseRemoved(address indexed adapter, address indexed trader);
+    event AdapterToUseRemoved(address indexed adapter, address indexed caller);
     event TraderWalletAddressSet(address indexed traderWalletAddress);
-
-    event UserDeposited(address indexed caller, uint256 assetsAmount);
+    event UserDeposited(
+        address indexed caller,
+        address tokenAddress,
+        uint256 assetsAmount
+    );
     event WithdrawRequest(address indexed caller, uint256 sharesAmount);
-
     event SharesClaimed(
         uint256 round,
         uint256 shares,
@@ -118,7 +118,6 @@ contract UsersVault is
         uint256 newDeposit,
         uint256 newWithdrawal
     );
-
     event OperationExecuted(
         uint256 protocolId,
         uint256 timestamp,
@@ -127,10 +126,6 @@ contract UsersVault is
         uint256 walletRatio
     );
 
-    // if (_tokenAddress != asset()) revert UnderlyingAssetNotAllowed();
-
-    // this is the shares token
-    // constructor() ERC20("name", "symbol) ERC4626(...) {}
     function initialize(
         address _underlyingTokenAddress,
         address _adaptersRegistryAddress,
@@ -150,7 +145,7 @@ contract UsersVault is
         if (_contractsFactoryAddress == address(0))
             revert ZeroAddress({target: "_contractsFactoryAddress"});
         if (_traderWalletAddress == address(0))
-            revert ZeroAddress({target: "_traderAddress"});
+            revert ZeroAddress({target: "_traderWalletAddress"});
 
         if (_dynamicValueAddress == address(0))
             revert ZeroAddress({target: "_dynamicValueAddress"});
@@ -166,6 +161,10 @@ contract UsersVault is
         dynamicValueAddress = _dynamicValueAddress;
         currentRound = 0;
     }
+
+    receive() external payable {}
+
+    fallback() external {}
 
     function setAdaptersRegistryAddress(
         address _adaptersRegistryAddress
@@ -209,21 +208,88 @@ contract UsersVault is
         underlyingTokenAddress = _underlyingTokenAddress;
     }
 
-    function userDeposit(
+    function addAdapterToUse(uint256 _protocolId) external {
+        _checkOwner();
+        address adapterAddress = _getAdapterAddress(_protocolId);
+        (bool isAdapterOnArray, ) = _isAdapterOnArray(adapterAddress);
+        if (isAdapterOnArray) revert AdapterPresent();
+
+        emit AdapterToUseAdded(_protocolId, adapterAddress, _msgSender());
+
+        // store the adapter on the array
+        traderSelectedAdaptersArray.push(adapterAddress);
+        adaptersPerProtocol[_protocolId] = adapterAddress;
+
+        /* 
+            MAKES APPROVAL OF UNDERLYING HERE ???
+        */
+    }
+
+    function removeAdapterToUse(uint256 _protocolId) external {
+        _checkOwner();
+
+        address adapterAddress = _getAdapterAddress(_protocolId);
+        (bool isAdapterOnArray, uint256 index) = _isAdapterOnArray(
+            adapterAddress
+        );
+        if (!isAdapterOnArray) revert AdapterNotPresent();
+
+        emit AdapterToUseRemoved(adapterAddress, _msgSender());
+
+        // put the last in the found index
+        traderSelectedAdaptersArray[index] = traderSelectedAdaptersArray[
+            traderSelectedAdaptersArray.length - 1
+        ];
+        // remove the last one because it was alredy put in found index
+        traderSelectedAdaptersArray.pop();
+
+        // remove mapping
+        delete adaptersPerProtocol[_protocolId];
+
+        // REMOVE ALLOWANCE OF UNDERLYING ????
+    }
+
+    function setAdapterAllowanceOnToken(
+        uint256 _protocolId,
         address _tokenAddress,
-        uint256 _assetsAmount
-    ) external {
+        bool _revoke
+    ) external returns (bool) {
+        _checkOwner();
+
+        address adapterAddress = adaptersPerProtocol[_protocolId];
+        if (adapterAddress == address(0)) revert InvalidAdapter();
+
+        uint256 amount;
+        if (!_revoke) amount = type(uint256).max;
+        else amount = 0;
+
+        if (!IERC20Upgradeable(_tokenAddress).approve(adapterAddress, amount)) {
+            revert ApproveFailed({
+                caller: _msgSender(),
+                token: _tokenAddress,
+                amount: amount
+            });
+        }
+
+        return true;
+    }
+
+    function userDeposit(address _tokenAddress, uint256 _amount) external {
         _onlyValidInvestors(_msgSender());
         _onlyUnderlying(_tokenAddress);
+        if (_amount == 0) revert ZeroAmount();
 
-        SafeERC20Upgradeable.safeTransferFrom(
-            IERC20Upgradeable(underlyingTokenAddress),
-            _msgSender(),
-            address(this),
-            _assetsAmount
-        );
+        if (
+            !(
+                IERC20Upgradeable(_tokenAddress).transferFrom(
+                    _msgSender(),
+                    address(this),
+                    _amount
+                )
+            )
+        ) revert TokenTransferFailed();
 
-        emit UserDeposited(_msgSender(), _assetsAmount);
+        emit UserDeposited(_msgSender(), _tokenAddress, _amount);
 
         // good only for first time (round zero)
         uint256 assetPerShare = 1e18;
@@ -252,9 +318,9 @@ contract UsersVault is
 
         userDeposits[_msgSender()].pendingAssets =
             userDeposits[_msgSender()].pendingAssets +
-            _assetsAmount;
+            _amount;
 
-        pendingDepositAssets += _assetsAmount;
+        pendingDepositAssets = pendingDepositAssets + _amount;
     }
 
     function withdrawRequest(uint256 _sharesAmount) external {
@@ -290,27 +356,88 @@ contract UsersVault is
         pendingWithdrawShares = pendingWithdrawShares + _sharesAmount;
     }
 
-    function setAdapterAllowanceOnToken(
-        uint256 _protocolId,
-        address _tokenAddress,
-        bool _revoke
-    ) external returns (bool) {
-        _checkOwner();
-        // check if protocolId is valid
-        address adapterAddress = adaptersPerProtocol[_protocolId];
-        if (adapterAddress == address(0)) revert InvalidAdapter();
+    //
+    //
+    function rolloverFromTrader() external returns (bool) {
+        _onlyTraderWallet(_msgSender());
 
-        uint256 amount;
-        if (!_revoke) amount = type(uint256).max;
-        else amount = 0;
+        if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
+            revert InvalidRollover();
 
-        if (!IERC20Upgradeable(_tokenAddress).approve(adapterAddress, amount)) {
-            revert ApproveFailed({
-                caller: _msgSender(),
-                token: _tokenAddress,
-                amount: amount
-            });
+        uint256 assetsPerShare;
+        uint256 sharesToMint;
+
+        if (currentRound != 0) {
+            afterRoundVaultBalance = getUnderlyingLiquidity();
+
+            assetsPerShare = getUnderlyingLiquidity().mulDiv(
+                1e18,
+                totalSupply()
+            );
+            sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
+            console.log(
+                "CNT - getUnderlyingLiquidity : ",
+                getUnderlyingLiquidity()
+            );
+            console.log("CNT - assetsPerShare         : ", assetsPerShare);
+            console.log("CNT - sharesToMint           : ", sharesToMint);
+        } else {
+            // first round dont consider pendings
+            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
+                .balanceOf(address(this));
+            // first ratio between shares and deposit = 1
+            assetsPerShare = 1e18;
+            // since ratio is 1 shares to mint is equal to actual balance
+            sharesToMint = afterRoundVaultBalance;
         }
+
+        // mint the shares for the contract so users can claim their shares
+        _mint(address(this), sharesToMint);
+        assetsPerShareXRound[currentRound] = assetsPerShare;
+
+        // Accept all pending deposits
+        pendingDepositAssets = 0;
+
+        // Process all withdrawals
+        processedWithdrawAssets = assetsPerShare.mulDiv(
+            pendingWithdrawShares,
+            1e18
+        );
+
+        console.log("CNT - assetsPerShare         : ", assetsPerShare);
+        console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
+
+        // Revert if the assets required for withdrawals < asset balance present in the vault
+        if (processedWithdrawAssets > 0) {
+            require(
+                IERC20Upgradeable(underlyingTokenAddress).balanceOf(
+                    address(this)
+                ) > processedWithdrawAssets,
+                "Not enough assets for withdrawal"
+            );
+        }
+
+        int256 vaultProfit = int256(afterRoundVaultBalance) -
+            int256(initialVaultBalance);
+        /*
+
+        DO SOMETHING HERE WITH PROFIT ?
+
+        */
+
+        // Make pending withdrawals 0
+        pendingWithdrawShares = 0;
+        vaultProfit = 0;
+
+        initialVaultBalance = getUnderlyingLiquidity();
+
+        emit BatchRollover(
+            currentRound,
+            pendingDepositAssets,
+            pendingWithdrawShares
+        );
+
+        currentRound++;
 
         return true;
     }
@@ -321,8 +448,6 @@ contract UsersVault is
         uint256 _walletRatio
     ) external returns (bool) {
         _onlyTraderWallet(_msgSender());
-
-        // check if protocolId is valid
         address adapterAddress = adaptersPerProtocol[_protocolId];
         if (adapterAddress == address(0)) revert InvalidAdapter();
 
@@ -352,125 +477,27 @@ contract UsersVault is
         return true;
     }
 
-    function _executeOnGmx(
-        uint256 _ratio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal pure returns (bool) {
-        return GMXAdapter.executeOperation(_ratio, _traderOperation);
+    // THIS FUNCTION SEEMS INCORRECT
+    // USES BALANCE OF SENDER SHARES TO CALCULATE AMOUNT TO CLAIM
+    // SO USER ALREADY HAS THAT
+    // THEN CALL CLAIMSHARES WITH THE RECEIVER WHICH CAN BE ANYONE
+    // IF USER EXECUTES WILL TRY TO GET FOR HIMSELF
+    // WHAT HE ALREADY HAS
+    /*
+    function claimAllShares(
+        address _receiver
+    ) external returns (uint256 _sharesAmount) {
+        _sharesAmount = balanceOf(_msgSender());
+        claimShares(_sharesAmount, _receiver);
     }
+    */
 
-    // @todo add implementation
-    function _executeOnAdapter(
-        address _adapterAddress,
-        uint256 _ratio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal returns (bool) {
-        return
-            IAdapter(_adapterAddress).executeOperation(
-                _ratio,
-                _traderOperation
-            );
-    }
-
-    //
-    //
-    function getUnderlyingLiquidity() public view returns (uint256) {
-        console.log(
-            "CNT - USDC Balance           : ",
-            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this))
-        );
-        console.log("CNT - pendingDepositAssets   : ", pendingDepositAssets);
-        console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
-        console.log("CNT - totalSupply()          : ", totalSupply());
-        return
-            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
-            pendingDepositAssets -
-            processedWithdrawAssets;
-    }
-
-    //
-    //
-    function rolloverFromTrader() external returns (bool) {
-        _onlyTraderWallet(_msgSender());
-
-        if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
-            revert InvalidRollover();
-
-        uint256 assetsPerShare;
-        uint256 sharesToMint;
-
-        if (currentRound != 0) {
-            afterRoundVaultBalance = getUnderlyingLiquidity();
-
-            assetsPerShare = getUnderlyingLiquidity().mulDiv(
-                1e18,
-                totalSupply()
-            );
-            sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
-            console.log(
-                "CNT - getUnderlyingLiquidity : ",
-                getUnderlyingLiquidity()
-            );
-            console.log("CNT - assetsPerShare         : ", assetsPerShare);
-            console.log("CNT - sharesToMint           : ", sharesToMint);
-        } else {
-            
-            // first round dont consider pendings            
-            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this));
-            // first ratio between shares and deposit = 1
-            assetsPerShare = 1e18;
-            // since ratio is 1 shares to mint is equal to actual balance
-            sharesToMint = afterRoundVaultBalance; 
-        }
-
-        // mint the shares for the contract so users can claim their shares
-        _mint(address(this), sharesToMint);
-        assetsPerShareXRound[currentRound] = assetsPerShare;
-
-        // Accept all pending deposits
-        pendingDepositAssets = 0;
-
-        // Process all withdrawals
-        processedWithdrawAssets = assetsPerShare.mulDiv(
-            pendingWithdrawShares,
-            1e18
-        );
-
-        console.log("CNT - assetsPerShare         : ", assetsPerShare);
-        console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
-
-        // Revert if the assets required for withdrawals < asset balance present in the vault
-        if (processedWithdrawAssets > 0) {
-            require(
-                IERC20Upgradeable(underlyingTokenAddress).balanceOf(
-                    address(this)
-                ) > processedWithdrawAssets,
-                "Not enough assets for withdrawal"
-            );
-        }
-
-        int256 vaultProfit = int256(afterRoundVaultBalance) - int256(initialVaultBalance);
-        /*
-
-        DO SOMETHING HERE WITH PROFIT ?
-
-        */
-
-        // Make pending withdrawals 0
-        pendingWithdrawShares = 0;
-        vaultProfit = 0;
-
-        initialVaultBalance = getUnderlyingLiquidity();
-
-        emit BatchRollover(
-            currentRound,
-            pendingDepositAssets,
-            pendingWithdrawShares
-        );
-
-        currentRound++;
-
-        return true;
+    function claimAllAssets(
+        address _receiver
+    ) external returns (uint256 _assetsAmount) {
+        _onlyValidInvestors(_msgSender());
+        _assetsAmount = balanceOf(_msgSender());
+        claimAssets(_assetsAmount, _receiver);
     }
 
     function previewShares(address _receiver) external view returns (uint256) {
@@ -493,6 +520,14 @@ contract UsersVault is
         }
 
         return userDeposits[_receiver].unclaimedShares;
+    }
+
+    function getSharesContractBalance() external view returns (uint256) {
+        return this.balanceOf(address(this));
+    }
+
+    function getTraderSelectedAdaptersLength() external view returns (uint256) {
+        return traderSelectedAdaptersArray.length;
     }
 
     // anybody can call this
@@ -520,7 +555,9 @@ contract UsersVault is
         }
 
         if (userDeposits[_msgSender()].unclaimedShares < _sharesAmount)
-            revert InsufficientShares(userDeposits[_msgSender()].unclaimedShares);
+            revert InsufficientShares(
+                userDeposits[_msgSender()].unclaimedShares
+            );
 
         userDeposits[_msgSender()].unclaimedShares =
             userDeposits[_msgSender()].unclaimedShares -
@@ -572,45 +609,30 @@ contract UsersVault is
             _receiver
         );
 
-        SafeERC20Upgradeable.safeTransfer(
-            IERC20Upgradeable(underlyingTokenAddress),
-            _receiver,
-            _assetsAmount
+        if (
+            !(
+                IERC20Upgradeable(underlyingTokenAddress).transfer(
+                    _receiver,
+                    _assetsAmount
+                )
+            )
+        ) revert TokenTransferFailed();
+    }
+
+    //
+    //
+    function getUnderlyingLiquidity() public view returns (uint256) {
+        console.log(
+            "CNT - USDC Balance           : ",
+            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this))
         );
-    }
-
-    // THIS FUNCTION SEEMS INCORRECT
-    // USES BALANCE OF SENDER SHARES TO CALCULATE AMOUNT TO CLAIM
-    // SO USER ALREADY HAS THAT
-    // THEN CALL CLAIMSHARES WITH THE RECEIVER WHICH CAN BE ANYONE
-    // IF USER EXECUTES WILL TRY TO GET FOR HIMSELF
-    // WHAT HE ALREADY HAS
-    /*
-    function claimAllShares(
-        address _receiver
-    ) external returns (uint256 _sharesAmount) {
-        _sharesAmount = balanceOf(_msgSender());
-        claimShares(_sharesAmount, _receiver);
-    }
-    */
-
-    function claimAllAssets(
-        address _receiver
-    ) external returns (uint256 _assetsAmount) {
-        _onlyValidInvestors(_msgSender());
-        _assetsAmount = balanceOf(_msgSender());
-        claimAssets(_assetsAmount, _receiver);
-    }
-
-    function getSharesContractBalance() external view returns (uint256) {
-        return this.balanceOf(address(this));
-    }
-
-    function _checkZeroAddress(
-        address _variable,
-        string memory _message
-    ) internal pure {
-        if (_variable == address(0)) revert ZeroAddress({target: _message});
+        console.log("CNT - pendingDepositAssets   : ", pendingDepositAssets);
+        console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
+        console.log("CNT - totalSupply()          : ", totalSupply());
+        return
+            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
+            pendingDepositAssets -
+            processedWithdrawAssets;
     }
 
     function _onlyUnderlying(address _tokenAddress) internal view {
@@ -632,5 +654,59 @@ contract UsersVault is
 
     function _checkZeroRound() internal view {
         if (currentRound == 0) revert InvalidRound();
+    }
+
+    function _checkZeroAddress(
+        address _variable,
+        string memory _message
+    ) internal pure {
+        if (_variable == address(0)) revert ZeroAddress({target: _message});
+    }
+
+    function _getAdapterAddress(
+        uint256 _protocolId
+    ) internal view returns (address) {
+        (bool adapterExist, address adapterAddress) = IAdaptersRegistry(
+            adaptersRegistryAddress
+        ).getAdapterAddress(_protocolId);
+        if (!adapterExist) revert InvalidProtocol();
+
+        return adapterAddress;
+    }
+
+    function _isAdapterOnArray(
+        address _adapterAddress
+    ) internal view returns (bool, uint256) {
+        bool found = false;
+        uint256 i = 0;
+        if (traderSelectedAdaptersArray.length > 0) {
+            for (i = 0; i < traderSelectedAdaptersArray.length; i++) {
+                if (traderSelectedAdaptersArray[i] == _adapterAddress) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        return (found, i);
+    }
+
+    //
+    function _executeOnAdapter(
+        address _adapterAddress,
+        uint256 _ratio,
+        IAdapter.AdapterOperation memory _traderOperation
+    ) internal returns (bool) {
+        return
+            IAdapter(_adapterAddress).executeOperation(
+                _ratio,
+                _traderOperation
+            );
+    }
+
+    function _executeOnGmx(
+        uint256 _ratio,
+        IAdapter.AdapterOperation memory _traderOperation
+    ) internal pure returns (bool) {
+        return GMXAdapter.executeOperation(_ratio, _traderOperation);
     }
 }

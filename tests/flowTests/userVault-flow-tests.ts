@@ -206,7 +206,6 @@ describe("User Vault Contract Tests", function () {
           expect(await usersVaultContract.traderWalletAddress()).to.equal(traderWalletAddress);
           expect(await usersVaultContract.dynamicValueAddress()).to.equal(dynamicValueAddress);
           expect(await usersVaultContract.owner()).to.equal(ownerAddress);
-          expect(await usersVaultContract.owner()).to.equal(ownerAddress);
         });
 
         it("THEN ==> DEPOSIT ON ROUND 0 ==> NOT STARTED YET !!!!", async () => {

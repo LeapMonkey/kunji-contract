@@ -1,5 +1,11 @@
 import { ethers, upgrades } from "hardhat";
-import { Signer, ContractFactory, ContractTransaction, BigNumber } from "ethers";
+import {
+  Signer,
+  ContractFactory,
+  ContractTransaction,
+  BigNumber,
+  Contract,
+} from "ethers";
 import { expect } from "chai";
 import Reverter from "./_helpers/reverter";
 import {
@@ -10,7 +16,13 @@ import {
   // TraderWalletMock,
   ERC20Mock,
 } from "../typechain-types";
-import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18, AMOUNT_100 } from "./_helpers/constants";
+import {
+  TEST_TIMEOUT,
+  ZERO_AMOUNT,
+  ZERO_ADDRESS,
+  AMOUNT_1E18,
+  AMOUNT_100,
+} from "./_helpers/constants";
 
 const reverter = new Reverter();
 
@@ -30,7 +42,6 @@ let user4: Signer;
 let user5: Signer;
 
 let deployerAddress: string;
-let vaultAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
@@ -59,19 +70,25 @@ let userBalanceAfter: BigNumber;
 let vaultBalanceBefore: BigNumber;
 let vaultBalanceAfter: BigNumber;
 
+const SHARES_NAME = "UserVaultShares";
+const SHARES_SYMBOL = "UVS";
+
 describe("User Vault Contract Tests", function () {
   this.timeout(TEST_TIMEOUT);
 
   before(async () => {
     const ERC20MockFactory = await ethers.getContractFactory("ERC20Mock");
 
-    usdcTokenContract = (await ERC20MockFactory.deploy("USDC", "USDC", 6)) as ERC20Mock;
+    usdcTokenContract = (await ERC20MockFactory.deploy(
+      "USDC",
+      "USDC",
+      6
+    )) as ERC20Mock;
     await usdcTokenContract.deployed();
     underlyingTokenAddress = usdcTokenContract.address;
 
     [
       deployer,
-      vault,
       traderWallet,
       adaptersRegistry,
       contractsFactory,
@@ -87,7 +104,6 @@ describe("User Vault Contract Tests", function () {
 
     [
       deployerAddress,
-      vaultAddress,
       traderWalletAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
@@ -100,7 +116,6 @@ describe("User Vault Contract Tests", function () {
       user5Address,
     ] = await Promise.all([
       deployer.getAddress(),
-      vault.getAddress(),
       traderWallet.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
@@ -116,7 +131,9 @@ describe("User Vault Contract Tests", function () {
 
   describe("UserVault deployment Tests", function () {
     before(async () => {
-      const GMXAdapterLibraryFactory = await ethers.getContractFactory("GMXAdapter");
+      const GMXAdapterLibraryFactory = await ethers.getContractFactory(
+        "GMXAdapter"
+      );
       const gmxAdapterContract = await GMXAdapterLibraryFactory.deploy();
       await gmxAdapterContract.deployed();
 
@@ -125,19 +142,143 @@ describe("User Vault Contract Tests", function () {
           GMXAdapter: gmxAdapterContract.address,
         },
       });
-      ContractsFactoryFactory = await ethers.getContractFactory("ContractsFactoryMock");
-
-      // deploy ContractsFactory
-      contractsFactoryContract = (await upgrades.deployProxy(ContractsFactoryFactory, [])) as ContractsFactoryMock;
-      await contractsFactoryContract.deployed();
-      // set TRUE for response
-      await contractsFactoryContract.setReturnValue(true);
+      ContractsFactoryFactory = await ethers.getContractFactory(
+        "ContractsFactoryMock"
+      );
 
       owner = deployer;
       ownerAddress = deployerAddress;
     });
-    describe("WHEN trying to deploy TraderWallet contract with correct parameters", function () {
+
+    describe("WHEN trying to deploy UserVault contract with invalid parameters", function () {
+      it("THEN it should FAIL when _underlyingTokenAddress is ZERO", async () => {
+        await expect(
+          upgrades.deployProxy(
+            UsersVaultFactory,
+            [
+              ZERO_ADDRESS,
+              adaptersRegistryAddress,
+              contractsFactoryAddress,
+              traderWalletAddress,
+              dynamicValueAddress,
+              SHARES_NAME,
+              SHARES_SYMBOL,
+            ],
+            { unsafeAllowLinkedLibraries: true }
+          )
+        )
+          .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
+          .withArgs("_underlyingTokenAddress");
+      });
+
+      it("THEN it should FAIL when _adaptersRegistryAddress is ZERO", async () => {
+        await expect(
+          upgrades.deployProxy(
+            UsersVaultFactory,
+            [
+              underlyingTokenAddress,
+              ZERO_ADDRESS,
+              contractsFactoryAddress,
+              traderWalletAddress,
+              dynamicValueAddress,
+              SHARES_NAME,
+              SHARES_SYMBOL,
+            ],
+            { unsafeAllowLinkedLibraries: true }
+          )
+        )
+          .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
+          .withArgs("_adaptersRegistryAddress");
+      });
+
+      it("THEN it should FAIL when _contractsFactoryAddress is ZERO", async () => {
+        await expect(
+          upgrades.deployProxy(
+            UsersVaultFactory,
+            [
+              underlyingTokenAddress,
+              adaptersRegistryAddress,
+              ZERO_ADDRESS,
+              traderWalletAddress,
+              dynamicValueAddress,
+              SHARES_NAME,
+              SHARES_SYMBOL,
+            ],
+            { unsafeAllowLinkedLibraries: true }
+          )
+        )
+          .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
+          .withArgs("_contractsFactoryAddress");
+      });
+
+      it("THEN it should FAIL when _traderWalletAddress is ZERO", async () => {
+        await expect(
+          upgrades.deployProxy(
+            UsersVaultFactory,
+            [
+              underlyingTokenAddress,
+              adaptersRegistryAddress,
+              contractsFactoryAddress,
+              ZERO_ADDRESS,
+              dynamicValueAddress,
+              SHARES_NAME,
+              SHARES_SYMBOL,
+            ],
+            { unsafeAllowLinkedLibraries: true }
+          )
+        )
+          .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
+          .withArgs("_traderWalletAddress");
+      });
+
+      it("THEN it should FAIL when _dynamicValueAddress is ZERO", async () => {
+        await expect(
+          upgrades.deployProxy(
+            UsersVaultFactory,
+            [
+              underlyingTokenAddress,
+              adaptersRegistryAddress,
+              contractsFactoryAddress,
+              traderWalletAddress,
+              ZERO_ADDRESS,
+              SHARES_NAME,
+              SHARES_SYMBOL,
+            ],
+            { unsafeAllowLinkedLibraries: true }
+          )
+        )
+          .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
+          .withArgs("_dynamicValueAddress");
+      });
+    });
+
+    describe("WHEN trying to deploy UserVault contract with correct parameters", function () {
+      const mintForUsers = async (
+        _userAddress: string,
+        _tokenContract: Contract,
+        _amount: BigNumber
+      ) => {
+        await _tokenContract.mint(_userAddress, _amount);
+      };
+      const approveForUsers = async (
+        _user: Signer,
+        _tokenContract: Contract,
+        _amount: BigNumber,
+        _spenderAddress: string
+      ) => {
+        await _tokenContract.connect(_user).approve(_spenderAddress, _amount);
+      };
+
       before(async () => {
+        // deploy ContractsFactory
+        contractsFactoryContract = (await upgrades.deployProxy(
+          ContractsFactoryFactory,
+          []
+        )) as ContractsFactoryMock;
+        await contractsFactoryContract.deployed();
+        // set TRUE for response
+        await contractsFactoryContract.setReturnValue(true);
+
         usersVaultContract = (await upgrades.deployProxy(
           UsersVaultFactory,
           [
@@ -146,215 +287,723 @@ describe("User Vault Contract Tests", function () {
             contractsFactoryContract.address,
             traderWalletAddress,
             dynamicValueAddress,
-            "UserVaultShares",
-            "UVS",
+            SHARES_NAME,
+            SHARES_SYMBOL,
           ],
           { unsafeAllowLinkedLibraries: true }
         )) as UsersVault;
         await usersVaultContract.deployed();
 
+        const signers = [user1, user2, user3, user4, user5];
+        const userAddresses = [
+          user1Address,
+          user2Address,
+          user3Address,
+          user4Address,
+          user5Address,
+        ];
+
         // approve and mint to users
-        await usdcTokenContract.mint(user1Address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.mint(user2Address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.mint(user3Address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.mint(user4Address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.mint(user5Address, AMOUNT_1E18.mul(1000));
+        for (let i = 0; i < 5; i++) {
+          await mintForUsers(
+            userAddresses[i],
+            usdcTokenContract,
+            AMOUNT_1E18.mul(1000)
+          );
 
-        await usdcTokenContract.connect(user1).approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.connect(user2).approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.connect(user3).approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.connect(user4).approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
-        await usdcTokenContract.connect(user5).approve(usersVaultContract.address, AMOUNT_1E18.mul(1000));
-
-        // contractBalanceBefore = await usdcTokenContract.balanceOf(
-        //   usersVaultContract.address
-        // );
-
-        vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
+          await approveForUsers(
+            signers[i],
+            usdcTokenContract,
+            AMOUNT_1E18.mul(1000),
+            usersVaultContract.address
+          );
+        }
 
         // take a snapshot
         await reverter.snapshot();
       });
 
-      describe("WHEN trying to deploy TraderWallet contract with correct parameters", function () {
-        const showBalances = async () => {
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
-          console.log("pendingWithdrawShares  : ", await usersVaultContract.pendingWithdrawShares());
-          console.log("\n");
-          console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
-          console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
-          console.log("userDeposits 3         : ", await usersVaultContract.userDeposits(user3Address));
-          console.log("\n");
-          console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
-          console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
-          console.log("userWithdrawals 3      : ", await usersVaultContract.userWithdrawals(user3Address));
-          console.log("\n");
-          console.log("assetsPerShareXRound(0): ", await usersVaultContract.assetsPerShareXRound(0));
-          console.log("assetsPerShareXRound(1): ", await usersVaultContract.assetsPerShareXRound(1));
-          console.log("assetsPerShareXRound(2): ", await usersVaultContract.assetsPerShareXRound(2));
-          console.log("\n");
-          console.log("ROUND                  : ", await usersVaultContract.currentRound());
-          console.log("contract USDC Balance  : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
-          console.log("Vault Shares Balance   : ", await usersVaultContract.getSharesContractBalance());
-        };
-
-        it("THEN it should return the same ones after deployment", async () => {
-          expect(await usersVaultContract.underlyingTokenAddress()).to.equal(underlyingTokenAddress);
-          expect(await usersVaultContract.adaptersRegistryAddress()).to.equal(adaptersRegistryAddress);
-          expect(await usersVaultContract.contractsFactoryAddress()).to.equal(contractsFactoryContract.address);
-          expect(await usersVaultContract.traderWalletAddress()).to.equal(traderWalletAddress);
-          expect(await usersVaultContract.dynamicValueAddress()).to.equal(dynamicValueAddress);
-          expect(await usersVaultContract.owner()).to.equal(ownerAddress);
-          expect(await usersVaultContract.owner()).to.equal(ownerAddress);
-        });
-
-        it("THEN ==> DEPOSIT ON ROUND 0 ==> NOT STARTED YET !!!!", async () => {
-          await usersVaultContract
-            .connect(user1)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(10)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user1)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(20)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user2)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(30)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user2)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(40)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user3)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(50)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-        });
-
-        it("THEN ==> FAIL WHEN CLAIMING SHARES --> InvalidRound because is ROUND 0", async () => {
-          await expect(usersVaultContract.claimShares(AMOUNT_100, user1Address)).to.be.revertedWithCustomError(
-            usersVaultContract,
-            "InvalidRound"
-          );
-        });
-
-        it("THEN ==> Balanaces before and after FIRST rollover", async () => {
-          await showBalances();
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          await usersVaultContract.connect(traderWallet).rolloverFromTrader();
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          await showBalances();
-
-          console.log("\n\nUser 1 Shares PRV    :>> ", await usersVaultContract.previewShares(user1Address));
-        });
-
-        it("THEN ==> FAIL WHEN CLAIMING SHARES", async () => {
-          await expect(
-            usersVaultContract.claimShares(AMOUNT_1E18.mul(100), user1Address)
-          ).to.be.revertedWithCustomError(usersVaultContract, "InsufficientShares");
-        });
-
-        it("THEN ==> DEPOSIT ON ROUND 1 ==> VALID FOR ROUND 2", async () => {
-          await usersVaultContract
-            .connect(user1)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(1)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user1)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(2)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user2)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(3)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user2)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(4)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user3)
-            .userDeposit(underlyingTokenAddress, BigNumber.from(AMOUNT_1E18.mul(5)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-
-          console.log("\n\nUser 1 Shares PRV      :>> ", await usersVaultContract.previewShares(user1Address));
-          console.log("--------------------------------------------------------------------------");
-        });
-
-        it("THEN ==> User 1 Claim 5 Shares", async () => {
-          console.log("Balance user 1 Before claim: ", await usersVaultContract.balanceOf(user1Address));
-          await usersVaultContract.connect(user1).claimShares(AMOUNT_1E18.mul(1), user1Address);
-          console.log("Balance user 1 After claim: ", await usersVaultContract.balanceOf(user1Address));
-        });
-
-        it("THEN ==> User 2 FAILS to claim 5 Asset", async () => {
-          await expect(
-            usersVaultContract.connect(user2).claimAssets(AMOUNT_1E18.mul(5), user2Address)
-          ).to.be.revertedWithCustomError(usersVaultContract, "InsufficientAssets");
-        });
-
-        it("THEN ==> User 2 Claim 2 shares", async () => {
-          const balanceBefore = await usersVaultContract.balanceOf(user2Address);
-          console.log("Balance user 2 Before claim: ", balanceBefore);
-          await usersVaultContract.connect(user2).claimShares(AMOUNT_1E18.mul(2), user2Address);
-          const balanceAfter = await usersVaultContract.balanceOf(user2Address);
-          expect(balanceBefore.add(AMOUNT_1E18.mul(2))).to.equal(balanceAfter);
-        });
-
-        it("THEN ==> User 3 Claim 3 shares", async () => {
-          const balanceBefore = await usersVaultContract.balanceOf(user3Address);
-          console.log("Balance user 3 Before claim: ", balanceBefore);
-          await usersVaultContract.connect(user3).claimShares(AMOUNT_1E18.mul(3), user3Address);
-          const balanceAfter = await usersVaultContract.balanceOf(user3Address);
-          expect(balanceBefore.add(AMOUNT_1E18.mul(3))).to.equal(balanceAfter);
-        });
-
-        it("THEN ==> User 3 Makes WithdrawRequest of 3 Asset", async () => {
-          const balanceBefore = await usdcTokenContract.balanceOf(user3Address);
-          console.log("Balance user 3 Before claim: ", await usdcTokenContract.balanceOf(user3Address));
-          await usersVaultContract.connect(user3).withdrawRequest(AMOUNT_1E18.mul(3));
-          const balanceAfter = await usdcTokenContract.balanceOf(user3Address);
-          expect(balanceBefore).to.equal(balanceAfter);
-        });
-
-        it("THEN ==> Balanaces before and after SECOND rollover PROFIT OF 35", async () => {
-          await showBalances();
-
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-
-          await usdcTokenContract.mint(usersVaultContract.address, AMOUNT_1E18.mul(35));
-          await usersVaultContract.connect(traderWallet).rolloverFromTrader();
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-
-          await showBalances();
-        });
-
-        it("THEN ==> User 3 Claim 3 Assets", async () => {
-          const balanceBefore = await usdcTokenContract.balanceOf(user3Address);
-          console.log("Balance user 3 Before claim: ", await usdcTokenContract.balanceOf(user3Address));
-          await usersVaultContract.connect(user3).claimAssets(AMOUNT_1E18.mul(3), user3Address);
-          const balanceAfter = await usdcTokenContract.balanceOf(user3Address);
-          expect(balanceBefore.add(AMOUNT_1E18.mul(3))).to.equal(balanceAfter);
-        });
-
-        // it("THEN ==> User 1 Claim ALL Shares", async () => {
-        //   console.log('Balance user 1 Before claim: ', await usersVaultContract.balanceOf(user1Address));
-        //   await usersVaultContract.connect(user1).claimAllShares(user1Address);
-        //   console.log('Balance user 1 After claim: ', await usersVaultContract.balanceOf(user1Address));
-        // });
+      it("THEN it should return the same ones after deployment", async () => {
+        expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
+          underlyingTokenAddress
+        );
+        expect(await usersVaultContract.adaptersRegistryAddress()).to.equal(
+          adaptersRegistryAddress
+        );
+        expect(await usersVaultContract.contractsFactoryAddress()).to.equal(
+          contractsFactoryContract.address
+        );
+        expect(await usersVaultContract.traderWalletAddress()).to.equal(
+          traderWalletAddress
+        );
+        expect(await usersVaultContract.dynamicValueAddress()).to.equal(
+          dynamicValueAddress
+        );
+        expect(await usersVaultContract.owner()).to.equal(ownerAddress);
       });
+
+      describe("WHEN trying to set the adaptersRegistryAddress", async () => {
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN caller is not owner", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(nonAuthorized)
+                  .setAdaptersRegistryAddress(otherAddress)
+              ).to.be.revertedWith("Ownable: caller is not the owner");
+            });
+          });
+
+          describe("WHEN address is invalid", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(owner)
+                  .setAdaptersRegistryAddress(ZERO_ADDRESS)
+              )
+                .to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAddress"
+                )
+                .withArgs("_adaptersRegistryAddress");
+            });
+          });
+        });
+
+        describe("WHEN calling with correct caller and address", function () {
+          before(async () => {
+            txResult = await usersVaultContract
+              .connect(owner)
+              .setAdaptersRegistryAddress(otherAddress);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+          it("THEN new address should be stored", async () => {
+            expect(await usersVaultContract.adaptersRegistryAddress()).to.equal(
+              otherAddress
+            );
+          });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "AdaptersRegistryAddressSet")
+              .withArgs(otherAddress);
+          });
+        });
+      });
+
+      describe("WHEN trying to set the contractsFactoryAddress", async () => {
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN caller is not owner", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(nonAuthorized)
+                  .setContractsFactoryAddress(otherAddress)
+              ).to.be.revertedWith("Ownable: caller is not the owner");
+            });
+          });
+
+          describe("WHEN address is invalid", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(owner)
+                  .setContractsFactoryAddress(ZERO_ADDRESS)
+              )
+                .to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAddress"
+                )
+                .withArgs("_contractsFactoryAddress");
+            });
+          });
+        });
+
+        describe("WHEN calling with correct caller and address", function () {
+          before(async () => {
+            txResult = await usersVaultContract
+              .connect(owner)
+              .setContractsFactoryAddress(otherAddress);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+          it("THEN new address should be stored", async () => {
+            expect(await usersVaultContract.contractsFactoryAddress()).to.equal(
+              otherAddress
+            );
+          });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "ContractsFactoryAddressSet")
+              .withArgs(otherAddress);
+          });
+        });
+      });
+
+      describe("WHEN trying to set the dynamicValueAddress", async () => {
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN caller is not owner", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(nonAuthorized)
+                  .setDynamicValueAddress(otherAddress)
+              ).to.be.revertedWith("Ownable: caller is not the owner");
+            });
+          });
+
+          describe("WHEN address is invalid", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(owner)
+                  .setDynamicValueAddress(ZERO_ADDRESS)
+              )
+                .to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAddress"
+                )
+                .withArgs("_dynamicValueAddress");
+            });
+          });
+        });
+
+        describe("WHEN calling with correct caller and address", function () {
+          before(async () => {
+            txResult = await usersVaultContract
+              .connect(owner)
+              .setDynamicValueAddress(otherAddress);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+          it("THEN new address should be stored", async () => {
+            expect(await usersVaultContract.dynamicValueAddress()).to.equal(
+              otherAddress
+            );
+          });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "DynamicValueAddressSet")
+              .withArgs(otherAddress);
+          });
+        });
+      });
+
+      describe("WHEN trying to set the underlyingTokenAddress", async () => {
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN caller is not owner", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(nonAuthorized)
+                  .setUnderlyingTokenAddress(otherAddress)
+              ).to.be.revertedWith("Ownable: caller is not the owner");
+            });
+          });
+
+          describe("WHEN address is invalid", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(owner)
+                  .setUnderlyingTokenAddress(ZERO_ADDRESS)
+              )
+                .to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAddress"
+                )
+                .withArgs("_underlyingTokenAddress");
+            });
+          });
+        });
+
+        describe("WHEN calling with correct caller and address", function () {
+          before(async () => {
+            txResult = await usersVaultContract
+              .connect(owner)
+              .setUnderlyingTokenAddress(otherAddress);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+          it("THEN new address should be stored", async () => {
+            expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
+              otherAddress
+            );
+          });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "UnderlyingTokenAddressSet")
+              .withArgs(otherAddress);
+          });
+        });
+      });
+
+      describe("WHEN trying to set the traderWalletAddress", async () => {
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN caller is not owner", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(nonAuthorized)
+                  .setTraderWalletAddress(otherAddress)
+              ).to.be.revertedWith("Ownable: caller is not the owner");
+            });
+          });
+
+          describe("WHEN address is invalid", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(owner)
+                  .setTraderWalletAddress(ZERO_ADDRESS)
+              )
+                .to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAddress"
+                )
+                .withArgs("_traderWalletAddress");
+            });
+          });
+          xdescribe("WHEN traderWalletADdress is INVALID ! ========>>>>>>> ", function () {
+            before(async () => {
+              // change returnValue to return false on function call
+              await contractsFactoryContract.setReturnValue(false);
+            });
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(owner)
+                  .setTraderWalletAddress(otherAddress)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "NewTraderNotAllowed"
+              );
+            });
+          });
+        });
+
+        describe("WHEN calling with correct caller and address", function () {
+          before(async () => {
+            // change returnValue to return true on function call
+            await contractsFactoryContract.setReturnValue(true);
+
+            txResult = await usersVaultContract
+              .connect(owner)
+              .setTraderWalletAddress(otherAddress);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+
+          it("THEN new address should be stored", async () => {
+            expect(await usersVaultContract.traderWalletAddress()).to.equal(
+              otherAddress
+            );
+          });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "TraderWalletAddressSet")
+              .withArgs(otherAddress);
+          });
+        });
+      });
+
+      describe("WHEN trying to add/remove adapter to be used by trader", async () => {
+        let AdaptersRegistryFactory: ContractFactory;
+        let adaptersRegistryContract: AdaptersRegistryMock;
+
+        before(async () => {
+          // deploy mocked adaptersRegistry
+          AdaptersRegistryFactory = await ethers.getContractFactory(
+            "AdaptersRegistryMock"
+          );
+          adaptersRegistryContract =
+            (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
+          await adaptersRegistryContract.deployed();
+
+          // change address to mocked adaptersRegistry
+          await usersVaultContract
+            .connect(owner)
+            .setAdaptersRegistryAddress(adaptersRegistryContract.address);
+        });
+        after(async () => {
+          await reverter.revert();
+        });
+
+        describe("WHEN trying to add an adapter to use (addAdapterToUse)", async () => {
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not owner", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(nonAuthorized).addAdapterToUse(1)
+                ).to.be.revertedWith("Ownable: caller is not the owner");
+              });
+            });
+            describe("WHEN protocol does not exist in registry", function () {
+              before(async () => {
+                // change returnValue to adapter registry to fail on function call
+                await adaptersRegistryContract.setReturnValue(false);
+                await adaptersRegistryContract.setReturnAddress(otherAddress);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(owner).addAdapterToUse(1)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "InvalidProtocol"
+                );
+              });
+            });
+          });
+
+          describe("WHEN calling with correct caller and protocol", function () {
+            let adapter1Address: string;
+
+            before(async () => {
+              // change returnValue to return true on function call
+              adapter1Address = otherAddress;
+              await adaptersRegistryContract.setReturnValue(true);
+              await adaptersRegistryContract.setReturnAddress(adapter1Address);
+
+              txResult = await usersVaultContract
+                .connect(owner)
+                .addAdapterToUse(1);
+            });
+
+            it("THEN new adapter should be added to the trader array", async () => {
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(0)
+              ).to.equal(adapter1Address);
+            });
+
+            it("THEN it should emit an Event", async () => {
+              await expect(txResult)
+                .to.emit(usersVaultContract, "AdapterToUseAdded")
+                .withArgs(1, adapter1Address, ownerAddress);
+            });
+
+            it("THEN it should be added to the adaptersPerProtocol mapping", async () => {
+              expect(await usersVaultContract.adaptersPerProtocol(1)).to.equal(
+                adapter1Address
+              );
+            });
+
+            describe("WHEN adapter already exists in traderArray ", function () {
+              it("THEN adding the same one should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(owner).addAdapterToUse(1)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "AdapterPresent"
+                );
+              });
+            });
+          });
+        });
+
+        describe("WHEN trying to remove an adapter (removeAdapterToUse)", async () => {
+          // otherAddress is already added from previous flow (addAdapterToUse)
+          // to add now deployerAddress, contractsFactoryAddress, dynamicValueAddress
+          // just to store something and test the function
+          let adapter1Address: string;
+          let adapter2Address: string;
+          let adapter3Address: string;
+          let adapter4Address: string;
+          let adapter10Address: string;
+
+          before(async () => {
+            adapter1Address = otherAddress;
+            adapter2Address = deployerAddress;
+            adapter3Address = contractsFactoryAddress;
+            adapter4Address = dynamicValueAddress;
+            adapter10Address = traderWalletAddress;
+
+            await adaptersRegistryContract.setReturnValue(true);
+            await adaptersRegistryContract.setReturnAddress(adapter2Address);
+            await usersVaultContract.connect(owner).addAdapterToUse(2);
+
+            await adaptersRegistryContract.setReturnAddress(adapter3Address);
+            await usersVaultContract.connect(owner).addAdapterToUse(3);
+
+            await adaptersRegistryContract.setReturnAddress(adapter4Address);
+            await usersVaultContract.connect(owner).addAdapterToUse(4);
+          });
+
+          describe("WHEN checking adapters", function () {
+            it("THEN it should return correct values", async () => {
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(0)
+              ).to.equal(adapter1Address);
+
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(1)
+              ).to.equal(adapter2Address);
+
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(2)
+              ).to.equal(adapter3Address);
+
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(3)
+              ).to.equal(adapter4Address);
+            });
+            it("THEN it should return correct array length", async () => {
+              expect(
+                await usersVaultContract.getTraderSelectedAdaptersLength()
+              ).to.equal(BigNumber.from(4));
+            });
+            it("THEN it should be added to the adaptersPerProtocol mapping", async () => {
+              expect(await usersVaultContract.adaptersPerProtocol(1)).to.equal(
+                adapter1Address
+              );
+
+              expect(await usersVaultContract.adaptersPerProtocol(2)).to.equal(
+                adapter2Address
+              );
+
+              expect(await usersVaultContract.adaptersPerProtocol(3)).to.equal(
+                adapter3Address
+              );
+
+              expect(await usersVaultContract.adaptersPerProtocol(4)).to.equal(
+                adapter4Address
+              );
+            });
+          });
+
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not owner", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(nonAuthorized)
+                    .removeAdapterToUse(1)
+                ).to.be.revertedWith("Ownable: caller is not the owner");
+              });
+            });
+            describe("WHEN protocol does not exist in registry", function () {
+              before(async () => {
+                // change returnValue to adapter registry to fail on function call
+                await adaptersRegistryContract.setReturnValue(false);
+                await adaptersRegistryContract.setReturnAddress(otherAddress);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(owner).removeAdapterToUse(10)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "InvalidProtocol"
+                );
+              });
+            });
+
+            describe("WHEN adapter does not exist in array", function () {
+              before(async () => {
+                await adaptersRegistryContract.setReturnValue(true);
+                await adaptersRegistryContract.setReturnAddress(
+                  adapter10Address
+                );
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(owner).removeAdapterToUse(10)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "AdapterNotPresent"
+                );
+              });
+            });
+          });
+
+          describe("WHEN calling with correct caller and address", function () {
+            before(async () => {
+              await adaptersRegistryContract.setReturnValue(true);
+              await adaptersRegistryContract.setReturnAddress(adapter3Address);
+              txResult = await usersVaultContract
+                .connect(owner)
+                .removeAdapterToUse(3);
+            });
+
+            it("THEN adapter should be removed from array", async () => {
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(0)
+              ).to.equal(adapter1Address);
+
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(1)
+              ).to.equal(adapter2Address);
+
+              expect(
+                await usersVaultContract.traderSelectedAdaptersArray(2)
+              ).to.equal(adapter4Address);
+            });
+            it("THEN it should return correct array length", async () => {
+              expect(
+                await usersVaultContract.getTraderSelectedAdaptersLength()
+              ).to.equal(BigNumber.from(3));
+            });
+            it("THEN it should emit an Event", async () => {
+              await expect(txResult)
+                .to.emit(usersVaultContract, "AdapterToUseRemoved")
+                .withArgs(adapter3Address, ownerAddress);
+            });
+            it("THEN it should be removed from adaptersPerProtocol mapping", async () => {
+              expect(await usersVaultContract.adaptersPerProtocol(3)).to.equal(
+                ZERO_ADDRESS
+              );
+            });
+          });
+        });
+      });
+
+      describe("WHEN trying to make a userDeposit", async () => {
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN user is not allowed", function () {
+            before(async () => {
+              // change returnValue to return false on function call
+              await contractsFactoryContract.setReturnValue(false);
+            });
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(nonAuthorized)
+                  .userDeposit(underlyingTokenAddress, AMOUNT_100)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "UserNotAllowed"
+              );
+            });
+          });
+
+          describe("WHEN Token is not the underlying", function () {
+            before(async () => {
+              // change returnValue to return true on function call
+              await contractsFactoryContract.setReturnValue(true);
+            });
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(user1)
+                  .userDeposit(otherAddress, AMOUNT_100)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "UnderlyingAssetNotAllowed"
+              );
+            });
+          });
+
+          describe("WHEN amount is ZERO", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(user1)
+                  .userDeposit(underlyingTokenAddress, ZERO_AMOUNT)
+              ).to.be.revertedWithCustomError(usersVaultContract, "ZeroAmount");
+            });
+          });
+
+          describe("WHEN transferFrom fails", function () {
+            before(async () => {
+              // to  fail on transfer from
+              await usdcTokenContract.setReturnBoolValue(false);
+            });
+            after(async () => {
+              await reverter.revert();
+            });
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(user1)
+                  .userDeposit(underlyingTokenAddress, AMOUNT_100)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "TokenTransferFailed"
+              );
+            });
+          });
+        });
+
+        describe("WHEN calling with correct caller and amount", function () {
+          const AMOUNT = AMOUNT_1E18.mul(100);
+
+          before(async () => {
+            vaultBalanceBefore = await usdcTokenContract.balanceOf(
+              usersVaultContract.address
+            );
+
+            userBalanceBefore = await usdcTokenContract.balanceOf(user1Address);
+
+            txResult = await usersVaultContract
+              .connect(user1)
+              .userDeposit(underlyingTokenAddress, AMOUNT);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+
+          xit("THEN contract should return correct vaules", async () => {
+            expect(
+              await usersVaultContract.getCumulativePendingDeposits()
+            ).to.equal(AMOUNT);
+            expect(
+              await usersVaultContract.cumulativePendingDeposits()
+            ).to.equal(AMOUNT);
+          });
+
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "UserDeposited")
+              .withArgs(user1Address, underlyingTokenAddress, AMOUNT);
+          });
+
+          it("THEN contract balance should increase", async () => {
+            vaultBalanceAfter = await usdcTokenContract.balanceOf(
+              usersVaultContract.address
+            );
+            expect(vaultBalanceAfter).to.equal(vaultBalanceBefore.add(AMOUNT));
+          });
+
+          it("THEN user balance should decrease", async () => {
+            userBalanceAfter = await usdcTokenContract.balanceOf(user1Address);
+            expect(userBalanceAfter).to.equal(userBalanceBefore.sub(AMOUNT));
+          });
+
+          describe("WHEN calling again with correct caller and amount", function () {
+            before(async () => {
+              vaultBalanceBefore = await usdcTokenContract.balanceOf(
+                usersVaultContract.address
+              );
+
+              userBalanceBefore = await usdcTokenContract.balanceOf(
+                user1Address
+              );
+
+              txResult = await usersVaultContract
+                .connect(user1)
+                .userDeposit(underlyingTokenAddress, AMOUNT);
+            });
+
+            xit("THEN contract should return correct vaules", async () => {
+              expect(
+                await usersVaultContract.getCumulativePendingDeposits()
+              ).to.equal(AMOUNT_100);
+              expect(
+                await usersVaultContract.cumulativePendingDeposits()
+              ).to.equal(AMOUNT_100);
+            });
+          });
+        });
+      });
+
+      // it("THEN ==> User 1 Claim ALL Shares", async () => {
+      //   console.log('Balance user 1 Before claim: ', await usersVaultContract.balanceOf(user1Address));
+      //   await usersVaultContract.connect(user1).claimAllShares(user1Address);
+      //   console.log('Balance user 1 After claim: ', await usersVaultContract.balanceOf(user1Address));
+      // });
     });
   });
 });

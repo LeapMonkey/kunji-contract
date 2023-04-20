@@ -21,7 +21,6 @@ contract TraderWallet is OwnableUpgradeable {
     address public contractsFactoryAddress;
     address public traderAddress;
     address public dynamicValueAddress;
-
     int256 public traderProfit;
     int256 public vaultProfit;
     uint256 public cumulativePendingDeposits;
@@ -32,11 +31,8 @@ contract TraderWallet is OwnableUpgradeable {
     uint256 public afterRoundVaultBalance;
     uint256 public ratioProportions;
     uint256 public currentRound;
-    mapping(uint256 => address) public adaptersPerProtocol;
     address[] public traderSelectedAdaptersArray;
-
-    // mapping(address => bool) public traderSelectedAdaptersMapping;
-    // uint256[] public traderSelectedProtocols;
+    mapping(uint256 => address) public adaptersPerProtocol;
 
     uint256[50] __gap;
 
@@ -46,8 +42,9 @@ contract TraderWallet is OwnableUpgradeable {
     error CallerNotAllowed();
     error NewTraderNotAllowed();
     error InvalidProtocol();
+    error AdapterPresent();
+    error AdapterNotPresent();
     error InvalidAdapter();
-    // error InvalidOperation(string target);
     error AdapterOperationFailed(string target);
     error UsersVaultOperationFailed();
     error ApproveFailed(address caller, address token, uint256 amount);
@@ -68,20 +65,17 @@ contract TraderWallet is OwnableUpgradeable {
         address indexed adapter,
         address indexed trader
     );
-    event AdapterToUseRemoved(address indexed adapter, address indexed trader);
-
+    event AdapterToUseRemoved(address indexed adapter, address indexed caller);
     event TraderDeposit(
         address indexed account,
         address indexed token,
         uint256 amount
     );
-
     event WithdrawalRequest(
         address indexed account,
         address indexed token,
         uint256 amount
     );
-
     event OperationExecuted(
         uint256 protocolId,
         uint256 timestamp,
@@ -90,7 +84,6 @@ contract TraderWallet is OwnableUpgradeable {
         uint256 initialBalance,
         uint256 walletRatio
     );
-
     event RolloverExecuted(uint256 timestamp, uint256 round);
 
     modifier onlyUnderlying(address _tokenAddress) {
@@ -106,12 +99,6 @@ contract TraderWallet is OwnableUpgradeable {
 
     modifier notZeroAddress(address _variable, string memory _message) {
         if (_variable == address(0)) revert ZeroAddress({target: _message});
-        _;
-    }
-
-    modifier onlyValidProtocolId(uint256 _protocolId) {
-        if (adaptersPerProtocol[_protocolId] == address(0))
-            revert InvalidProtocol();
         _;
     }
 
@@ -157,6 +144,11 @@ contract TraderWallet is OwnableUpgradeable {
         afterRoundVaultBalance = 0;
         currentRound = 0;
     }
+
+    //
+    receive() external payable {}
+
+    fallback() external {}
 
     function setVaultAddress(
         address _vaultAddress
@@ -222,80 +214,55 @@ contract TraderWallet is OwnableUpgradeable {
         traderAddress = _traderAddress;
     }
 
-    function addAdapterToUse(
-        uint256 _protocolId,
-        address _adapterAddress
-    )
-        external
-        onlyTrader
-        notZeroAddress(_adapterAddress, "_adapterAddress")
-    {
-        emit AdapterToUseAdded(_protocolId, _adapterAddress, _msgSender());
-        adaptersPerProtocol[_protocolId] = _adapterAddress;
+    function addAdapterToUse(uint256 _protocolId) external onlyTrader {
+        address adapterAddress = _getAdapterAddress(_protocolId);
+        (bool isAdapterOnArray, ) = _isAdapterOnArray(adapterAddress);
+        if (isAdapterOnArray) revert AdapterPresent();
+
+        emit AdapterToUseAdded(_protocolId, adapterAddress, _msgSender());
+
         // store the adapter on the array
-        traderSelectedAdaptersArray.push(_adapterAddress);
+        traderSelectedAdaptersArray.push(adapterAddress);
+        adaptersPerProtocol[_protocolId] = adapterAddress;
 
         /* 
-        MAKES APPROVAL OF UNDERLYING HERE ???
-        MAKES APPROVAL OF UNDERLYING HERE ???
-
-        if (
-            !IERC20Upgradeable(underlyingTokenAddress).approve(
-                _adapterAddress,
-                type(uint256).max
-            )
-        ) {
-            revert ApproveFailed({
-                caller: _msgSender(),
-                token: underlyingTokenAddress,
-                amount: type(uint256).max
-            });
-        }
+            MAKES APPROVAL OF UNDERLYING HERE ???
         */
     }
 
-    function removeAdapterToUse(
-        uint256 _protocolId,
-        address _adapterAddress
-    )
-        external
-        onlyTrader
-        notZeroAddress(_adapterAddress, "_adapterAddress")
-        onlyValidProtocolId(_protocolId)
-    {
-        emit AdapterToUseRemoved(_adapterAddress, _msgSender());
-        delete adaptersPerProtocol[_protocolId];
+    function removeAdapterToUse(uint256 _protocolId) external onlyTrader {
+        bool found = false;
+        address adapterAddress = _getAdapterAddress(_protocolId);
+
+        for (uint256 i = 0; i < traderSelectedAdaptersArray.length; i++) {
+            if (traderSelectedAdaptersArray[i] == adapterAddress) {
+                emit AdapterToUseRemoved(adapterAddress, _msgSender());
+
+                // put the last in the found index
+                traderSelectedAdaptersArray[i] = traderSelectedAdaptersArray[
+                    traderSelectedAdaptersArray.length - 1
+                ];
+                // remove the last one because it was alredy put in found index
+                traderSelectedAdaptersArray.pop();
+                // flag
+                found = true;
+            }
+        }
+        if (!found) revert InvalidProtocol();
 
         // REMOVE ALLOWANCE OF UNDERLYING ????
-        /*
-        if (
-            !IERC20Upgradeable(underlyingTokenAddress).approve(
-                _adapterAddress,
-                0
-            )
-        ) {
-            revert ApproveFailed({
-                caller: _msgSender(),
-                token: underlyingTokenAddress,
-                amount: 0
-            });
-        }
-        */
     }
-
-    //
-    receive() external payable {}
 
     //
     function traderDeposit(
-        address _underlying,
+        address _tokenAddress,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_underlying) {
+    ) external onlyTrader onlyUnderlying(_tokenAddress) {
         if (_amount == 0) revert ZeroAmount();
 
         if (
             !(
-                IERC20Upgradeable(_underlying).transferFrom(
+                IERC20Upgradeable(_tokenAddress).transferFrom(
                     _msgSender(),
                     address(this),
                     _amount
@@ -303,7 +270,7 @@ contract TraderWallet is OwnableUpgradeable {
             )
         ) revert TokenTransferFailed();
 
-        emit TraderDeposit(_msgSender(), _underlying, _amount);
+        emit TraderDeposit(_msgSender(), _tokenAddress, _amount);
 
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
@@ -334,7 +301,6 @@ contract TraderWallet is OwnableUpgradeable {
         address _tokenAddress,
         bool _revoke
     ) external onlyTrader returns (bool) {
-        // check if protocolId is valid
         address adapterAddress = adaptersPerProtocol[_protocolId];
         if (adapterAddress == address(0)) revert InvalidAdapter();
 
@@ -353,13 +319,65 @@ contract TraderWallet is OwnableUpgradeable {
         return true;
     }
 
-    
+    // not sure if the execution is here. Don't think so
+    function rollover() external onlyTrader {
+        if (cumulativePendingDeposits == 0 && cumulativePendingWithdrawals == 0)
+            revert InvalidRollover();
+
+        if (currentRound != 0) {
+            (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
+        } else {
+            afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
+                .balanceOf(traderAddress);
+            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
+                .balanceOf(vaultAddress);
+        }
+
+        bool success = IUsersVault(vaultAddress).rolloverFromTrader();
+        if (!success) revert RolloverFailed();
+        emit RolloverExecuted(
+            block.timestamp,
+            IUsersVault(vaultAddress).getRound()
+        );
+
+        if (cumulativePendingWithdrawals > 0) {
+            // send to trader account
+            success = IERC20Upgradeable(underlyingTokenAddress).transferFrom(
+                address(this),
+                traderAddress,
+                cumulativePendingWithdrawals
+            );
+            if (!success) revert SendToTraderFailed();
+        }
+
+        // get profits ?
+        traderProfit =
+            int256(afterRoundTraderBalance) -
+            int256(initialTraderBalance);
+        vaultProfit =
+            int256(afterRoundVaultBalance) -
+            int256(initialVaultBalance);
+        /*
+
+        DO SOMETHING HERE WITH PROFIT ?
+
+        */
+
+        // get values for next round proportions
+        (initialTraderBalance, initialVaultBalance) = getBalances();
+
+        cumulativePendingDeposits = 0;
+        cumulativePendingWithdrawals = 0;
+        traderProfit = 0;
+        vaultProfit = 0;
+        ratioProportions = calculateRatio();
+    }
+
     function executeOnProtocol(
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
-    ) external onlyTrader onlyValidProtocolId(_protocolId) returns (bool) {
-        // check if protocolId is valid
+    ) external onlyTrader returns (bool) {
         address adapterAddress = adaptersPerProtocol[_protocolId];
         if (adapterAddress == address(0)) revert InvalidAdapter();
 
@@ -395,7 +413,7 @@ contract TraderWallet is OwnableUpgradeable {
         // if tx needs to be replicated on vault
         if (_replicate) {
             walletRatio = ratioProportions;
-            
+
             success = IUsersVault(vaultAddress).executeOnProtocol(
                 _protocolId,
                 _traderOperation,
@@ -418,31 +436,6 @@ contract TraderWallet is OwnableUpgradeable {
         return true;
     }
 
-    function _executeOnGmx(
-        uint256 _walletRatio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal pure returns (bool) {
-        return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
-    }
-
-    // @todo add implementation
-    function _executeOnAdapter(
-        address _adapterAddress,
-        uint256 _walletRatio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal returns (bool) {
-        return
-            IAdapter(_adapterAddress).executeOperation(
-                _walletRatio,
-                _traderOperation
-            );
-    }
-
-    function totalAssets() public view returns (uint256) {
-        // Balance of UNDERLYING ASSET + Value of positions on adapters
-        // this will call to the DynamicValuationContract
-    }
-
     function getTraderSelectedAdaptersLength() external view returns (uint256) {
         return traderSelectedAdaptersArray.length;
     }
@@ -453,56 +446,6 @@ contract TraderWallet is OwnableUpgradeable {
 
     function getCumulativePendingDeposits() external view returns (uint256) {
         return cumulativePendingDeposits;
-    }
-
-    // not sure if the execution is here. Don't think so
-    function rollover() external onlyTrader {
-        if (cumulativePendingDeposits == 0 && cumulativePendingWithdrawals == 0)
-            revert InvalidRollover();
-
-        if (currentRound != 0) {
-            (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
-        } else{
-            afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(traderAddress);
-            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(vaultAddress);
-        }
-
-        bool success = IUsersVault(vaultAddress).rolloverFromTrader();
-        if (!success) revert RolloverFailed();
-        emit RolloverExecuted(
-            block.timestamp,
-            IUsersVault(vaultAddress).getRound()
-        );
-
-
-        if (cumulativePendingWithdrawals > 0) {
-            // send to trader account
-            success = IERC20Upgradeable(underlyingTokenAddress).transferFrom(
-                address(this),
-                traderAddress,
-                cumulativePendingWithdrawals
-            );
-            if (!success) revert SendToTraderFailed();
-        }
-
-        // get profits ?
-        traderProfit = int256(afterRoundTraderBalance) - int256(initialTraderBalance);
-        vaultProfit = int256(afterRoundVaultBalance) - int256(initialVaultBalance);
-        /*
-
-        DO SOMETHING HERE WITH PROFIT ?
-
-        */
-
-        
-        // get values for next round proportions
-        (initialTraderBalance, initialVaultBalance) = getBalances();
-
-        cumulativePendingDeposits = 0;
-        cumulativePendingWithdrawals = 0;
-        traderProfit = 0;
-        vaultProfit = 0;
-        ratioProportions = calculateRatio();
     }
 
     function getBalances() public view returns (uint256, uint256) {
@@ -520,5 +463,51 @@ contract TraderWallet is OwnableUpgradeable {
 
     function getRatio() public view returns (uint256) {
         return ratioProportions;
+    }
+
+    function _getAdapterAddress(
+        uint256 _protocolId
+    ) internal view returns (address) {
+        (bool adapterExist, address adapterAddress) = IAdaptersRegistry(
+            adaptersRegistryAddress
+        ).getAdapterAddress(_protocolId);
+        if (!adapterExist) revert InvalidProtocol();
+
+        return adapterAddress;
+    }
+
+    function _isAdapterOnArray(
+        address _adapterAddress
+    ) internal view returns (bool, uint256) {
+        bool found = false;
+        uint256 i = 0;
+        if (traderSelectedAdaptersArray.length > 0) {
+            for (i = 0; i < traderSelectedAdaptersArray.length; i++) {
+                if (traderSelectedAdaptersArray[i] == _adapterAddress) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        return (found, i);
+    }
+
+    function _executeOnAdapter(
+        address _adapterAddress,
+        uint256 _walletRatio,
+        IAdapter.AdapterOperation memory _traderOperation
+    ) internal returns (bool) {
+        return
+            IAdapter(_adapterAddress).executeOperation(
+                _walletRatio,
+                _traderOperation
+            );
+    }
+
+    function _executeOnGmx(
+        uint256 _walletRatio,
+        IAdapter.AdapterOperation memory _traderOperation
+    ) internal pure returns (bool) {
+        return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
     }
 }
