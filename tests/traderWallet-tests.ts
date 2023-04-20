@@ -6,7 +6,7 @@ import {
   BigNumber,
 } from "ethers";
 import { expect } from "chai";
-import Reverter from "./helpers/reverter";
+import Reverter from "./_helpers/reverter";
 import {
   TraderWallet,
   ContractsFactoryMock,
@@ -20,7 +20,7 @@ import {
   ZERO_AMOUNT,
   ZERO_ADDRESS,
   AMOUNT_100,
-} from "./helpers/constants";
+} from "./_helpers/constants";
 
 const reverter = new Reverter();
 

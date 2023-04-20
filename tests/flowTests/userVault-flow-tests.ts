@@ -1,7 +1,7 @@
 import { ethers, upgrades } from "hardhat";
 import { Signer, ContractFactory, ContractTransaction, BigNumber } from "ethers";
 import { expect } from "chai";
-import Reverter from "./_helpers/reverter";
+import Reverter from "../_helpers/reverter";
 import {
   UsersVault,
   ContractsFactoryMock,
@@ -9,8 +9,8 @@ import {
   AdapterMock,
   // TraderWalletMock,
   ERC20Mock,
-} from "../typechain-types";
-import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18, AMOUNT_100 } from "./_helpers/constants";
+} from "../../typechain-types";
+import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18, AMOUNT_100 } from "../_helpers/constants";
 
 const reverter = new Reverter();
 

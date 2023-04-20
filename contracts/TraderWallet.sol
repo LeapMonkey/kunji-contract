@@ -229,7 +229,6 @@ contract TraderWallet is OwnableUpgradeable {
         external
         onlyTrader
         notZeroAddress(_adapterAddress, "_adapterAddress")
-        onlyValidProtocolId(_protocolId)
     {
         emit AdapterToUseAdded(_protocolId, _adapterAddress, _msgSender());
         adaptersPerProtocol[_protocolId] = _adapterAddress;
