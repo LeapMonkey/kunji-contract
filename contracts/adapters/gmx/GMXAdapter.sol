@@ -11,30 +11,33 @@ import "./interfaces/IGmxOrderBook.sol";
 import "./interfaces/IGmxReader.sol";
 import "./interfaces/IGmxRouter.sol";
 import "./interfaces/IGmxVault.sol";
-
+import "hardhat/console.sol";
 
 library GMXAdapter {
     error AddressZero();
     error InvalidOperationId();
     error CreateSwapOrderFail();
+    error CreateIncreasePositionFail();
+    error CreateDecreasePositionFail();
 
-    IGmxReader constant public gmxReader = IGmxReader(0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064);
-    IGmxRouter constant public gmxRouter = IGmxRouter(0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868);
-    IGmxPositionRouter constant public gmxPositionRouter = IGmxPositionRouter(0x22199a49A999c351eF7927602CFB187ec3cae489);
-    IGmxVault constant public gmxVault = IGmxVault(0x489ee077994B6658eAfA855C308275EAd8097C4A);
-    IGmxOrderBook constant public gmxOrderBook = IGmxOrderBook(0x09f77E8A13De9a35a7231028187e9fD5DB8a2ACB);
-    IGmxOrderBookReader constant public gmxOrderBookReader = IGmxOrderBookReader(0xa27C20A7CF0e1C68C0460706bB674f98F362Bc21);
+    address constant public gmxRouter = 0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064;
+    address constant public gmxPositionRouter = 0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868;
+    address constant public gmxVault = 0x489ee077994B6658eAfA855C308275EAd8097C4A;
+    address constant public gmxOrderBook = 0x09f77E8A13De9a35a7231028187e9fD5DB8a2ACB;
+    address constant public gmxOrderBookReader = 0xa27C20A7CF0e1C68C0460706bB674f98F362Bc21;
+    address constant public gmxReader = 0x22199a49A999c351eF7927602CFB187ec3cae489;
 
     uint256 constant public ratioDenominator = 1e18;
 
-    /// @notice The maximum slippage allowance
-    uint256 constant public slippageMax = 1e17;  // 10%
+
+    event CreateIncreasePosition(address sender, bytes32 requestKey);
+    event CreateDecreasePosition(address sender, bytes32 requestKey);
 
     /// @notice Gives approve to operate with gmxPositionRouter
     /// @dev Needs to be called from wallet and vault in initialization
-    // @todo move to contract constructor
-    function initApprove() external {
-        gmxRouter.approvePlugin(address(gmxPositionRouter));
+    // @todo add to contract constructor
+    function approveGmxPlugin() internal {
+        IGmxRouter(gmxRouter).approvePlugin(gmxPositionRouter);
     }
 
 
@@ -44,7 +47,7 @@ library GMXAdapter {
     function executeOperation(
         uint256 ratio,
         IAdapter.AdapterOperation memory tradeOperation
-    ) external returns (bytes32) {
+    ) internal returns (bool) {
         if (uint256(tradeOperation.operationId) == 0) {
             return _increasePosition(ratio, tradeOperation.data);
 
@@ -96,7 +99,7 @@ library GMXAdapter {
     function _increasePosition(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {
+    ) internal returns (bool) {
         (
             address[] memory path,
             address indexToken,
@@ -115,26 +118,41 @@ library GMXAdapter {
             amountIn = amountIn * ratio / ratioDenominator;
             sizeDelta = sizeDelta * ratio / ratioDenominator;
             // increasing slippage allowance due to higher amounts
-            minOut = minOut * ratio / (ratioDenominator + slippageMax);
+            minOut = minOut * ratio / ratioDenominator;
         }
 
         address tokenOut = path[path.length - 1];
-        _checkUpdateAllowance(tokenOut, address(gmxPositionRouter), amountIn);
-        uint256 executionFee = gmxPositionRouter.minExecutionFee();
+        _checkUpdateAllowance(tokenOut, address(gmxRouter), amountIn);
+        uint256 executionFee = IGmxPositionRouter(gmxPositionRouter).minExecutionFee();
 
-        requestKey = gmxPositionRouter.createIncreasePosition(
-            path,
-            indexToken,
-            amountIn,
-            minOut,
-            sizeDelta,
-            isLong,
-            acceptablePrice,
-            executionFee,
-            0, // referralCode
-            address(0) // callbackTarget
-        );
+        (bool success, bytes memory data) = 
+        gmxPositionRouter.call{value: msg.value}(
+            abi.encodeWithSelector(
+                IGmxPositionRouter.createIncreasePosition.selector, 
+                path,
+                indexToken,
+                amountIn,
+                minOut,
+                sizeDelta,
+                isLong,
+                acceptablePrice,
+                executionFee,
+                0,          // referralCode
+                address(0)  // callbackTarget
+                )
+            );
+
+        if(!success) {
+            // dev tracking errors
+            // string memory failMessage = _getRevertMsg(data);
+            // console.log(failMessage);
+            revert CreateIncreasePositionFail();
+        }
+        emit CreateIncreasePosition(msg.sender, bytes32(data));
+        return true;
     }
+
+
 
     /* 
     @notice Closes or decreases an existing position
@@ -157,7 +175,7 @@ library GMXAdapter {
     function _decreasePosition(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {
+    ) internal returns (bool) {
         (
             address[] memory path,
             address indexToken,
@@ -178,16 +196,19 @@ library GMXAdapter {
                     uint256
                 )
             );
-        uint256 executionFee = gmxPositionRouter.minExecutionFee();
+        uint256 executionFee = IGmxPositionRouter(gmxPositionRouter).minExecutionFee();
 
         // scaling for Vault
         if (ratio != ratioDenominator) {
             sizeDelta = sizeDelta * ratio / ratioDenominator;
             // increasing slippage allowance due to higher amounts
-            minOut = minOut * ratio / (ratioDenominator + slippageMax);
+            minOut = minOut * ratio / ratioDenominator;
         }
 
-        requestKey = gmxPositionRouter.createDecreasePosition(
+        (bool success, bytes memory data) = 
+        gmxPositionRouter.call{value: msg.value}(
+            abi.encodeWithSelector(
+            IGmxPositionRouter.createDecreasePosition.selector,
             path,
             indexToken,
             collateralDelta,
@@ -197,9 +218,18 @@ library GMXAdapter {
             acceptablePrice,
             minOut,
             executionFee,
-            false, // withdrawETH
-            address(0) // callbackTarget
+            false,      // withdrawETH
+            address(0)  // callbackTarget
+            )
         );
+        if(!success) {
+            // dev tracking errors
+            // string memory failMessage = _getRevertMsg(data);
+            // console.log(failMessage);
+            revert CreateDecreasePositionFail();
+        }
+        emit CreateDecreasePosition(msg.sender, bytes32(data));
+        return true;
     }
 
 
@@ -210,39 +240,41 @@ library GMXAdapter {
     function _createIncreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
     function _updateIncreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
     function _cancelIncreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
     function _createDecreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
     function _updateDecreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
     function _cancelDecreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
     function _cancelMultipleOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bytes32 requestKey) {}
+    ) internal returns (bool) {}
 
 
+
+    // @todo move to 'Lens' contract
     /// /// /// /// /// ///
     /// View functions
     /// /// /// /// /// ///
@@ -255,7 +287,7 @@ library GMXAdapter {
         address tokenIn,
         address tokenOut
     ) external view returns (uint256 amountIn) {
-        return gmxReader.getMaxAmountIn(address(gmxVault), tokenIn, tokenOut);
+        return IGmxReader(gmxReader).getMaxAmountIn(address(gmxVault), tokenIn, tokenOut);
     }
 
     /// @notice Returns amount out after fees and the fee amount
@@ -270,7 +302,7 @@ library GMXAdapter {
         uint256 amountIn
     ) external view returns (uint256 amountOutAfterFees, uint256 feeAmount) {
         return
-            gmxReader.getAmountOut(
+            IGmxReader(gmxReader).getAmountOut(
                 address(gmxVault),
                 tokenIn,
                 tokenOut,
@@ -286,7 +318,7 @@ library GMXAdapter {
         bool[] memory isLong
     ) external view returns (uint256[] memory) {
         return
-            gmxReader.getPositions(
+            IGmxReader(gmxReader).getPositions(
                 address(gmxVault),
                 account,
                 collateralTokens,
@@ -303,5 +335,17 @@ library GMXAdapter {
         if (IERC20(token).allowance(address(this), spender) < amount) {
             IERC20(token).approve(spender, amount);
         }
+    }
+
+    /// temporary dev helper function
+    function _getRevertMsg(bytes memory _returnData) internal pure returns (string memory) {
+        // If the _res length is less than 68, then the transaction failed silently (without a revert message)
+        if (_returnData.length < 68) return "Transaction reverted silently";
+
+        assembly {
+            // Slice the sighash.
+            _returnData := add(_returnData, 0x04)
+        }
+        return abi.decode(_returnData, (string)); // All that remains is the revert string
     }
 }

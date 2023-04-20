@@ -55,6 +55,9 @@ interface IGmxPositionRouter {
 
 
 interface IGmxRouter {
+
+    function approvedPlugins(address user, address plugin) external view returns (bool); 
+
     function approvePlugin(address plugin) external;
 
     function denyPlugin(address plugin) external;

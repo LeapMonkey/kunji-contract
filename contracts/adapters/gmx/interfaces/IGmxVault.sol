@@ -2,6 +2,11 @@
 pragma solidity ^0.8.9;
 
 interface IGmxVault {
+
+    function getMaxPrice(address indexToken) external view returns (uint256);
+    
+    function getMinPrice(address indexToken) external view returns (uint256);
+
     function getPosition(
         address _account,
         address _collateralToken,

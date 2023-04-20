@@ -15,6 +15,8 @@ import "./adapters/gmx/GMXAdapter.sol";
 // import "hardhat/console.sol";
 
 contract TraderWallet is OwnableUpgradeable {
+    // using GMXAdapter for *;
+
     address public vaultAddress;
     address public underlyingTokenAddress;
     address public adaptersRegistryAddress;
@@ -138,6 +140,8 @@ contract TraderWallet is OwnableUpgradeable {
         afterRoundTraderBalance = 0;
         afterRoundVaultBalance = 0;
         currentRound = 0;
+
+        GMXAdapter.approveGmxPlugin();
     }
 
     //
@@ -372,6 +376,7 @@ contract TraderWallet is OwnableUpgradeable {
         ratioProportions = calculateRatio();
     }
 
+    // @todo rename '_traderOperation' to '_tradeOperation'
     function executeOnProtocol(
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
