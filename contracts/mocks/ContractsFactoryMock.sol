@@ -3,8 +3,14 @@ pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
+
+//// DESPUES DEL DEPLOY DE LA WALLET Y LA VAULT
+//// HAY QUE SETEAR EN LA VAULT, LA WALLET
+//// Y EN LA WALLET LA VAULT
+
+
 contract ContractsFactoryMock is OwnableUpgradeable {
-    bool public returnValue;    
+    bool public returnValue;
 
     function initialize() external initializer {}
 
@@ -21,4 +27,19 @@ contract ContractsFactoryMock is OwnableUpgradeable {
         _investor; // just to avoid warnings
         return returnValue;
     }
+
+    function isTraderWalletAllowed(
+        address _contract
+    ) external view returns (bool) {
+        _contract; // just to avoid warnings
+        return returnValue;
+    }
+
+    function isVaultWalletAllowed(
+        address _vault
+    ) external view returns (bool) {
+        _vault; // just to avoid warnings
+        return returnValue;
+    }
 }
+

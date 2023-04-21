@@ -34,13 +34,12 @@ contract TraderWallet is OwnableUpgradeable {
     address[] public traderSelectedAdaptersArray;
     mapping(uint256 => address) public adaptersPerProtocol;
 
-    uint256[50] __gap;
-
     error ZeroAddress(string target);
     error ZeroAmount();
+    error InvalidVault();
     error UnderlyingAssetNotAllowed();
     error CallerNotAllowed();
-    error NewTraderNotAllowed();
+    error TraderNotAllowed();
     error InvalidProtocol();
     error AdapterPresent();
     error AdapterNotPresent();
@@ -103,7 +102,6 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function initialize(
-        address _vaultAddress,
         address _underlyingTokenAddress,
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
@@ -112,8 +110,6 @@ contract TraderWallet is OwnableUpgradeable {
     ) external initializer {
         // CHECK CALLER IS THE FACTORY
 
-        if (_vaultAddress == address(0))
-            revert ZeroAddress({target: "_vaultAddress"});
         if (_underlyingTokenAddress == address(0))
             revert ZeroAddress({target: "_underlyingTokenAddress"});
         if (_adaptersRegistryAddress == address(0))
@@ -129,7 +125,6 @@ contract TraderWallet is OwnableUpgradeable {
 
         __Ownable_init();
 
-        vaultAddress = _vaultAddress;
         underlyingTokenAddress = _underlyingTokenAddress;
         adaptersRegistryAddress = _adaptersRegistryAddress;
         contractsFactoryAddress = _contractsFactoryAddress;
@@ -153,6 +148,11 @@ contract TraderWallet is OwnableUpgradeable {
     function setVaultAddress(
         address _vaultAddress
     ) external onlyOwner notZeroAddress(_vaultAddress, "_vaultAddress") {
+        if (
+            !IContractsFactory(contractsFactoryAddress).isVaultWalletAllowed(
+                _vaultAddress
+            )
+        ) revert InvalidVault();
         emit VaultAddressSet(_vaultAddress);
         vaultAddress = _vaultAddress;
     }
@@ -208,7 +208,7 @@ contract TraderWallet is OwnableUpgradeable {
             !IContractsFactory(contractsFactoryAddress).isTraderAllowed(
                 _traderAddress
             )
-        ) revert NewTraderNotAllowed();
+        ) revert TraderNotAllowed();
 
         emit TraderAddressSet(_traderAddress);
         traderAddress = _traderAddress;
@@ -231,24 +231,23 @@ contract TraderWallet is OwnableUpgradeable {
     }
 
     function removeAdapterToUse(uint256 _protocolId) external onlyTrader {
-        bool found = false;
         address adapterAddress = _getAdapterAddress(_protocolId);
+        (bool isAdapterOnArray, uint256 index) = _isAdapterOnArray(
+            adapterAddress
+        );
+        if (!isAdapterOnArray) revert AdapterNotPresent();
 
-        for (uint256 i = 0; i < traderSelectedAdaptersArray.length; i++) {
-            if (traderSelectedAdaptersArray[i] == adapterAddress) {
-                emit AdapterToUseRemoved(adapterAddress, _msgSender());
+        emit AdapterToUseRemoved(adapterAddress, _msgSender());
 
-                // put the last in the found index
-                traderSelectedAdaptersArray[i] = traderSelectedAdaptersArray[
-                    traderSelectedAdaptersArray.length - 1
-                ];
-                // remove the last one because it was alredy put in found index
-                traderSelectedAdaptersArray.pop();
-                // flag
-                found = true;
-            }
-        }
-        if (!found) revert InvalidProtocol();
+        // put the last in the found index
+        traderSelectedAdaptersArray[index] = traderSelectedAdaptersArray[
+            traderSelectedAdaptersArray.length - 1
+        ];
+        // remove the last one because it was alredy put in found index
+        traderSelectedAdaptersArray.pop();
+
+        // remove mapping
+        delete adaptersPerProtocol[_protocolId];
 
         // REMOVE ALLOWANCE OF UNDERLYING ????
     }

@@ -3,6 +3,8 @@ pragma solidity ^0.8.9;
 
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
+import "hardhat/console.sol";
+
 contract AdapterMock {
     bool public executedOperation;
     
@@ -10,7 +12,7 @@ contract AdapterMock {
         executedOperation = _value;
     }
 
-    function executeOperations(
+    function executeOperation(
         uint256 _ratio,
         IAdapter.AdapterOperation memory adapterOperations
     ) external returns (bool) {

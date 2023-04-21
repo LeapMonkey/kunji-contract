@@ -8,15 +8,15 @@ import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/Ma
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
-import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
-import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
-import "./adapters/gmx/GMXAdapter.sol";
+import {IAdaptersRegistry} from "../interfaces/IAdaptersRegistry.sol";
+import {IContractsFactory} from "../interfaces/IContractsFactory.sol";
+import "../adapters/gmx/GMXAdapter.sol";
 
 import "hardhat/console.sol";
 
 /// import its own interface as well
 
-contract UsersVault is
+contract UsersVaultV2 is
     ERC20Upgradeable,
     OwnableUpgradeable,
     PausableUpgradeable
@@ -60,8 +60,9 @@ contract UsersVault is
     mapping(address => UserWithdrawal) public userWithdrawals;
 
     // ratio per round
-    mapping(uint256 => uint256) public assetsPerShareXRound;    
+    mapping(uint256 => uint256) public assetsPerShareXRound;
 
+    uint256 public addedVariable;
 
     error ZeroAddress(string target);
     error ZeroAmount();
@@ -712,5 +713,9 @@ contract UsersVault is
         string memory _message
     ) internal pure {
         if (_variable == address(0)) revert ZeroAddress({target: _message});
+    }
+
+    function addedMethod(uint256 _newValue) external {
+        addedVariable = _newValue;
     }
 }

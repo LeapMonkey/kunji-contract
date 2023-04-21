@@ -10,10 +10,10 @@ import { expect } from "chai";
 import Reverter from "./_helpers/reverter";
 import {
   UsersVault,
+  UsersVaultV2,
   ContractsFactoryMock,
   AdaptersRegistryMock,
-  AdapterMock,
-  // TraderWalletMock,
+  GMXAdapter,
   ERC20Mock,
 } from "../typechain-types";
 import {
@@ -27,10 +27,8 @@ import {
 const reverter = new Reverter();
 
 let deployer: Signer;
-let vault: Signer;
 let traderWallet: Signer;
 let adaptersRegistry: Signer;
-let contractsFactory: Signer;
 let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
@@ -44,7 +42,6 @@ let user5: Signer;
 let deployerAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
-let contractsFactoryAddress: string;
 let traderWalletAddress: string;
 let dynamicValueAddress: string;
 let otherAddress: string;
@@ -57,12 +54,12 @@ let user5Address: string;
 
 let txResult: ContractTransaction;
 let TraderWalletFactory: ContractFactory;
-// let traderWalletContract: TraderWalletMock;
 let UsersVaultFactory: ContractFactory;
 let usersVaultContract: UsersVault;
-
 let ContractsFactoryFactory: ContractFactory;
 let contractsFactoryContract: ContractsFactoryMock;
+let GMXAdapterLibraryFactory: ContractFactory;
+let gmxAdapterContract: GMXAdapter;
 
 let usdcTokenContract: ERC20Mock;
 let userBalanceBefore: BigNumber;
@@ -91,7 +88,6 @@ describe("User Vault Contract Tests", function () {
       deployer,
       traderWallet,
       adaptersRegistry,
-      contractsFactory,
       dynamicValue,
       nonAuthorized,
       otherSigner,
@@ -106,7 +102,6 @@ describe("User Vault Contract Tests", function () {
       deployerAddress,
       traderWalletAddress,
       adaptersRegistryAddress,
-      contractsFactoryAddress,
       dynamicValueAddress,
       otherAddress,
       user1Address,
@@ -118,7 +113,6 @@ describe("User Vault Contract Tests", function () {
       deployer.getAddress(),
       traderWallet.getAddress(),
       adaptersRegistry.getAddress(),
-      contractsFactory.getAddress(),
       dynamicValue.getAddress(),
       otherSigner.getAddress(),
       user1.getAddress(),
@@ -131,10 +125,10 @@ describe("User Vault Contract Tests", function () {
 
   describe("UserVault deployment Tests", function () {
     before(async () => {
-      const GMXAdapterLibraryFactory = await ethers.getContractFactory(
+      GMXAdapterLibraryFactory = await ethers.getContractFactory(
         "GMXAdapter"
       );
-      const gmxAdapterContract = await GMXAdapterLibraryFactory.deploy();
+      gmxAdapterContract = (await GMXAdapterLibraryFactory.deploy()) as GMXAdapter;
       await gmxAdapterContract.deployed();
 
       UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
@@ -145,6 +139,14 @@ describe("User Vault Contract Tests", function () {
       ContractsFactoryFactory = await ethers.getContractFactory(
         "ContractsFactoryMock"
       );
+      // deploy ContractsFactory
+      contractsFactoryContract = (await upgrades.deployProxy(
+        ContractsFactoryFactory,
+        []
+      )) as ContractsFactoryMock;
+      await contractsFactoryContract.deployed();
+      // set TRUE for response
+      await contractsFactoryContract.setReturnValue(true);
 
       owner = deployer;
       ownerAddress = deployerAddress;
@@ -158,7 +160,7 @@ describe("User Vault Contract Tests", function () {
             [
               ZERO_ADDRESS,
               adaptersRegistryAddress,
-              contractsFactoryAddress,
+              contractsFactoryContract.address,
               traderWalletAddress,
               dynamicValueAddress,
               SHARES_NAME,
@@ -178,7 +180,7 @@ describe("User Vault Contract Tests", function () {
             [
               underlyingTokenAddress,
               ZERO_ADDRESS,
-              contractsFactoryAddress,
+              contractsFactoryContract.address,
               traderWalletAddress,
               dynamicValueAddress,
               SHARES_NAME,
@@ -218,7 +220,7 @@ describe("User Vault Contract Tests", function () {
             [
               underlyingTokenAddress,
               adaptersRegistryAddress,
-              contractsFactoryAddress,
+              contractsFactoryContract.address,
               ZERO_ADDRESS,
               dynamicValueAddress,
               SHARES_NAME,
@@ -238,7 +240,7 @@ describe("User Vault Contract Tests", function () {
             [
               underlyingTokenAddress,
               adaptersRegistryAddress,
-              contractsFactoryAddress,
+              contractsFactoryContract.address,
               traderWalletAddress,
               ZERO_ADDRESS,
               SHARES_NAME,
@@ -270,15 +272,6 @@ describe("User Vault Contract Tests", function () {
       };
 
       before(async () => {
-        // deploy ContractsFactory
-        contractsFactoryContract = (await upgrades.deployProxy(
-          ContractsFactoryFactory,
-          []
-        )) as ContractsFactoryMock;
-        await contractsFactoryContract.deployed();
-        // set TRUE for response
-        await contractsFactoryContract.setReturnValue(true);
-
         usersVaultContract = (await upgrades.deployProxy(
           UsersVaultFactory,
           [
@@ -568,7 +561,8 @@ describe("User Vault Contract Tests", function () {
                 .withArgs("_traderWalletAddress");
             });
           });
-          xdescribe("WHEN traderWalletADdress is INVALID ! ========>>>>>>> ", function () {
+
+          describe("WHEN traderWalletAddress is not allowed", function () {
             before(async () => {
               // change returnValue to return false on function call
               await contractsFactoryContract.setReturnValue(false);
@@ -580,7 +574,7 @@ describe("User Vault Contract Tests", function () {
                   .setTraderWalletAddress(otherAddress)
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
-                "NewTraderNotAllowed"
+                "InvalidTraderWallet"
               );
             });
           });
@@ -718,7 +712,7 @@ describe("User Vault Contract Tests", function () {
           before(async () => {
             adapter1Address = otherAddress;
             adapter2Address = deployerAddress;
-            adapter3Address = contractsFactoryAddress;
+            adapter3Address = contractsFactoryContract.address;
             adapter4Address = dynamicValueAddress;
             adapter10Address = traderWalletAddress;
 
@@ -945,13 +939,17 @@ describe("User Vault Contract Tests", function () {
             await reverter.revert();
           });
 
-          xit("THEN contract should return correct vaules", async () => {
-            expect(
-              await usersVaultContract.getCumulativePendingDeposits()
-            ).to.equal(AMOUNT);
-            expect(
-              await usersVaultContract.cumulativePendingDeposits()
-            ).to.equal(AMOUNT);
+          it("THEN contract should return correct values", async () => {
+            const userDeposits = await usersVaultContract.userDeposits(
+              user1Address
+            );
+            expect(userDeposits.round).to.equal(BigNumber.from(0));
+
+            expect(userDeposits.pendingAssets).to.equal(AMOUNT);
+
+            expect(await usersVaultContract.pendingDepositAssets()).to.equal(
+              AMOUNT
+            );
           });
 
           it("THEN it should emit an Event", async () => {
@@ -987,23 +985,78 @@ describe("User Vault Contract Tests", function () {
                 .userDeposit(underlyingTokenAddress, AMOUNT);
             });
 
-            xit("THEN contract should return correct vaules", async () => {
-              expect(
-                await usersVaultContract.getCumulativePendingDeposits()
-              ).to.equal(AMOUNT_100);
-              expect(
-                await usersVaultContract.cumulativePendingDeposits()
-              ).to.equal(AMOUNT_100);
+            it("THEN contract should return correct vaules", async () => {
+              const userDeposits = await usersVaultContract.userDeposits(
+                user1Address
+              );
+              expect(userDeposits.round).to.equal(BigNumber.from(0));
+
+              expect(userDeposits.pendingAssets).to.equal(AMOUNT.add(AMOUNT));
+
+              expect(await usersVaultContract.pendingDepositAssets()).to.equal(
+                AMOUNT.add(AMOUNT)
+              );
             });
           });
         });
       });
 
       // it("THEN ==> User 1 Claim ALL Shares", async () => {
+
       //   console.log('Balance user 1 Before claim: ', await usersVaultContract.balanceOf(user1Address));
       //   await usersVaultContract.connect(user1).claimAllShares(user1Address);
       //   console.log('Balance user 1 After claim: ', await usersVaultContract.balanceOf(user1Address));
       // });
+
+      describe("WHEN trying to UPGRADE the contract", async () => {
+        let UsersVaultV2Factory: ContractFactory;
+        let usersVaultV2Contract: UsersVaultV2;
+
+        before(async () => {
+          UsersVaultV2Factory = await ethers.getContractFactory(
+            "UsersVaultV2",
+            {
+              libraries: {
+                GMXAdapter: gmxAdapterContract.address,
+              },
+            }
+          );
+          usersVaultV2Contract = (await upgrades.upgradeProxy(
+            usersVaultContract.address,
+            UsersVaultV2Factory,
+            { unsafeAllowLinkedLibraries: true }
+          )) as UsersVaultV2;
+          await usersVaultV2Contract.deployed();
+        });
+        it("THEN it should maintain previous storage", async () => {          
+          expect(await usersVaultV2Contract.underlyingTokenAddress()).to.equal(
+            underlyingTokenAddress
+          );
+          expect(await usersVaultV2Contract.adaptersRegistryAddress()).to.equal(
+            adaptersRegistryAddress
+          );
+          expect(await usersVaultV2Contract.contractsFactoryAddress()).to.equal(
+            contractsFactoryContract.address
+          );
+          expect(await usersVaultV2Contract.traderWalletAddress()).to.equal(
+            traderWalletAddress
+          );
+          expect(await usersVaultV2Contract.dynamicValueAddress()).to.equal(
+            dynamicValueAddress
+          );
+          expect(await usersVaultV2Contract.owner()).to.equal(ownerAddress);
+
+          
+        });
+
+        it("THEN it should contains the new function to set the added variable", async () => {
+          await usersVaultV2Contract.addedMethod(AMOUNT_100);
+
+          expect(await usersVaultV2Contract.addedVariable()).to.equal(
+            AMOUNT_100
+          );
+        });
+      });
     });
   });
 });

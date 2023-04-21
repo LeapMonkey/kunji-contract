@@ -4,6 +4,8 @@ pragma solidity ^0.8.9;
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
+import "hardhat/console.sol";
+
 contract UsersVaultMock {
     bool public generalReturnValue;
     address public returnAddress;
@@ -22,8 +24,8 @@ contract UsersVaultMock {
     function setReturnAddress(address _value) external {
         returnAddress = _value;
     }
-    
-    function setExecuteOnAdapter(bool _value) external {
+
+    function setExecuteOnProtocol(bool _value) external {
         executedOperation = _value;
     }
 
@@ -39,23 +41,23 @@ contract UsersVaultMock {
         liquidity = _value;
     }
 
-    function executeOnAdapter(
-        address _adapterAddress,
+    function executeOnProtocol(
+        uint256 _protocolId,
         IAdapter.AdapterOperation memory _vaultOperation,
         uint256 _walletRatio
     ) external returns (bool) {
-        _adapterAddress;                                    // just to avoid warnings
-        _vaultOperation;                                // just to avoid warnings
-        _walletRatio;                                    // just to avoid warnings
-        executedOperation = executedOperation;          // just to avoid warnings
+        _protocolId; // just to avoid warnings
+        _vaultOperation; // just to avoid warnings
+        _walletRatio = 1; // just to avoid warnings
+        executedOperation = executedOperation; // just to avoid warnings
         return (executedOperation);
     }
 
-    function getUnderlyingLiquidity() external view returns(uint256) {
+    function getUnderlyingLiquidity() external view returns (uint256) {
         return liquidity;
     }
 
-    function getRound() external view returns(uint256) {
+    function getRound() external view returns (uint256) {
         return round;
     }
 }
