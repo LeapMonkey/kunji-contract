@@ -3,6 +3,46 @@ pragma solidity ^0.8.9;
 
 
 interface IGmxPositionRouter {
+
+    struct IncreasePositionRequest {
+        address account;
+        // address[] path;
+        address indexToken;
+        uint256 amountIn;
+        uint256 minOut;
+        uint256 sizeDelta;
+        bool isLong;
+        uint256 acceptablePrice;
+        uint256 executionFee;
+        uint256 blockNumber;
+        uint256 blockTime;
+        bool hasCollateralInETH;
+        address callbackTarget;
+    }
+
+    function increasePositionRequests(bytes32 requestKey) external view returns(IncreasePositionRequest memory);
+
+
+    struct DecreasePositionRequest {
+        address account;
+        // address[] path;
+        address indexToken;
+        uint256 collateralDelta;
+        uint256 sizeDelta;
+        bool isLong;
+        address receiver;
+        uint256 acceptablePrice;
+        uint256 minOut;
+        uint256 executionFee;
+        uint256 blockNumber;
+        uint256 blockTime;
+        bool withdrawETH;
+        address callbackTarget;
+    }
+
+    function decreasePositionRequests(bytes32 requestKey) external view returns(DecreasePositionRequest memory);
+
+
     function createIncreasePosition(
         address[] memory _path,
         address _indexToken,
