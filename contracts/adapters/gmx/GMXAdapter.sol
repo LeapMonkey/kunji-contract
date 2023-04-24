@@ -14,6 +14,7 @@ import "./interfaces/IGmxVault.sol";
 
 library GMXAdapter {
     error AddressZero();
+    error InsufficientEtherBalance();
     error InvalidOperationId();
     error CreateSwapOrderFail();
     error CreateIncreasePositionFail(string);
@@ -99,6 +100,7 @@ library GMXAdapter {
         uint256 ratio,
         bytes memory tradeData
     ) internal returns (bool) {
+
         (
             address[] memory path,
             address indexToken,
@@ -115,14 +117,13 @@ library GMXAdapter {
             // scaling for Vault
             amountIn = amountIn * ratio / ratioDenominator;
             sizeDelta = sizeDelta * ratio / ratioDenominator;
-            // increasing slippage allowance due to higher amounts
             minOut = minOut * ratio / ratioDenominator;
         }
 
-        address tokenIn = path[0];
-        _checkUpdateAllowance(tokenIn, address(gmxRouter), amountIn);
+        _checkUpdateAllowance(path[0], address(gmxRouter), amountIn);
         uint256 executionFee = IGmxPositionRouter(gmxPositionRouter).minExecutionFee();
-        
+        if (address(this).balance < executionFee) revert InsufficientEtherBalance();
+
         uint256 acceptablePrice;
         if (isLong) {
             acceptablePrice = gmxVault.getMaxPrice(indexToken);
@@ -131,7 +132,7 @@ library GMXAdapter {
         }
 
         (bool success, bytes memory data) = 
-        gmxPositionRouter.call{value: msg.value}(
+        gmxPositionRouter.call{value: executionFee}(
             abi.encodeWithSelector(
                 IGmxPositionRouter.createIncreasePosition.selector, 
                 path,
@@ -196,11 +197,11 @@ library GMXAdapter {
                 )
             );
         uint256 executionFee = IGmxPositionRouter(gmxPositionRouter).minExecutionFee();
+        if (address(this).balance < executionFee) revert InsufficientEtherBalance();
 
-        // scaling for Vault
         if (ratio != ratioDenominator) {
+            // scaling for Vault
             sizeDelta = sizeDelta * ratio / ratioDenominator;
-            // increasing slippage allowance due to higher amounts
             minOut = minOut * ratio / ratioDenominator;
         }
 
@@ -213,7 +214,7 @@ library GMXAdapter {
         }
 
         (bool success, bytes memory data) = 
-        gmxPositionRouter.call{value: msg.value}(
+        gmxPositionRouter.call{value: executionFee}(
             abi.encodeWithSelector(
             IGmxPositionRouter.createDecreasePosition.selector,
             path,

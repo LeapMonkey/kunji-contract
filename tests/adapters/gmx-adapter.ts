@@ -203,12 +203,22 @@ describe("GMXAdapter", function() {
       after(async () => {
         await reverter.revert();
       });
-      it("Should revert with insufficient balance", async() => {
+
+      it("Should revert if Wallet does not have enough Ether for fee", async() => {
         await expect(traderWalletContract.connect(trader).executeOnProtocol(
           protocolId,
           tradeOperation,
-          replicate,
-          { value: msgValue }
+          replicate
+        ))
+        .to.be.revertedWithCustomError(gmxAdapterLibrary.attach(traderWalletContract.address), "InsufficientEtherBalance")
+      });
+
+      it("Should revert with insufficient balance", async() => {
+        await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
+        await expect(traderWalletContract.connect(trader).executeOnProtocol(
+          protocolId,
+          tradeOperation,
+          replicate
         ))
         .to.be.revertedWithCustomError(gmxAdapterLibrary.attach(traderWalletContract.address), "CreateIncreasePositionFail")
         .withArgs("ERC20: transfer amount exceeds balance");
@@ -227,6 +237,7 @@ describe("GMXAdapter", function() {
       let requestKey: string;
       let keeper: Signer;
       before(async () => {
+        await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
         await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
         const tokenIn = tokens.usdc;
@@ -250,7 +261,6 @@ describe("GMXAdapter", function() {
           protocolId,
           tradeOperation,
           replicate,
-          { value: msgValue }
         );
         const txReceipt = await txResult.wait();
         
@@ -327,8 +337,7 @@ describe("GMXAdapter", function() {
           txResult = await traderWalletContract.connect(trader).executeOnProtocol(
             protocolId,
             tradeOperation,
-            replicate,
-            { value: msgValue }
+            replicate
           );
           const txReceipt = await txResult.wait();
         
@@ -387,6 +396,7 @@ describe("GMXAdapter", function() {
       let requestKey: string;
       let keeper: Signer;
       before(async () => {
+        await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
         await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
         const tokenIn = tokens.usdc;
@@ -409,8 +419,7 @@ describe("GMXAdapter", function() {
         txResult = await traderWalletContract.connect(trader).executeOnProtocol(
           protocolId,
           tradeOperation,
-          replicate,
-          { value: msgValue }
+          replicate
         );
         const txReceipt = await txResult.wait();
         
@@ -478,6 +487,7 @@ describe("GMXAdapter", function() {
       let requestKey: string;
       let keeper: Signer;
       beforeEach(async () => {
+        await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
         await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
 
@@ -503,13 +513,11 @@ describe("GMXAdapter", function() {
           );
         const operationId = 0;  // increasePosition
         const tradeOperation = {operationId, data: tradeData};
-        const msgValue = await gmxPositionRouter.minExecutionFee();
 
         txResult = await traderWalletContract.connect(trader).executeOnProtocol(
           protocolId,
           tradeOperation,
-          replicate,
-          { value: msgValue }
+          replicate
         );
         const txReceipt = await txResult.wait();
         
@@ -539,8 +547,7 @@ describe("GMXAdapter", function() {
         txResult = await traderWalletContract.connect(trader).executeOnProtocol(
           protocolId,
           tradeOperation,
-          replicate,
-          { value: msgValue }
+          replicate
         );
         const txReceipt = await txResult.wait();
         
