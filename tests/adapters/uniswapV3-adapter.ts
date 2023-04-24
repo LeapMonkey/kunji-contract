@@ -9,15 +9,25 @@ import {
   utils,
   constants
 } from "ethers";
-import { ContractsFactory, IQuoterV2, UniswapV3Adapter, ERC20Mock, IUniswapV3Pool, IAdapter, IUniswapV3Router, IUniswapV3Factory, INonfungiblePositionManager } from "../../typechain-types";
+import {
+ContractsFactory,
+IQuoterV2,
+UniswapV3Adapter,
+ERC20Mock,
+IUniswapV3Pool,
+IAdapter,
+IUniswapV3Router,
+IUniswapV3Factory,
+INonfungiblePositionManager
+} from "../../typechain-types";
 import {
     TEST_TIMEOUT,
     ZERO_AMOUNT,
     ZERO_ADDRESS,
     AMOUNT_100,
-  } from "../helpers/constants";
-import { tokens, uniswap } from "../helpers/arbitrumAddresses";
-import Reverter from "../helpers/reverter";
+  } from "../_helpers/constants";
+import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
+import Reverter from "../_helpers/reverter";
 import { deployERC20 } from "../helpers/ERC20Mock/ERC20Mock";
 import { addLiquidity, createPool, initializePool } from "../helpers/UniswapV3/createPool";
 

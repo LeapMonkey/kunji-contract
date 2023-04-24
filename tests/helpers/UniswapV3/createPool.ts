@@ -5,7 +5,7 @@ import {
   BigNumber,
   utils,
 } from "ethers";
-import { uniswap } from "../../../tests/helpers/arbitrumAddresses";
+import { uniswap } from "../../../tests/_helpers/arbitrumAddresses";
 
 
 export async function createPool(
