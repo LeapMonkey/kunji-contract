@@ -657,7 +657,7 @@ contract UsersVault is
     function _executeOnGmx(
         uint256 _ratio,
         IAdapter.AdapterOperation memory _traderOperation
-    ) internal pure returns (bool) {
+    ) internal returns (bool) {
         return GMXAdapter.executeOperation(_ratio, _traderOperation);
     }
 

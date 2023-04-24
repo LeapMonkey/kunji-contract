@@ -24,9 +24,9 @@ import {
     ZERO_AMOUNT,
     ZERO_ADDRESS,
     AMOUNT_100,
-  } from "../helpers/constants";
-import Reverter from "../helpers/reverter";
-import { tokens, gmx, tokenHolders } from "../helpers/arbitrumAddresses";
+  } from "../_helpers/constants";
+import Reverter from "../_helpers/reverter";
+import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
 
 
 const reverter = new Reverter();
@@ -41,6 +41,7 @@ let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
+let usdcHolder0: Signer;
 
 let deployerAddress: string;
 let vaultAddress: string;
@@ -62,7 +63,7 @@ let contractBalanceAfter: BigNumber;
 let traderBalanceBefore: BigNumber;
 let traderBalanceAfter: BigNumber;
 
-let GMXAdapterFactory: ContractsFactory;
+let GMXAdapterFactory: ContractFactory;
 let gmxAdapterLibrary: GMXAdapter
 let gmxRouter: IGmxRouter;
 let gmxPositionRouter: IGmxPositionRouter;
@@ -120,7 +121,7 @@ describe("GMXAdapter", function() {
     usdcTokenContract = await ethers.getContractAt("ERC20", tokens.usdc);
     underlyingTokenAddress = usdcTokenContract.address;
 
-    const usdcHolder0 = await ethers.getImpersonatedSigner(tokenHolders.usdc[0]);
+    usdcHolder0 = await ethers.getImpersonatedSigner(tokenHolders.usdc[0]);
     await usdcTokenContract.connect(usdcHolder0).transfer(traderAddress, utils.parseUnits("1000", 6));
 
     GMXAdapterFactory = await ethers.getContractFactory("GMXAdapter");
@@ -135,7 +136,6 @@ describe("GMXAdapter", function() {
     traderWalletContract = (await upgrades.deployProxy(
       TraderWalletFactory,
       [
-        vaultAddress,
         underlyingTokenAddress,
         adaptersRegistryAddress,
         contractsFactoryAddress,
@@ -149,9 +149,9 @@ describe("GMXAdapter", function() {
 
     await traderWalletContract.deployed();
 
-     // mock interaction
-    await traderWalletContract.connect(trader).addAdapterToUse(protocolId, gmx.routerAddress);
-    
+    // mock interaction
+    // await traderWalletContract.connect(trader).addAdapterToUse(protocolId, gmx.routerAddress);
+    await reverter.snapshot();
   });
 
   describe("Adapter deployment parameters", function() {
@@ -170,6 +170,52 @@ describe("GMXAdapter", function() {
         );
       });
     });
+
+    describe("Reverts with creating new orders", function () {
+      const amount = utils.parseUnits("1000", 6);
+      const replicate = false;
+
+      let indexToken: string;
+      let collateralToken: string;
+      let msgValue: BigNumber;
+      let tradeOperation: any;
+      before(async () => {
+        await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+        const isLong = true;
+        const tokenIn = tokens.usdc;
+        collateralToken = tokens.wbtc;
+        indexToken = collateralToken; 
+        const path = [tokenIn, collateralToken];
+        const amountIn = amount.add(1);
+        const minOut = 0;
+        const sizeDelta = utils.parseUnits("2000", 30);
+
+        const tradeData = abiCoder.encode(
+          ["address[]", "address", "uint256", "uint256", "uint256", "bool"],
+          [path, indexToken, amountIn, minOut, sizeDelta, isLong]
+          );
+        const operationId = 0;  // increasePosition
+        tradeOperation = { operationId, data: tradeData };
+        msgValue = await gmxPositionRouter.minExecutionFee();
+      });
+
+      after(async () => {
+        await reverter.revert();
+      });
+      it("Should revert with insufficient balance", async() => {
+        await expect(traderWalletContract.connect(trader).executeOnProtocol(
+          protocolId,
+          tradeOperation,
+          replicate,
+          { value: msgValue }
+        ))
+        .to.be.revertedWithCustomError(gmxAdapterLibrary.attach(traderWalletContract.address), "CreateIncreasePositionFail")
+        .withArgs("ERC20: transfer amount exceeds balance");
+      });
+
+    });
+
 
     describe("Open and close LONG trader position", function () {
       const amount = utils.parseUnits("1000", 6);
@@ -331,14 +377,181 @@ describe("GMXAdapter", function() {
 
     });
 
-    xdescribe("Open and close SHORT trader position", function () {
-      before(async () => {
+    describe("Open a SHORT trader position", function () {
+      const amount = utils.parseUnits("1000", 6);
+      const replicate = false;
+      const isLong = false;
 
+      let indexToken: string;
+      let collateralToken: string;
+      let requestKey: string;
+      let keeper: Signer;
+      before(async () => {
+        await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+        const tokenIn = tokens.usdc;
+        collateralToken = tokenIn;
+        indexToken = tokens.wbtc; 
+        const path = [collateralToken];
+        const amountIn = amount;
+        const minOut = 0;
+        const sizeDelta = utils.parseUnits("2000", 30);
+        // const acceptablePrice = await gmxVault.getMaxPrice(indexToken);
+
+        const tradeData = abiCoder.encode(
+          ["address[]", "address", "uint256", "uint256", "uint256", "bool"],
+          [path, indexToken, amountIn, minOut, sizeDelta, isLong]
+          );
+        const operationId = 0;  // increasePosition
+        const tradeOperation = {operationId, data: tradeData};
+        const msgValue = await gmxPositionRouter.minExecutionFee();
+
+        txResult = await traderWalletContract.connect(trader).executeOnProtocol(
+          protocolId,
+          tradeOperation,
+          replicate,
+          { value: msgValue }
+        );
+        const txReceipt = await txResult.wait();
+        
+        const events = txReceipt.events?.filter((event: any) => event.topics[0] === createIncreasePositionEvent)[0];
+        requestKey = requestKeyFromEvent(events);
       });
 
-      xit("Should create increase positions", async() => {
+      after(async () => {
+        await reverter.revert();
+      });
 
+      it("Should emit event with create increase position requestKey", async() => {
+        // const gmxAdapterLibrary = await ethers.getContractAt("GMXAdapter", traderWalletContract.address);
+        await expect(txResult)
+          .to.emit(gmxAdapterLibrary.attach(traderWalletContract.address), "CreateIncreasePosition")
+          .withArgs(traderWalletContract.address, requestKey);
+      });
+
+      it("Should spent all trader's balance", async() => {
+        expect(await usdcTokenContract.balanceOf(traderAddress)).to.equal(0);
+      });
+
+      it("Should create IncreasePositionRequest in GMX.PositionRouter contract ", async() => {
+        const createdRequest = await gmxPositionRouter.increasePositionRequests(requestKey);
+        expect(createdRequest.account).to.equal(traderWalletContract.address);
+        expect(createdRequest.amountIn).to.equal(amount);
+      });
+
+      describe("Execute increasing position by a keeper", function () {
+        before(async () => {
+          keeper = await ethers.getImpersonatedSigner(gmx.keeper);
+          await setBalance(gmx.keeper, utils.parseEther("10"));
+          await gmxPositionRouter.connect(keeper).executeIncreasePosition(requestKey, gmx.keeper);
+        });
+
+        it("Should remove IncreasePositionRequest after executing ", async() => {
+          const createdRequest = await gmxPositionRouter.increasePositionRequests(requestKey);
+          expect(createdRequest.account).to.equal(constants.AddressZero);
+          expect(createdRequest.indexToken).to.equal(constants.AddressZero);
+          expect(createdRequest.amountIn).to.equal(constants.Zero);
+        });
+
+        it("Should return opened position from positions list", async() => {
+          const position = await gmxAdapterLibrary.getPositions(
+              traderWalletContract.address,
+              [collateralToken],
+              [indexToken],
+              [isLong]
+            );
+          const [ size ] = position;
+          expect(size).to.equal(utils.parseUnits("2000", 30));
+        });
+      });
+
+    });
+
+    describe("Errors with opening positions LONG", function () {
+      const amount = utils.parseUnits("1000", 6);
+      const replicate = false;
+      const isLong = true;
+      let tokenIn: string;
+
+      let indexToken: string;
+      let collateralToken: string;
+      let requestKey: string;
+      let keeper: Signer;
+      beforeEach(async () => {
+        await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+
+        keeper = await ethers.getImpersonatedSigner(gmx.keeper);
+        await setBalance(gmx.keeper, utils.parseEther("10"));
+      });
+
+      afterEach(async () => {
+        await reverter.revert();
+      });
+    
+      it("Should revert increase Long position if collateral != indexToken '_collateralToken must not be a stableToken'", async() => {
+        tokenIn = tokens.usdc;
+        collateralToken = tokenIn;
+        indexToken = tokens.wbtc; 
+        const path = [tokenIn];
+        const amountIn = amount;
+        const minOut = 0;
+        const sizeDelta = utils.parseUnits("2000", 30);
+        const tradeData = abiCoder.encode(
+          ["address[]", "address", "uint256", "uint256", "uint256", "bool"],
+          [path, indexToken, amountIn, minOut, sizeDelta, isLong]
+          );
+        const operationId = 0;  // increasePosition
+        const tradeOperation = {operationId, data: tradeData};
+        const msgValue = await gmxPositionRouter.minExecutionFee();
+
+        txResult = await traderWalletContract.connect(trader).executeOnProtocol(
+          protocolId,
+          tradeOperation,
+          replicate,
+          { value: msgValue }
+        );
+        const txReceipt = await txResult.wait();
+        
+        const events = txReceipt.events?.filter((event: any) => event.topics[0] === createIncreasePositionEvent)[0];
+        requestKey = requestKeyFromEvent(events);
+
+        await expect(gmxPositionRouter.connect(keeper).executeIncreasePosition(requestKey, gmx.keeper))
+          .to.be.revertedWith("Vault: mismatched tokens")
+      });
+
+      it("Should revert increase Long position if collateral == stableToken'", async() => {
+        tokenIn = tokens.usdc;
+        collateralToken = tokens.usdc;
+        indexToken = tokens.usdc; 
+        const path = [tokenIn];
+        const amountIn = amount;
+        const minOut = 0;
+        const sizeDelta = utils.parseUnits("2000", 30);
+        const tradeData = abiCoder.encode(
+          ["address[]", "address", "uint256", "uint256", "uint256", "bool"],
+          [path, indexToken, amountIn, minOut, sizeDelta, isLong]
+          );
+        const operationId = 0;  // increasePosition
+        const tradeOperation = {operationId, data: tradeData};
+        const msgValue = await gmxPositionRouter.minExecutionFee();
+
+        txResult = await traderWalletContract.connect(trader).executeOnProtocol(
+          protocolId,
+          tradeOperation,
+          replicate,
+          { value: msgValue }
+        );
+        const txReceipt = await txResult.wait();
+        
+        const events = txReceipt.events?.filter((event: any) => event.topics[0] === createIncreasePositionEvent)[0];
+        requestKey = requestKeyFromEvent(events);
+
+        await expect(gmxPositionRouter.connect(keeper).executeIncreasePosition(requestKey, gmx.keeper))
+          .to.be.revertedWith("Vault: _collateralToken must not be a stableToken")
       });
     });
+
+
   });
 });
