@@ -377,8 +377,7 @@ contract TraderWallet is OwnableUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
     ) external onlyTrader returns (bool) {
-        address adapterAddress = adaptersPerProtocol[_protocolId];
-        if (adapterAddress == address(0)) revert InvalidAdapter();
+        address adapterAddress;
 
         uint256 walletRatio = 1e18;
         // execute operation with ratio equals to 1 because it is for trader, not scaling
@@ -388,6 +387,9 @@ contract TraderWallet is OwnableUpgradeable {
         if (_protocolId == 1) {
             success = _executeOnGmx(walletRatio, _traderOperation);
         } else {
+            adapterAddress = adaptersPerProtocol[_protocolId];
+            if (adapterAddress == address(0)) revert InvalidAdapter();
+
             success = _executeOnAdapter(
                 adapterAddress,
                 walletRatio,
@@ -508,5 +510,6 @@ contract TraderWallet is OwnableUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation
     ) internal pure returns (bool) {
         return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
+        // needs to mock a library responde to unit testing
     }
 }

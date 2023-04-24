@@ -1045,8 +1045,6 @@ describe("User Vault Contract Tests", function () {
             dynamicValueAddress
           );
           expect(await usersVaultV2Contract.owner()).to.equal(ownerAddress);
-
-          
         });
 
         it("THEN it should contains the new function to set the added variable", async () => {

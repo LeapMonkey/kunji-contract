@@ -1274,7 +1274,9 @@ describe("Trader Wallet Contract Tests", function () {
                 // so the call to the executeOnProtocol returns the adapter address
                 await traderWalletContract.connect(trader).addAdapterToUse(2);
               });
-
+              after(async () => {
+                await reverter.revert();
+              });
               describe("WHEN executed on wallet ok but revert in users vault", function () {
                 before(async () => {
                   // change returnValue to return true on function call on allowed operation

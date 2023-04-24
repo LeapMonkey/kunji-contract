@@ -452,13 +452,15 @@ contract UsersVault is
         uint256 _walletRatio
     ) external returns (bool) {
         _onlyTraderWallet(_msgSender());
-        address adapterAddress = adaptersPerProtocol[_protocolId];
-        if (adapterAddress == address(0)) revert InvalidAdapter();
 
+        address adapterAddress;
         bool success = false;
+
         if (_protocolId == 1) {
             success = _executeOnGmx(_walletRatio, _traderOperation);
         } else {
+        adapterAddress = adaptersPerProtocol[_protocolId];
+        if (adapterAddress == address(0)) revert InvalidAdapter();
             success = _executeOnAdapter(
                 adapterAddress,
                 _walletRatio,
