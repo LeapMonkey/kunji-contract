@@ -10,7 +10,7 @@ import {
   // TraderWalletMock,
   ERC20Mock,
 } from "../../typechain-types";
-import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18, AMOUNT_100 } from "../_helpers/constants";
+import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18, AMOUNT_1E18 } from "../_helpers/constants";
 
 const reverter = new Reverter();
 
@@ -232,7 +232,7 @@ describe("User Vault Contract Tests", function () {
         });
 
         it("THEN ==> FAIL WHEN CLAIMING SHARES --> InvalidRound because is ROUND 0", async () => {
-          await expect(usersVaultContract.claimShares(AMOUNT_100, user1Address)).to.be.revertedWithCustomError(
+          await expect(usersVaultContract.claimShares(AMOUNT_1E18, user1Address)).to.be.revertedWithCustomError(
             usersVaultContract,
             "InvalidRound"
           );

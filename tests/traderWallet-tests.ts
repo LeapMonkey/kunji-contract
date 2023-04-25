@@ -21,7 +21,7 @@ import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
-  AMOUNT_100,
+  AMOUNT_1E18,
 } from "./_helpers/constants";
 
 const reverter = new Reverter();
@@ -263,10 +263,10 @@ describe("Trader Wallet Contract Tests", function () {
           await adapterContract.deployed();
 
           // mint to trader
-          await usdcTokenContract.mint(traderAddress, AMOUNT_100);
+          await usdcTokenContract.mint(traderAddress, AMOUNT_1E18.mul(100));
           await usdcTokenContract
             .connect(trader)
-            .approve(traderWalletContract.address, AMOUNT_100);
+            .approve(traderWalletContract.address, AMOUNT_1E18.mul(100));
 
           contractBalanceBefore = await usdcTokenContract.balanceOf(
             traderWalletContract.address
@@ -924,7 +924,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(nonAuthorized)
-                    .traderDeposit(underlyingTokenAddress, AMOUNT_100)
+                    .traderDeposit(underlyingTokenAddress, AMOUNT_1E18)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "CallerNotAllowed"
@@ -937,7 +937,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .traderDeposit(otherAddress, AMOUNT_100)
+                    .traderDeposit(otherAddress, AMOUNT_1E18)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "UnderlyingAssetNotAllowed"
@@ -969,7 +969,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .traderDeposit(underlyingTokenAddress, AMOUNT_100)
+                    .traderDeposit(underlyingTokenAddress, AMOUNT_1E18)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "TokenTransferFailed"
@@ -979,7 +979,7 @@ describe("Trader Wallet Contract Tests", function () {
           });
 
           describe("WHEN calling with correct caller and amount", function () {
-            const AMOUNT = AMOUNT_100.div(2);
+            const AMOUNT = AMOUNT_1E18.mul(100).div(2);
 
             before(async () => {
               txResult = await traderWalletContract
@@ -1029,10 +1029,10 @@ describe("Trader Wallet Contract Tests", function () {
               it("THEN contract should return correct vaules", async () => {
                 expect(
                   await traderWalletContract.getCumulativePendingDeposits()
-                ).to.equal(AMOUNT_100);
+                ).to.equal(AMOUNT_1E18.mul(100));
                 expect(
                   await traderWalletContract.cumulativePendingDeposits()
-                ).to.equal(AMOUNT_100);
+                ).to.equal(AMOUNT_1E18.mul(100));
               });
               it("THEN it should emit an Event", async () => {
                 await expect(txResult)
@@ -1044,7 +1044,7 @@ describe("Trader Wallet Contract Tests", function () {
                   traderWalletContract.address
                 );
                 expect(contractBalanceAfter).to.equal(
-                  contractBalanceBefore.add(AMOUNT_100)
+                  contractBalanceBefore.add(AMOUNT_1E18.mul(100))
                 );
               });
               it("THEN trader balance should decrease", async () => {
@@ -1052,7 +1052,7 @@ describe("Trader Wallet Contract Tests", function () {
                   traderAddress
                 );
                 expect(traderBalanceAfter).to.equal(
-                  traderBalanceBefore.sub(AMOUNT_100)
+                  traderBalanceBefore.sub(AMOUNT_1E18.mul(100))
                 );
               });
             });
@@ -1066,33 +1066,19 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(nonAuthorized)
-                    .withdrawRequest(underlyingTokenAddress, AMOUNT_100)
+                    .withdrawRequest(AMOUNT_1E18.mul(100))
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "CallerNotAllowed"
                 );
               });
             });
-
-            describe("WHEN Token is not the underlying", function () {
-              it("THEN it should fail", async () => {
-                await expect(
-                  traderWalletContract
-                    .connect(trader)
-                    .withdrawRequest(otherAddress, AMOUNT_100)
-                ).to.be.revertedWithCustomError(
-                  traderWalletContract,
-                  "UnderlyingAssetNotAllowed"
-                );
-              });
-            });
-
             describe("WHEN amount is ZERO", function () {
               it("THEN it should fail", async () => {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .withdrawRequest(underlyingTokenAddress, ZERO_AMOUNT)
+                    .withdrawRequest(ZERO_AMOUNT)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "ZeroAmount"
@@ -1102,12 +1088,12 @@ describe("Trader Wallet Contract Tests", function () {
           });
 
           describe("WHEN calling with correct caller and amount", function () {
-            const AMOUNT = AMOUNT_100.div(2);
+            const AMOUNT = AMOUNT_1E18.mul(100).div(2);
 
             before(async () => {
               txResult = await traderWalletContract
                 .connect(trader)
-                .withdrawRequest(underlyingTokenAddress, AMOUNT);
+                .withdrawRequest(AMOUNT);
             });
             after(async () => {
               await reverter.revert();
@@ -1122,7 +1108,7 @@ describe("Trader Wallet Contract Tests", function () {
             });
             it("THEN it should emit an Event", async () => {
               await expect(txResult)
-                .to.emit(traderWalletContract, "WithdrawalRequest")
+                .to.emit(traderWalletContract, "WithdrawRequest")
                 .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
             });
 
@@ -1130,20 +1116,20 @@ describe("Trader Wallet Contract Tests", function () {
               before(async () => {
                 txResult = await traderWalletContract
                   .connect(trader)
-                  .withdrawRequest(underlyingTokenAddress, AMOUNT);
+                  .withdrawRequest(AMOUNT);
               });
 
               it("THEN contract should return correct vaules", async () => {
                 expect(
                   await traderWalletContract.getCumulativePendingWithdrawals()
-                ).to.equal(AMOUNT_100);
+                ).to.equal(AMOUNT_1E18.mul(100));
                 expect(
                   await traderWalletContract.cumulativePendingWithdrawals()
-                ).to.equal(AMOUNT_100);
+                ).to.equal(AMOUNT_1E18.mul(100));
               });
               it("THEN it should emit an Event", async () => {
                 await expect(txResult)
-                  .to.emit(traderWalletContract, "WithdrawalRequest")
+                  .to.emit(traderWalletContract, "WithdrawRequest")
                   .withArgs(traderAddress, underlyingTokenAddress, AMOUNT);
               });
             });
@@ -1320,10 +1306,248 @@ describe("Trader Wallet Contract Tests", function () {
           });
         });
 
+        describe("WHEN trying to make a rollover", async () => {
+          let vaultBalanceBefore;
+          let vaultBalanceAfter;
+
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not trader", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract.connect(nonAuthorized).rollover()
+                ).to.be.revertedWithCustomError(
+                  traderWalletContract,
+                  "CallerNotAllowed"
+                );
+              });
+            });
+            describe("WHEN no cumulatives pending", async () => {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletContract.connect(trader).rollover()
+                ).to.be.revertedWithCustomError(
+                  traderWalletContract,
+                  "InvalidRollover"
+                );
+              });
+            });
+
+            describe("WHEN external contract operations fail", async () => {
+              before(async () => {
+                // mint to trader
+                await usdcTokenContract.mint(
+                  traderAddress,
+                  AMOUNT_1E18.mul(100).mul(4)
+                );
+                await usdcTokenContract
+                  .connect(trader)
+                  .approve(
+                    traderWalletContract.address,
+                    AMOUNT_1E18.mul(100).mul(4)
+                  );
+
+                // mint to vault
+                await usdcTokenContract.mint(
+                  usersVaultContract.address,
+                  AMOUNT_1E18.mul(100).mul(10).mul(8)
+                );
+
+                await traderWalletContract
+                  .connect(trader)
+                  .traderDeposit(
+                    underlyingTokenAddress,
+                    AMOUNT_1E18.mul(100).mul(4)
+                  );
+              });
+
+              describe("WHEN rollover fails on Users Vault", async () => {
+                before(async () => {
+                  // for rollover return false
+                  await usersVaultContract.setReturnValue(false);
+                });
+                it("THEN rollover should fail", async () => {
+                  await expect(
+                    traderWalletContract.connect(trader).rollover()
+                  ).to.be.revertedWithCustomError(
+                    traderWalletContract,
+                    "RolloverFailed"
+                  );
+                });
+              });
+
+              describe("WHEN transfer to trader fails after users vault rollover", async () => {
+                before(async () => {
+                  // for rollover return ok
+                  await usersVaultContract.setReturnValue(true);
+                  // for transfer return error
+                  await usdcTokenContract.setReturnBoolValue(false);
+
+                  // request withdraw so the transfer can take place
+                  await traderWalletContract
+                    .connect(trader)
+                    .withdrawRequest(AMOUNT_1E18.mul(100));
+                });
+                // after(async () => {
+                //   await reverter.revert();
+                // });
+                it("THEN rollover should fail", async () => {
+                  await expect(
+                    traderWalletContract.connect(trader).rollover()
+                  ).to.be.revertedWithCustomError(
+                    traderWalletContract,
+                    "SendToTraderFailed"
+                  );
+                });
+              });
+              describe("WHEN trader makes a really big withdraw request and it is processed after users vault rollover", async () => {
+                before(async () => {
+                  // for rollover return ok
+                  await usersVaultContract.setReturnValue(true);
+                  // for transfer return ok
+                  await usdcTokenContract.setReturnBoolValue(true);
+
+                  // request withdraw so the transfer can take place
+                  await traderWalletContract
+                    .connect(trader)
+                    .withdrawRequest(AMOUNT_1E18.mul(100).mul(10));
+                });
+                after(async () => {
+                  await reverter.revert();
+                });
+                it("THEN rollover should fail", async () => {
+                  await expect(
+                    traderWalletContract.connect(trader).rollover()
+                  ).to.be.revertedWith(
+                    "ERC20: transfer amount exceeds balance"
+                  );
+                });
+              });
+            });
+          });
+
+          describe("WHEN calling with correct parameters on round ZERO", function () {
+            before(async () => {
+              // mint to trader 400
+              await usdcTokenContract.mint(
+                traderAddress,
+                AMOUNT_1E18.mul(100).mul(4)
+              );
+              await usdcTokenContract
+                .connect(trader)
+                .approve(
+                  traderWalletContract.address,
+                  AMOUNT_1E18.mul(100).mul(4)
+                );
+
+              // mint to vault 8000
+              await usdcTokenContract.mint(
+                usersVaultContract.address,
+                AMOUNT_1E18.mul(100).mul(10).mul(8)
+              );
+
+              contractBalanceBefore = await usdcTokenContract.balanceOf(
+                traderWalletContract.address
+              );
+              vaultBalanceBefore = await usdcTokenContract.balanceOf(
+                usersVaultContract.address
+              );
+              traderBalanceBefore = await usdcTokenContract.balanceOf(
+                traderAddress
+              );
+
+              await traderWalletContract
+                .connect(trader)
+                .traderDeposit(
+                  underlyingTokenAddress,
+                  AMOUNT_1E18.mul(100).mul(4)
+                );
+            });
+
+            it("THEN before deposit all round balance variables should be ZERO", async () => {
+              expect(
+                await traderWalletContract.afterRoundVaultBalance()
+              ).to.equal(ZERO_AMOUNT);
+              expect(
+                await traderWalletContract.afterRoundTraderBalance()
+              ).to.equal(ZERO_AMOUNT);
+              expect(
+                await traderWalletContract.initialTraderBalance()
+              ).to.equal(ZERO_AMOUNT);
+              expect(await traderWalletContract.initialVaultBalance()).to.equal(
+                ZERO_AMOUNT
+              );
+            });
+
+            describe("WHEN rollover on users vault succeed", function () {
+              before(async () => {
+                // for rollover return ok
+                await usersVaultContract.setReturnValue(true);
+                // increase users vault round
+                await usersVaultContract.setRound(1);
+                // set the return value for vault
+                await usersVaultContract.setLiquidity(
+                  AMOUNT_1E18.mul(100).mul(10).mul(8)
+                );
+
+                txResult = await traderWalletContract
+                  .connect(trader)
+                  .rollover();
+              });
+
+              it("THEN after deposit afterRoundTraderBalance/afterRoundVaultBalance should be plain underlying balances", async () => {
+                expect(
+                  await traderWalletContract.afterRoundVaultBalance()
+                ).to.equal(AMOUNT_1E18.mul(100).mul(10).mul(8));
+                expect(
+                  await traderWalletContract.afterRoundTraderBalance()
+                ).to.equal(AMOUNT_1E18.mul(100).mul(4));
+              });
+              it("THEN after deposit initialVaultBalance/initialTraderBalance should be plain underlying balances", async () => {
+                expect(
+                  await traderWalletContract.initialVaultBalance()
+                ).to.equal(AMOUNT_1E18.mul(100).mul(10).mul(8));
+                expect(
+                  await traderWalletContract.initialTraderBalance()
+                ).to.equal(AMOUNT_1E18.mul(100).mul(4));
+              });
+              it("THEN it should emit an Event", async () => {
+                await expect(txResult).to.emit(
+                  traderWalletContract,
+                  "RolloverExecuted"
+                );
+                // .withArgs(BLOCK TIME STAMP, 0);
+              });
+              it("THEN currentRound should be increased", async () => {
+                expect(await traderWalletContract.currentRound()).to.equal(1);
+              });
+              it("THEN cumulativePendingDeposits/traderProfit/vaultProfit should be ZERO", async () => {
+                expect(
+                  await traderWalletContract.cumulativePendingDeposits()
+                ).to.equal(ZERO_AMOUNT);
+                expect(await traderWalletContract.traderProfit()).to.equal(
+                  ZERO_AMOUNT
+                );
+                expect(await traderWalletContract.vaultProfit()).to.equal(
+                  ZERO_AMOUNT
+                );
+              });
+              it("THEN ratio should be ", async () => {
+                const expectedRatio = AMOUNT_1E18.mul(100)
+                  .mul(10)
+                  .mul(8)
+                  .mul(AMOUNT_1E18)
+                  .div(AMOUNT_1E18.mul(100).mul(4));
+                expect(await traderWalletContract.ratioProportions()).to.equal(
+                  expectedRatio
+                );
+              });
+            });
+          });
+        });
+
         describe("WHEN trying to UPGRADE the contract", async () => {
           let TraderWalletV2Factory: ContractFactory;
           let traderWalletV2Contract: TraderWalletV2;
-          //{ unsafeAllowLinkedLibraries: true }
           before(async () => {
             TraderWalletV2Factory = await ethers.getContractFactory(
               "TraderWalletV2",
@@ -1363,10 +1587,10 @@ describe("Trader Wallet Contract Tests", function () {
           });
 
           it("THEN it should contains the new function to set the added variable", async () => {
-            await traderWalletV2Contract.addedMethod(AMOUNT_100);
+            await traderWalletV2Contract.addedMethod(AMOUNT_1E18.mul(100));
 
             expect(await traderWalletV2Contract.addedVariable()).to.equal(
-              AMOUNT_100
+              AMOUNT_1E18.mul(100)
             );
           });
         });

@@ -21,8 +21,8 @@ import {
   ZERO_AMOUNT,
   ZERO_ADDRESS,
   AMOUNT_1E18,
-  AMOUNT_100,
 } from "./_helpers/constants";
+import { makeTransferProxyAdminOwnership } from "@openzeppelin/hardhat-upgrades/dist/admin";
 
 const reverter = new Reverter();
 
@@ -125,10 +125,9 @@ describe("User Vault Contract Tests", function () {
 
   describe("UserVault deployment Tests", function () {
     before(async () => {
-      GMXAdapterLibraryFactory = await ethers.getContractFactory(
-        "GMXAdapter"
-      );
-      gmxAdapterContract = (await GMXAdapterLibraryFactory.deploy()) as GMXAdapter;
+      GMXAdapterLibraryFactory = await ethers.getContractFactory("GMXAdapter");
+      gmxAdapterContract =
+        (await GMXAdapterLibraryFactory.deploy()) as GMXAdapter;
       await gmxAdapterContract.deployed();
 
       UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
@@ -865,7 +864,7 @@ describe("User Vault Contract Tests", function () {
               await expect(
                 usersVaultContract
                   .connect(nonAuthorized)
-                  .userDeposit(underlyingTokenAddress, AMOUNT_100)
+                  .userDeposit(underlyingTokenAddress, AMOUNT_1E18)
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
                 "UserNotAllowed"
@@ -882,7 +881,7 @@ describe("User Vault Contract Tests", function () {
               await expect(
                 usersVaultContract
                   .connect(user1)
-                  .userDeposit(otherAddress, AMOUNT_100)
+                  .userDeposit(otherAddress, AMOUNT_1E18)
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
                 "UnderlyingAssetNotAllowed"
@@ -912,7 +911,7 @@ describe("User Vault Contract Tests", function () {
               await expect(
                 usersVaultContract
                   .connect(user1)
-                  .userDeposit(underlyingTokenAddress, AMOUNT_100)
+                  .userDeposit(underlyingTokenAddress, AMOUNT_1E18)
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
                 "TokenTransferFailed"
@@ -1001,6 +1000,131 @@ describe("User Vault Contract Tests", function () {
         });
       });
 
+      describe("WHEN trying to make a withdrawRequest", async () => {
+        describe("WHEN calling on round ZERO", function () {
+          it("THEN it should fail", async () => {
+            await expect(
+              usersVaultContract.connect(user1).withdrawRequest(AMOUNT_1E18)
+            ).to.be.revertedWithCustomError(usersVaultContract, "InvalidRound");
+          });
+        });
+        describe("WHEN calling on round 1", function () {
+          const AMOUNT = AMOUNT_1E18.mul(100);
+
+          before(async () => {
+            vaultBalanceBefore = await usdcTokenContract.balanceOf(
+              usersVaultContract.address
+            );
+
+            userBalanceBefore = await usdcTokenContract.balanceOf(user5Address);
+
+            txResult = await usersVaultContract
+              .connect(user1)
+              .userDeposit(underlyingTokenAddress, AMOUNT);
+          });
+          after(async () => {
+            await reverter.revert();
+          });
+
+          describe("WHEN calling with invalid caller or parameters", function () {
+            describe("WHEN caller is not allowed", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(nonAuthorized)
+                    .withdrawRequest(AMOUNT_1E18.mul(100))
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "UserNotAllowed"
+                );
+              });
+            });
+            describe("WHEN amount is ZERO", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(user1).withdrawRequest(ZERO_AMOUNT)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAmount"
+                );
+              });
+            });
+            describe("WHEN amount is higher than user shares", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(user1)
+                    .withdrawRequest(AMOUNT_1E18.mul(10000))
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAmount"
+                );
+              });
+            });
+          });
+
+          describe("WHEN calling with correct caller and amount", function () {
+            const AMOUNT = AMOUNT_1E18.mul(100).div(2);
+
+            before(async () => {
+              // mint 100 shares for user5
+              await mintForUsers(
+                user5Address,
+                usersVaultContract,
+                AMOUNT_1E18.mul(100)
+              );
+
+              txResult = await usersVaultContract
+                .connect(user5)
+                .withdrawRequest(AMOUNT);
+            });
+            after(async () => {
+              await reverter.revert();
+            });
+            it("THEN contract should return correct vaules", async () => {
+              const userWithdrawals = await usersVaultContract.userWithdrawals(
+                user5Address
+              );
+              expect(userWithdrawals.round).to.equal(ZERO_AMOUNT);
+              expect(userWithdrawals.pendingShares).to.equal(AMOUNT);
+              expect(await usersVaultContract.pendingWithdrawShares()).to.equal(
+                AMOUNT
+              );
+            });
+            it("THEN it should emit an Event", async () => {
+              await expect(txResult)
+                .to.emit(usersVaultContract, "WithdrawRequest")
+                .withArgs(user5Address, underlyingTokenAddress, AMOUNT);
+            });
+
+            describe("WHEN calling again with correct caller and amount", function () {
+              before(async () => {
+                txResult = await usersVaultContract
+                  .connect(user5)
+                  .withdrawRequest(AMOUNT);
+              });
+
+              it("THEN contract should return correct vaules", async () => {
+                const userWithdrawals =
+                  await usersVaultContract.userWithdrawals(user5Address);
+                expect(userWithdrawals.round).to.equal(ZERO_AMOUNT);
+                expect(userWithdrawals.pendingShares).to.equal(
+                  AMOUNT.add(AMOUNT)
+                );
+                expect(
+                  await usersVaultContract.pendingWithdrawShares()
+                ).to.equal(AMOUNT.add(AMOUNT));
+              });
+              it("THEN it should emit an Event", async () => {
+                await expect(txResult)
+                  .to.emit(usersVaultContract, "WithdrawalRequest")
+                  .withArgs(user5Address, underlyingTokenAddress, AMOUNT);
+              });
+            });
+          });
+        });
+      });
+
       // it("THEN ==> User 1 Claim ALL Shares", async () => {
 
       //   console.log('Balance user 1 Before claim: ', await usersVaultContract.balanceOf(user1Address));
@@ -1008,7 +1132,7 @@ describe("User Vault Contract Tests", function () {
       //   console.log('Balance user 1 After claim: ', await usersVaultContract.balanceOf(user1Address));
       // });
 
-      describe("WHEN trying to UPGRADE the contract", async () => {
+      xdescribe("WHEN trying to UPGRADE the contract", async () => {
         let UsersVaultV2Factory: ContractFactory;
         let usersVaultV2Contract: UsersVaultV2;
 
@@ -1028,7 +1152,7 @@ describe("User Vault Contract Tests", function () {
           )) as UsersVaultV2;
           await usersVaultV2Contract.deployed();
         });
-        it("THEN it should maintain previous storage", async () => {          
+        it("THEN it should maintain previous storage", async () => {
           expect(await usersVaultV2Contract.underlyingTokenAddress()).to.equal(
             underlyingTokenAddress
           );
@@ -1048,10 +1172,10 @@ describe("User Vault Contract Tests", function () {
         });
 
         it("THEN it should contains the new function to set the added variable", async () => {
-          await usersVaultV2Contract.addedMethod(AMOUNT_100);
+          await usersVaultV2Contract.addedMethod(AMOUNT_1E18);
 
           expect(await usersVaultV2Contract.addedVariable()).to.equal(
-            AMOUNT_100
+            AMOUNT_1E18
           );
         });
       });

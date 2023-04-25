@@ -100,7 +100,11 @@ contract UsersVault is
         address tokenAddress,
         uint256 assetsAmount
     );
-    event WithdrawRequest(address indexed caller, uint256 sharesAmount);
+    event WithdrawRequest(
+        address indexed account,
+        address indexed token,
+        uint256 amount
+    );
     event SharesClaimed(
         uint256 round,
         uint256 shares,
@@ -331,7 +335,7 @@ contract UsersVault is
         _onlyValidInvestors(_msgSender());
         _checkZeroRound();
 
-        emit WithdrawRequest(_msgSender(), _sharesAmount);
+        emit WithdrawRequest(_msgSender(), underlyingTokenAddress, _sharesAmount);
         _burn(_msgSender(), _sharesAmount);
 
         // Convert previous round pending shares into unclaimed assets
