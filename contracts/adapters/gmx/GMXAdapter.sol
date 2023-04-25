@@ -35,8 +35,7 @@ library GMXAdapter {
 
     /// @notice Gives approve to operate with gmxPositionRouter
     /// @dev Needs to be called from wallet and vault in initialization
-    // @todo add to contract constructor
-    function approveGmxPlugin() internal {
+    function __initApproveGmxPlugin() internal {
         IGmxRouter(gmxRouter).approvePlugin(gmxPositionRouter);
     }
 

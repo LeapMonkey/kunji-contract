@@ -128,6 +128,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         __Ownable_init();
         __ReentrancyGuard_init();
+        GMXAdapter.__initApproveGmxPlugin();
 
         underlyingTokenAddress = _underlyingTokenAddress;
         adaptersRegistryAddress = _adaptersRegistryAddress;
@@ -142,8 +143,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         afterRoundTraderBalance = 0;
         afterRoundVaultBalance = 0;
         currentRound = 0;
-
-        GMXAdapter.approveGmxPlugin();
     }
 
     //
@@ -383,7 +382,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
-    ) external onlyTrader returns (bool) {
+    ) external onlyTrader nonReentrant returns (bool) {
         address adapterAddress;
 
         uint256 walletRatio = 1e18;

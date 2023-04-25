@@ -7,6 +7,8 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+
 
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
@@ -19,7 +21,8 @@ import "hardhat/console.sol";
 contract UsersVault is
     ERC20Upgradeable,
     OwnableUpgradeable,
-    PausableUpgradeable
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable
 {
     using MathUpgradeable for uint256;
 
@@ -153,6 +156,8 @@ contract UsersVault is
         __Ownable_init();
         __Pausable_init();
         __ERC20_init(_sharesName, _sharesSymbol);
+        __ReentrancyGuard_init();
+        GMXAdapter.__initApproveGmxPlugin();
 
         underlyingTokenAddress = _underlyingTokenAddress;
         adaptersRegistryAddress = _adaptersRegistryAddress;
@@ -450,7 +455,7 @@ contract UsersVault is
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         uint256 _walletRatio
-    ) external returns (bool) {
+    ) external nonReentrant returns (bool) {
         _onlyTraderWallet(_msgSender());
 
         address adapterAddress;

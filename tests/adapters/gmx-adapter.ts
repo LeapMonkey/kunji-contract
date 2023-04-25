@@ -499,7 +499,7 @@ describe("GMXAdapter", function() {
         await reverter.revert();
       });
     
-      it("Should revert increase Long position if collateral != indexToken '_collateralToken must not be a stableToken'", async() => {
+      it("Should revert increase Long position if collateral != indexToken", async() => {
         tokenIn = tokens.usdc;
         collateralToken = tokenIn;
         indexToken = tokens.wbtc; 
