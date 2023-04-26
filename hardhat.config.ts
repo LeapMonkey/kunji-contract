@@ -1,12 +1,10 @@
 import "@nomicfoundation/hardhat-toolbox";
-import '@openzeppelin/hardhat-upgrades';
+import "@openzeppelin/hardhat-upgrades";
 import "hardhat-contract-sizer";
+import 'solidity-coverage';
 import { HardhatUserConfig } from "hardhat/config";
 import * as dotenv from "dotenv";
 dotenv.config();
-
-// You need to export an object to set up your config
-// Go to https://hardhat.org/config/ to learn more
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
@@ -19,11 +17,14 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 170
-      }
-    }
+        runs: 170,
+      },
+    },
   },
   networks: {
+    hardhat: {
+      initialBaseFeePerGas: 0
+    },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts:

@@ -257,7 +257,7 @@ describe("Trader Wallet Contract Tests", function () {
             .connect(owner)
             .setVaultAddress(usersVaultContract.address);
 
-          // deploy mocked adapterOperations
+          // deploy mocked adapter
           AdapterFactory = await ethers.getContractFactory("AdapterMock");
           adapterContract = (await AdapterFactory.deploy()) as AdapterMock;
           await adapterContract.deployed();
@@ -924,7 +924,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(nonAuthorized)
-                    .traderDeposit(underlyingTokenAddress, AMOUNT_1E18)
+                    .traderDeposit(AMOUNT_1E18)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "CallerNotAllowed"
@@ -932,16 +932,13 @@ describe("Trader Wallet Contract Tests", function () {
               });
             });
 
-            describe("WHEN Token is not the underlying", function () {
+            describe("WHEN trader does not have the amount", function () {
               it("THEN it should fail", async () => {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .traderDeposit(otherAddress, AMOUNT_1E18)
-                ).to.be.revertedWithCustomError(
-                  traderWalletContract,
-                  "UnderlyingAssetNotAllowed"
-                );
+                    .traderDeposit(AMOUNT_1E18.mul(100000))
+                ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
               });
             });
 
@@ -950,7 +947,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .traderDeposit(underlyingTokenAddress, ZERO_AMOUNT)
+                    .traderDeposit(ZERO_AMOUNT)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "ZeroAmount"
@@ -969,7 +966,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .traderDeposit(underlyingTokenAddress, AMOUNT_1E18)
+                    .traderDeposit(AMOUNT_1E18)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "TokenTransferFailed"
@@ -984,7 +981,7 @@ describe("Trader Wallet Contract Tests", function () {
             before(async () => {
               txResult = await traderWalletContract
                 .connect(trader)
-                .traderDeposit(underlyingTokenAddress, AMOUNT);
+                .traderDeposit(AMOUNT);
             });
             after(async () => {
               await reverter.revert();
@@ -1023,7 +1020,7 @@ describe("Trader Wallet Contract Tests", function () {
               before(async () => {
                 txResult = await traderWalletContract
                   .connect(trader)
-                  .traderDeposit(underlyingTokenAddress, AMOUNT);
+                  .traderDeposit(AMOUNT);
               });
 
               it("THEN contract should return correct vaules", async () => {
@@ -1153,7 +1150,7 @@ describe("Trader Wallet Contract Tests", function () {
                   traderWalletContract
                     .connect(nonAuthorized)
                     .executeOnProtocol(
-                      adapterContract.address,
+                      1,
                       traderOperation,
                       false
                     )
@@ -1271,7 +1268,7 @@ describe("Trader Wallet Contract Tests", function () {
                   // change returnValue to return false on function call on result of execute on vault
                   await usersVaultContract.setExecuteOnProtocol(false);
                 });
-                it("THEN it should emit an Event", async () => {
+                it("THEN it should fail", async () => {
                   await expect(
                     traderWalletContract
                       .connect(trader)
@@ -1307,9 +1304,6 @@ describe("Trader Wallet Contract Tests", function () {
         });
 
         describe("WHEN trying to make a rollover", async () => {
-          let vaultBalanceBefore;
-          let vaultBalanceAfter;
-
           describe("WHEN calling with invalid caller or parameters", function () {
             describe("WHEN caller is not trader", function () {
               it("THEN it should fail", async () => {
@@ -1354,10 +1348,7 @@ describe("Trader Wallet Contract Tests", function () {
 
                 await traderWalletContract
                   .connect(trader)
-                  .traderDeposit(
-                    underlyingTokenAddress,
-                    AMOUNT_1E18.mul(100).mul(4)
-                  );
+                  .traderDeposit(AMOUNT_1E18.mul(100).mul(4));
               });
 
               describe("WHEN rollover fails on Users Vault", async () => {
@@ -1445,25 +1436,22 @@ describe("Trader Wallet Contract Tests", function () {
                 AMOUNT_1E18.mul(100).mul(10).mul(8)
               );
 
-              contractBalanceBefore = await usdcTokenContract.balanceOf(
-                traderWalletContract.address
-              );
-              vaultBalanceBefore = await usdcTokenContract.balanceOf(
-                usersVaultContract.address
-              );
-              traderBalanceBefore = await usdcTokenContract.balanceOf(
-                traderAddress
-              );
+              // contractBalanceBefore = await usdcTokenContract.balanceOf(
+              //   traderWalletContract.address
+              // );
+              // let vaultBalanceBefore = await usdcTokenContract.balanceOf(
+              //   usersVaultContract.address
+              // );
+              // traderBalanceBefore = await usdcTokenContract.balanceOf(
+              //   traderAddress
+              // );
 
               await traderWalletContract
                 .connect(trader)
-                .traderDeposit(
-                  underlyingTokenAddress,
-                  AMOUNT_1E18.mul(100).mul(4)
-                );
+                .traderDeposit(AMOUNT_1E18.mul(100).mul(4));
             });
 
-            it("THEN before deposit all round balance variables should be ZERO", async () => {
+            it("THEN before rollover all round balance variables should be ZERO", async () => {
               expect(
                 await traderWalletContract.afterRoundVaultBalance()
               ).to.equal(ZERO_AMOUNT);
@@ -1494,7 +1482,7 @@ describe("Trader Wallet Contract Tests", function () {
                   .rollover();
               });
 
-              it("THEN after deposit afterRoundTraderBalance/afterRoundVaultBalance should be plain underlying balances", async () => {
+              it("THEN after rollover afterRoundTraderBalance/afterRoundVaultBalance should be plain underlying balances", async () => {
                 expect(
                   await traderWalletContract.afterRoundVaultBalance()
                 ).to.equal(AMOUNT_1E18.mul(100).mul(10).mul(8));
@@ -1502,7 +1490,7 @@ describe("Trader Wallet Contract Tests", function () {
                   await traderWalletContract.afterRoundTraderBalance()
                 ).to.equal(AMOUNT_1E18.mul(100).mul(4));
               });
-              it("THEN after deposit initialVaultBalance/initialTraderBalance should be plain underlying balances", async () => {
+              it("THEN after rollover initialVaultBalance/initialTraderBalance should be plain underlying balances", async () => {
                 expect(
                   await traderWalletContract.initialVaultBalance()
                 ).to.equal(AMOUNT_1E18.mul(100).mul(10).mul(8));
@@ -1531,7 +1519,7 @@ describe("Trader Wallet Contract Tests", function () {
                   ZERO_AMOUNT
                 );
               });
-              it("THEN ratio should be ", async () => {
+              it("THEN ratio should be the expected one", async () => {
                 const expectedRatio = AMOUNT_1E18.mul(100)
                   .mul(10)
                   .mul(8)
@@ -1545,6 +1533,11 @@ describe("Trader Wallet Contract Tests", function () {
           });
         });
 
+
+        /// UPGRADABILITY TESTS
+        /// UPGRADABILITY TESTS
+        /// UPGRADABILITY TESTS
+        /// UPGRADABILITY TESTS
         describe("WHEN trying to UPGRADE the contract", async () => {
           let TraderWalletV2Factory: ContractFactory;
           let traderWalletV2Contract: TraderWalletV2;

@@ -37,7 +37,6 @@ contract TraderWallet is OwnableUpgradeable {
     error ZeroAddress(string target);
     error ZeroAmount();
     error InvalidVault();
-    error UnderlyingAssetNotAllowed();
     error CallerNotAllowed();
     error TraderNotAllowed();
     error InvalidProtocol();
@@ -89,12 +88,6 @@ contract TraderWallet is OwnableUpgradeable {
         int256 traderProfit,
         int256 vaultProfit
     );
-
-    modifier onlyUnderlying(address _tokenAddress) {
-        if (_tokenAddress != underlyingTokenAddress)
-            revert UnderlyingAssetNotAllowed();
-        _;
-    }
 
     modifier onlyTrader() {
         if (_msgSender() != traderAddress) revert CallerNotAllowed();
@@ -261,14 +254,13 @@ contract TraderWallet is OwnableUpgradeable {
 
     //
     function traderDeposit(
-        address _tokenAddress,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_tokenAddress) {
+    ) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
             !(
-                IERC20Upgradeable(_tokenAddress).transferFrom(
+                IERC20Upgradeable(underlyingTokenAddress).transferFrom(
                     _msgSender(),
                     address(this),
                     _amount
@@ -276,7 +268,7 @@ contract TraderWallet is OwnableUpgradeable {
             )
         ) revert TokenTransferFailed();
 
-        emit TraderDeposit(_msgSender(), _tokenAddress, _amount);
+        emit TraderDeposit(_msgSender(), underlyingTokenAddress, _amount);
 
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
@@ -356,7 +348,7 @@ contract TraderWallet is OwnableUpgradeable {
         // put to zero this value so the round can start
         cumulativePendingDeposits = 0;
 
-        // get profits ?
+        // get profits
         if (currentRound != 0) {
             traderProfit =
                 int256(afterRoundTraderBalance) -
