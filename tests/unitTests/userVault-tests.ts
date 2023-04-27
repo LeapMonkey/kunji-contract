@@ -6,7 +6,7 @@ import {
   BigNumber,
 } from "ethers";
 import { expect } from "chai";
-import Reverter from "./_helpers/reverter";
+import Reverter from "./../_helpers/reverter";
 import {
   UsersVault,
   UsersVaultV2,
@@ -15,19 +15,19 @@ import {
   AdapterMock,
   GMXAdapter,
   ERC20Mock,
-} from "../typechain-types";
+} from "../../typechain-types";
 import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
   AMOUNT_1E18,
-} from "./_helpers/constants";
+} from "./../_helpers/constants";
 import {
   usersDeposit,
   mintForUsers,
   approveForUsers,
   claimShares,
-} from "./_helpers/functions";
+} from "./../_helpers/functions";
 
 const reverter = new Reverter();
 

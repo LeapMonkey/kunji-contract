@@ -6,7 +6,7 @@ import {
   BigNumber,
 } from "ethers";
 import { expect } from "chai";
-import Reverter from "./_helpers/reverter";
+import Reverter from "./../_helpers/reverter";
 import {
   TraderWallet,
   TraderWalletV2,
@@ -16,13 +16,13 @@ import {
   AdapterMock,
   UsersVaultMock,
   ERC20Mock,
-} from "../typechain-types";
+} from "../../typechain-types";
 import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
   AMOUNT_1E18,
-} from "./_helpers/constants";
+} from "./../_helpers/constants";
 
 const reverter = new Reverter();
 
