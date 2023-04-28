@@ -1,4 +1,4 @@
-import { loadFixture, setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, setBalance, setCode } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import {
@@ -17,7 +17,10 @@ import {
   IGmxReader,
   IGmxRouter,
   IGmxVault,
-  IGmxPositionRouter
+  IGmxPositionRouter,
+  IGmxOrderBook,
+  GmxVaultPriceFeedMock,
+  IGmxPositionManager
 } from "../../typechain-types";
 import {
     TEST_TIMEOUT,
@@ -26,10 +29,13 @@ import {
     AMOUNT_100,
   } from "../_helpers/constants";
 import Reverter from "../_helpers/reverter";
+import { ReverterLocal }  from "../_helpers/reverter";
 import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
 
 
 const reverter = new Reverter();
+const reverterLocal = new ReverterLocal();
+
 const abiCoder = new utils.AbiCoder();
 
 let deployer: Signer;
@@ -69,6 +75,9 @@ let gmxRouter: IGmxRouter;
 let gmxPositionRouter: IGmxPositionRouter;
 let gmxReader: IGmxReader;
 let gmxVault: IGmxVault;
+let gmxOrderBook: IGmxOrderBook;
+let gmxVaultPriceFeedMock: GmxVaultPriceFeedMock;
+let gmxPositionManager: IGmxPositionManager;
 
 const protocolId = 1;
 
@@ -86,6 +95,8 @@ describe("GMXAdapter", function() {
     gmxPositionRouter = await ethers.getContractAt("IGmxPositionRouter", gmx.positionRouterAddress);
     gmxReader = await ethers.getContractAt("IGmxReader", gmx.readerAddress);
     gmxVault = await ethers.getContractAt("IGmxVault", gmx.vaultAddress);
+    gmxOrderBook = await ethers.getContractAt("IGmxOrderBook", gmx.orderBookAddress);
+    gmxPositionManager = await ethers.getContractAt("IGmxPositionManager", gmx.positionManagerAddress);
 
     [
       deployer,
@@ -151,6 +162,11 @@ describe("GMXAdapter", function() {
 
     // mock interaction
     // await traderWalletContract.connect(trader).addAdapterToUse(protocolId, gmx.routerAddress);
+    
+    const GmxPriceFeedFactory = await ethers.getContractFactory("GmxVaultPriceFeedMock")
+    gmxVaultPriceFeedMock = await GmxPriceFeedFactory.deploy();
+    await gmxVaultPriceFeedMock.deployed();
+
     await reverter.snapshot();
   });
 
@@ -255,7 +271,7 @@ describe("GMXAdapter", function() {
           );
         const operationId = 0;  // increasePosition
         const tradeOperation = {operationId, data: tradeData};
-        const msgValue = await gmxPositionRouter.minExecutionFee();
+        // const msgValue = await gmxPositionRouter.minExecutionFee();
 
         txResult = await traderWalletContract.connect(trader).executeOnProtocol(
           protocolId,
@@ -559,6 +575,195 @@ describe("GMXAdapter", function() {
       });
     });
 
+    describe("Limit orders", function () {
+      const amount = utils.parseUnits("1000", 6);
+      const replicate = false;
+
+      let indexToken: string;
+      let collateralToken: string;
+      let requestKey: string;
+      let limitOrderKeeper: Signer;
+
+      describe("Creating Long Increase Limit order", function () {
+        const tokenIn = tokens.usdc;
+        collateralToken = tokens.wbtc;
+        indexToken = collateralToken;   // wbtc
+        const path = [tokenIn, collateralToken];
+        const amountIn = amount;
+
+        const minOut = 0;
+        const sizeDelta = utils.parseUnits("2000", 30);
+        const isLong = true;
+        const triggerAboveThreshold = true;
+
+        let currentPrice: BigNumber;
+        let triggerPrice: BigNumber;
+
+        before(async () => {
+          await trader.sendTransaction(
+            { to: traderWalletContract.address, value: utils.parseEther("0.2") }
+            );
+          await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
+          await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+
+          limitOrderKeeper = await ethers.getImpersonatedSigner(gmx.limitOrderKeeper);
+          await setBalance(gmx.limitOrderKeeper, utils.parseEther("10"));
+
+          currentPrice = await gmxVault.getMaxPrice(indexToken);
+          triggerPrice = currentPrice.add(utils.parseUnits("100", 30));
+          const tradeData = abiCoder.encode(
+            ["address[]", "uint256", "address", "uint256", "uint256", "bool", "uint256", "bool"],
+            [path, amountIn, indexToken, minOut, sizeDelta, isLong, triggerPrice, triggerAboveThreshold]
+            );
+          const operationId = 2;  // createIncreaseOrder
+          const tradeOperation = {operationId, data: tradeData};
+          txResult = await traderWalletContract.connect(trader).executeOnProtocol(
+            protocolId,
+            tradeOperation,
+            replicate,
+          );
+          const txReceipt = await txResult.wait();
+        });
+
+        it("Should create increase order index for trader wallet account", async () => {
+          expect(await gmxOrderBook.increaseOrdersIndex(traderWalletContract.address))
+            .to.equal(1); // first increase order
+        });
+
+        it("Should return correct data of created limit order", async () => {
+          const index = 0;
+          
+          const order = await gmxOrderBook.increaseOrders(traderWalletContract.address, index);
+          expect(order.account).to.equal(traderWalletContract.address);
+          expect(order.purchaseToken).to.equal(collateralToken);
+          expect(order.collateralToken).to.equal(collateralToken);
+          expect(order.indexToken).to.equal(indexToken);
+          expect(order.sizeDelta).to.equal(sizeDelta);
+          expect(order.triggerPrice).to.equal(triggerPrice);
+        });
+
+        describe("CANCEL the existing limit order", function () {
+          const orderIndex = 0;
+          before(async () => {
+            reverterLocal.snapshot();
+
+            const operationId = 4;  // cancelIncreaseOrder
+            const walletIndex = orderIndex;
+            const vaultIndex = orderIndex; // mocked value
+            const tradeData = abiCoder.encode(
+              ["uint256[]"],
+              [[walletIndex, vaultIndex]]
+            );
+            const tradeOperation = {operationId, data: tradeData};
+            txResult = await traderWalletContract.connect(trader).executeOnProtocol(
+              protocolId,
+              tradeOperation,
+              replicate,
+            );
+          });
+          after(async () => {
+            reverterLocal.revert();
+          })
+
+          it("Should return empty data at zero limit order index", async () => {
+            const index = 0;
+            
+            const order = await gmxOrderBook.increaseOrders(traderWalletContract.address, index);
+            expect(order.account).to.equal(constants.AddressZero);
+            expect(order.purchaseToken).to.equal(constants.AddressZero);
+            expect(order.collateralToken).to.equal(constants.AddressZero);
+            expect(order.indexToken).to.equal(constants.AddressZero);
+            expect(order.sizeDelta).to.equal(0);
+            expect(order.triggerPrice).to.equal(0);
+          });
+        });
+
+
+        describe("UPDATE the existing limit order", function () {
+          const orderIndex = 0;
+          let newSizeDelta: BigNumber;
+          let newTriggerAboveThreshold: boolean;
+          before(async () => {
+            reverterLocal.snapshot();
+
+            const operationId = 3;  // updateIncreaseOrder
+            const walletIndex = orderIndex;
+            const vaultIndex = orderIndex; // mocked value
+
+            newSizeDelta = sizeDelta.add(utils.parseUnits("100", 30));
+            newTriggerAboveThreshold = false;
+            const tradeData = abiCoder.encode(
+              ["uint256[]", "uint256", "uint256", "bool"],
+              [[walletIndex, vaultIndex], newSizeDelta, triggerPrice, newTriggerAboveThreshold]
+            );
+            const tradeOperation = { operationId, data: tradeData };
+            txResult = await traderWalletContract.connect(trader).executeOnProtocol(
+              protocolId,
+              tradeOperation,
+              replicate,
+            );
+          });
+          after(async () => {
+            reverterLocal.revert();
+          })
+
+          it("Should return updated data at zero limit order index", async () => {
+            const index = 0;
+            
+            const order = await gmxOrderBook.increaseOrders(traderWalletContract.address, index);
+            expect(order.account).to.equal(traderWalletContract.address);
+            expect(order.purchaseToken).to.equal(collateralToken);
+            expect(order.collateralToken).to.equal(collateralToken);
+            expect(order.indexToken).to.equal(indexToken);
+            expect(order.sizeDelta).to.equal(newSizeDelta);
+            expect(order.triggerAboveThreshold).to.equal(newTriggerAboveThreshold);
+          });
+        });
+
+        describe("Fail execution limit order because price didn't reach trigger", function () {
+          it("Should revert order execution because price didn't reach trigger", async () => {
+            await expect(
+              gmxPositionManager.connect(limitOrderKeeper)
+                .executeIncreaseOrder(traderWalletContract.address, 0, gmx.limitOrderKeeper)
+              ).to.be.revertedWith("OrderBook: invalid price for execution");
+          });
+        });
+
+        describe("Executing Long Increase Limit order by limitOrderKeeper", function () {
+
+          before(async () => {
+            // mock Gmx PriceFeed
+            const gmxPriceFeedMockCode = await ethers.provider.getCode(gmxVaultPriceFeedMock.address);
+            await setCode(gmx.vaultPriceFeedAddress, gmxPriceFeedMockCode);
+            gmxVaultPriceFeedMock = await ethers.getContractAt("GmxVaultPriceFeedMock", gmx.vaultPriceFeedAddress);
+
+            // increase price
+            await gmxVaultPriceFeedMock.setPrice(indexToken, triggerPrice.add(1));
+            await gmxPositionManager.connect(limitOrderKeeper)
+              .executeIncreaseOrder(traderWalletContract.address, 0, gmx.limitOrderKeeper);
+          });
+
+          it("Should execute created increase order", async () => {
+            // check opened position
+            expect(await gmxOrderBook.increaseOrdersIndex(traderWalletContract.address))
+              .to.equal(1); // first increase order
+
+            const position = await gmxAdapterLibrary.getPositions(
+              traderWalletContract.address,
+              [collateralToken],
+              [indexToken],
+              [isLong]
+            );
+
+            const [ size, collateralUsdValue ] = position;
+            expect(size).to.equal(sizeDelta);
+            expect(collateralUsdValue).to.be.gt(utils.parseUnits("900", 30));
+            expect(collateralUsdValue).to.be.lt(utils.parseUnits("1000", 30));
+          });
+        });
+
+      });
+    });
 
   });
 });
