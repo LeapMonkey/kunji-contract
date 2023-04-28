@@ -96,6 +96,19 @@ contract Lens is OwnableUpgradeable {
     }
 
     /// @param account Wallet or Vault
+    /// @param collateralTokens array of collaterals
+    /// @param indexTokens array of shorted (or longed) tokens
+    /// @param isLong array of position types ('true' for Long position)
+    /// @return array with positions current characteristics:
+    ///     0 size:         position size in USD
+    ///     1 collateral:   position collateral in USD
+    ///     2 averagePrice: average entry price of the position in USD
+    ///     3 entryFundingRate: snapshot of the cumulative funding rate at the time the position was entered
+    ///     4 hasRealisedProfit: '1' if the position has a positive realized profit, '0' otherwise
+    ///     5 realisedPnl: the realized PnL for the position in USD
+    ///     6 lastIncreasedTime: timestamp of the last time the position was increased
+    ///     7 hasProfit: 1 if the position is currently in profit, 0 otherwise
+    ///     8 delta: amount of current profit or loss of the position in USD
     function getPositions(
         address account,
         address[] memory collateralTokens,
