@@ -37,12 +37,14 @@ library GMXAdapter {
     /// @dev Needs to be called from wallet and vault in initialization
     function __initApproveGmxPlugin() internal {
         IGmxRouter(gmxRouter).approvePlugin(gmxPositionRouter);
+        IGmxRouter(gmxRouter).approvePlugin(gmxOrderBook);
     }
 
 
     /// @notice Executes operation with external protocol
     /// @param ratio Scaling ratio to
     /// @param tradeOperation Encoded operation data 
+    /// @return bool 'true' if the operation completed successfully 
     function executeOperation(
         uint256 ratio,
         IAdapter.AdapterOperation memory tradeOperation
@@ -369,7 +371,7 @@ library GMXAdapter {
     /* 
     @notice Cancels exist increase order
     @param tradeData must contain parameters:
-        orderIndexes:      the array with Wallet and Vault indexes of the exist orders to update
+        orderIndexes:  the array with Wallet and Vault indexes of the exist orders to update
     @return bool - Returns 'true' if order was canceled
     */
     function _cancelIncreaseOrder(
