@@ -425,7 +425,10 @@ library GMXAdapter {
                 tradeData,
                 (address, uint256, address, uint256, bool, uint256, bool)
             );
-        uint256 executionFee = IGmxOrderBook(gmxOrderBook).minExecutionFee();
+        
+        // for decrease order gmx requires strict: 'msg.value > minExecutionFee'
+        // thats why we need to add 1
+        uint256 executionFee = IGmxOrderBook(gmxOrderBook).minExecutionFee() + 1; 
         if (address(this).balance < executionFee) revert InsufficientEtherBalance();
 
         if (ratio != ratioDenominator) {
