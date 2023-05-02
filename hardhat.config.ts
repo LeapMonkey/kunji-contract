@@ -23,10 +23,19 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      initialBaseFeePerGas: 0
+      forking: {
+        url: process.env.ARBITRUM_NODE || "",
+        blockNumber: 77400001,
+        enabled: true,
+      },
     },
-    ropsten: {
-      url: process.env.ROPSTEN_URL || "",
+    arbitrum: {
+      url: process.env.ARBITRUM_NODE || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    arbitrum_test: {
+      url: process.env.TEST_ARBITRUM_NODE || "",
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
@@ -37,6 +46,9 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
+  },
+  mocha: {
+    timeout: 100000000,
   },
 };
 

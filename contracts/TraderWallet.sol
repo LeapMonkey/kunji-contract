@@ -2,19 +2,18 @@
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IUsersVault} from "./interfaces/IUsersVault.sol";
-import "./adapters/gmx/GMXAdapter.sol";
+import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 /// import its own interface as well
 
-import "hardhat/console.sol";
-
-contract TraderWallet is OwnableUpgradeable {
+contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public vaultAddress;
     address public underlyingTokenAddress;
     address public adaptersRegistryAddress;
@@ -122,6 +121,8 @@ contract TraderWallet is OwnableUpgradeable {
             revert ZeroAddress({target: "_dynamicValueAddress"});
 
         __Ownable_init();
+        __ReentrancyGuard_init();
+        GMXAdapter.__initApproveGmxPlugin();
 
         underlyingTokenAddress = _underlyingTokenAddress;
         adaptersRegistryAddress = _adaptersRegistryAddress;
@@ -377,11 +378,12 @@ contract TraderWallet is OwnableUpgradeable {
         ratioProportions = calculateRatio();
     }
 
+    // @todo rename '_traderOperation' to '_tradeOperation'
     function executeOnProtocol(
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
-    ) external onlyTrader returns (bool) {
+    ) external onlyTrader nonReentrant returns (bool) {
         address adapterAddress;
 
         uint256 walletRatio = 1e18;
@@ -516,7 +518,7 @@ contract TraderWallet is OwnableUpgradeable {
     function _executeOnGmx(
         uint256 _walletRatio,
         IAdapter.AdapterOperation memory _traderOperation
-    ) internal pure returns (bool) {
+    ) internal returns (bool) {
         return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
         // needs to mock a library responde to unit testing
     }

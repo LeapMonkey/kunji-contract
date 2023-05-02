@@ -7,10 +7,12 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-import {IAdaptersRegistry} from "../interfaces/IAdaptersRegistry.sol";
-import {IContractsFactory} from "../interfaces/IContractsFactory.sol";
-import "../adapters/gmx/GMXAdapter.sol";
+import {IContractsFactory} from "./../interfaces/IContractsFactory.sol";
+import {IAdaptersRegistry} from "./../interfaces/IAdaptersRegistry.sol";
+import {IAdapter} from "./../interfaces/IAdapter.sol";
+import {GMXAdapter} from "./../adapters/gmx/GMXAdapter.sol";
 
 import "hardhat/console.sol";
 
@@ -19,7 +21,8 @@ import "hardhat/console.sol";
 contract UsersVaultV2 is
     ERC20Upgradeable,
     OwnableUpgradeable,
-    PausableUpgradeable
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable
 {
 using MathUpgradeable for uint256;
 
@@ -674,7 +677,7 @@ using MathUpgradeable for uint256;
     function _executeOnGmx(
         uint256 _ratio,
         IAdapter.AdapterOperation memory _traderOperation
-    ) internal pure returns (bool) {
+    ) internal returns (bool) {
         return GMXAdapter.executeOperation(_ratio, _traderOperation);
     }
 

@@ -107,9 +107,9 @@ describe("Trader Wallet Contract Tests", function () {
         await gmxAdapterContract.deployed();
 
         TraderWalletFactory = await ethers.getContractFactory("TraderWallet", {
-          libraries: {
-            GMXAdapter: gmxAdapterContract.address,
-          },
+          // libraries: {
+          //   GMXAdapter: gmxAdapterContract.address,
+          // },
         });
 
         // deploy mocked Vault
@@ -152,7 +152,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -170,7 +170,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -188,7 +188,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -206,7 +206,7 @@ describe("Trader Wallet Contract Tests", function () {
                 ZERO_ADDRESS,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -224,7 +224,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 ZERO_ADDRESS,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -242,8 +242,12 @@ describe("Trader Wallet Contract Tests", function () {
               contractsFactoryContract.address,
               traderAddress,
               dynamicValueAddress,
-            ],
-            { unsafeAllowLinkedLibraries: true }
+            ]
+            // ,
+            // { unsafeAllowLinkedLibraries: true }
+            // { 
+            //   initializer: "initialize",
+            // }
           )) as TraderWallet;
           await traderWalletContract.deployed();
 
@@ -1135,8 +1139,8 @@ describe("Trader Wallet Contract Tests", function () {
 
         describe("WHEN trying to make an executeOnProtocol call", async () => {
           const traderOperation = {
-            _operationId: 10,
-            _data: ethers.utils.hexlify("0x1234"),
+            operationId: 10,
+            data: ethers.utils.hexlify("0x1234"),
           };
 
           describe("WHEN calling with invalid caller or parameters", function () {
@@ -1544,16 +1548,16 @@ describe("Trader Wallet Contract Tests", function () {
           before(async () => {
             TraderWalletV2Factory = await ethers.getContractFactory(
               "TraderWalletV2",
-              {
-                libraries: {
-                  GMXAdapter: gmxAdapterContract.address,
-                },
-              }
+              // {
+              //   libraries: {
+              //     GMXAdapter: gmxAdapterContract.address,
+              //   },
+              // }
             );
             traderWalletV2Contract = (await upgrades.upgradeProxy(
               traderWalletContract.address,
               TraderWalletV2Factory,
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )) as TraderWalletV2;
             await traderWalletV2Contract.deployed();
           });

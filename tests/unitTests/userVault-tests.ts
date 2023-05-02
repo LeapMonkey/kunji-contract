@@ -151,9 +151,9 @@ describe("User Vault Contract Tests", function () {
       await gmxAdapterContract.deployed();
 
       UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
-        libraries: {
-          GMXAdapter: gmxAdapterContract.address,
-        },
+        // libraries: {
+        //   GMXAdapter: gmxAdapterContract.address,
+        // },
       });
       ContractsFactoryFactory = await ethers.getContractFactory(
         "ContractsFactoryMock"
@@ -199,7 +199,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -219,7 +219,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -239,7 +239,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -259,7 +259,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -279,7 +279,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -300,7 +300,7 @@ describe("User Vault Contract Tests", function () {
             SHARES_NAME,
             SHARES_SYMBOL,
           ],
-          { unsafeAllowLinkedLibraries: true }
+          // { unsafeAllowLinkedLibraries: true }
         )) as UsersVault;
         await usersVaultContract.deployed();
 
@@ -1426,8 +1426,8 @@ describe("User Vault Contract Tests", function () {
 
       describe("WHEN trying to make an executeOnProtocol call", async () => {
         const traderOperation = {
-          _operationId: 10,
-          _data: ethers.utils.hexlify("0x1234"),
+          operationId: 10,
+          data: ethers.utils.hexlify("0x1234"),
         };
 
         describe("WHEN calling with invalid caller or parameters", function () {
@@ -1648,16 +1648,16 @@ describe("User Vault Contract Tests", function () {
         before(async () => {
           UsersVaultV2Factory = await ethers.getContractFactory(
             "UsersVaultV2",
-            {
-              libraries: {
-                GMXAdapter: gmxAdapterContract.address,
-              },
-            }
+            // {
+            //   libraries: {
+            //     GMXAdapter: gmxAdapterContract.address,
+            //   },
+            // }
           );
           usersVaultV2Contract = (await upgrades.upgradeProxy(
             usersVaultContract.address,
             UsersVaultV2Factory,
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )) as UsersVaultV2;
           await usersVaultV2Contract.deployed();
         });
