@@ -1135,8 +1135,8 @@ describe("Trader Wallet Contract Tests", function () {
 
         describe("WHEN trying to make an executeOnProtocol call", async () => {
           const traderOperation = {
-            _operationId: 10,
-            _data: ethers.utils.hexlify("0x1234"),
+            operationId: 10,
+            data: ethers.utils.hexlify("0x1234"),
           };
 
           describe("WHEN calling with invalid caller or parameters", function () {
