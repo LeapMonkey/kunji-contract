@@ -2,8 +2,40 @@
 pragma solidity ^0.8.9;
 
 interface IGmxOrderBook {
+    struct IncreaseOrder {
+        address account;
+        address purchaseToken;
+        uint256 purchaseTokenAmount;
+        address collateralToken;
+        address indexToken;
+        uint256 sizeDelta;
+        bool isLong;
+        uint256 triggerPrice;
+        bool triggerAboveThreshold;
+        uint256 executionFee;
+    }
+
+    struct DecreaseOrder {
+        address account;
+        address collateralToken;
+        uint256 collateralDelta;
+        address indexToken;
+        uint256 sizeDelta;
+        bool isLong;
+        uint256 triggerPrice;
+        bool triggerAboveThreshold;
+        uint256 executionFee;
+    }
 
     function minExecutionFee() external view returns (uint256);
+    
+    function increaseOrdersIndex(address orderCreator) external view returns (uint256);
+    
+    function increaseOrders(address orderCreator, uint256 index) external view returns (IncreaseOrder memory);
+
+    function decreaseOrdersIndex(address orderCreator) external view returns (uint256);
+    
+    function decreaseOrders(address orderCreator, uint256 index) external view returns (DecreaseOrder memory);
 
     function createSwapOrder(
         address[] memory _path,

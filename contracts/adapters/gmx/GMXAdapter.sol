@@ -19,6 +19,8 @@ library GMXAdapter {
     error CreateSwapOrderFail();
     error CreateIncreasePositionFail(string);
     error CreateDecreasePositionFail(string);
+    error CreateIncreasePositionOrderFail(string);
+    error CreateDecreasePositionOrderFail(string);
 
     address constant public gmxRouter = 0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064;
     address constant public gmxPositionRouter = 0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868;
@@ -37,12 +39,14 @@ library GMXAdapter {
     /// @dev Needs to be called from wallet and vault in initialization
     function __initApproveGmxPlugin() internal {
         IGmxRouter(gmxRouter).approvePlugin(gmxPositionRouter);
+        IGmxRouter(gmxRouter).approvePlugin(gmxOrderBook);
     }
 
 
     /// @notice Executes operation with external protocol
     /// @param ratio Scaling ratio to
     /// @param tradeOperation Encoded operation data 
+    /// @return bool 'true' if the operation completed successfully 
     function executeOperation(
         uint256 ratio,
         IAdapter.AdapterOperation memory tradeOperation
@@ -70,17 +74,14 @@ library GMXAdapter {
 
         } else if (tradeOperation.operationId == 7) {
             return _cancelDecreaseOrder(ratio, tradeOperation.data);
-
-        } else if (tradeOperation.operationId == 8) {
-            return _cancelMultipleOrder(ratio, tradeOperation.data);
-        } 
+        }
         revert InvalidOperationId();
     }
 
 
     /* 
     @notice Opens new or increases the size of an existing position
-    @param tradeData must contain packed parameters:
+    @param tradeData must contain parameters:
         path:       [collateralToken] or [tokenIn, collateralToken] if a swap is needed
         indexToken: the address of the token to long or short
         amountIn:   the amount of tokenIn to deposit as collateral
@@ -99,7 +100,6 @@ library GMXAdapter {
         uint256 ratio,
         bytes memory tradeData
     ) internal returns (bool) {
-
         (
             address[] memory path,
             address indexToken,
@@ -114,7 +114,7 @@ library GMXAdapter {
 
         if (ratio != ratioDenominator) {
             // scaling for Vault
-            amountIn = amountIn * ratio / ratioDenominator;
+            amountIn = amountIn * ratio / ratioDenominator;   // @todo replace with safe mulDiv
             sizeDelta = sizeDelta * ratio / ratioDenominator;
             minOut = minOut * ratio / ratioDenominator;
         }
@@ -131,25 +131,24 @@ library GMXAdapter {
         }
 
         (bool success, bytes memory data) = 
-        gmxPositionRouter.call{value: executionFee}(
-            abi.encodeWithSelector(
-                IGmxPositionRouter.createIncreasePosition.selector, 
-                path,
-                indexToken,
-                amountIn,
-                minOut,
-                sizeDelta,
-                isLong,
-                acceptablePrice,
-                executionFee,
-                0,          // referralCode
-                address(0)  // callbackTarget
+            gmxPositionRouter.call{value: executionFee}(
+                abi.encodeWithSelector(
+                    IGmxPositionRouter.createIncreasePosition.selector, 
+                    path,
+                    indexToken,
+                    amountIn,
+                    minOut,
+                    sizeDelta,
+                    isLong,
+                    acceptablePrice,
+                    executionFee,
+                    0,          // referralCode
+                    address(0)  // callbackTarget
                 )
             );
 
         if(!success) {
-            string memory failMessage = _getRevertMsg(data);
-            revert CreateIncreasePositionFail(failMessage);
+            revert CreateIncreasePositionFail(_getRevertMsg(data));
         }
         emit CreateIncreasePosition(address(this), bytes32(data));
         return true;
@@ -157,7 +156,7 @@ library GMXAdapter {
 
     /* 
     @notice Closes or decreases an existing position
-    @param tradeData must contain packed parameters:
+    @param tradeData must contain parameters:
         path:            [collateralToken] or [collateralToken, tokenOut] if a swap is needed
         indexToken:      the address of the token that was longed (or shorted)
         collateralDelta: the amount of collateral in USD value to withdraw
@@ -200,10 +199,10 @@ library GMXAdapter {
 
         if (ratio != ratioDenominator) {
             // scaling for Vault
+            collateralDelta = collateralDelta * ratio / ratioDenominator;
             sizeDelta = sizeDelta * ratio / ratioDenominator;
             minOut = minOut * ratio / ratioDenominator;
         }
-
 
         uint256 acceptablePrice;
         if (isLong) {
@@ -213,26 +212,25 @@ library GMXAdapter {
         }
 
         (bool success, bytes memory data) = 
-        gmxPositionRouter.call{value: executionFee}(
-            abi.encodeWithSelector(
-            IGmxPositionRouter.createDecreasePosition.selector,
-            path,
-            indexToken,
-            collateralDelta,
-            sizeDelta,
-            isLong,
-            address(this),    // receiver
-            acceptablePrice,
-            minOut,
-            executionFee,
-            false,      // withdrawETH
-            address(0)  // callbackTarget
-            )
-        );
+            gmxPositionRouter.call{value: executionFee}(
+                abi.encodeWithSelector(
+                IGmxPositionRouter.createDecreasePosition.selector,
+                path,
+                indexToken,
+                collateralDelta,
+                sizeDelta,
+                isLong,
+                address(this),    // receiver
+                acceptablePrice,
+                minOut,
+                executionFee,
+                false,      // withdrawETH
+                address(0)  // callbackTarget
+                )
+            );
 
         if(!success) {
-            string memory failMessage = _getRevertMsg(data);
-            revert CreateDecreasePositionFail(failMessage);
+            revert CreateDecreasePositionFail(_getRevertMsg(data));
         }
         emit CreateDecreasePosition(address(this), bytes32(data));
         return true;
@@ -243,96 +241,280 @@ library GMXAdapter {
     /// Orders
     /// /// /// ///
 
+    /* 
+    @notice Creates new order to open or increase position
+            Also can be used to create stop-loss or take-profit orders
+    @param tradeData must contain parameters:
+        path:            [collateralToken] or [tokenIn, collateralToken] if a swap is needed
+        amountIn:        the amount of tokenIn to deposit as collateral
+        indexToken:      the address of the token to long or short
+        minOut:          the min amount of collateralToken to swap for (can be zero if no swap is required)
+        sizeDelta:       the USD value of the change in position size  (scaled 1e30)
+        isLong:          whether to long or short position
+        triggerPrice:    the price at which the order should be executed
+        triggerAboveThreshold:
+            in terms of Long position:
+                'true' for creating new Long order
+            in terms of Short position:
+                'false' for creating new Short order
+
+    Additional params for increasing position    
+        collateralToken: the collateral token (must be path[path.length-1] )
+        executionFee:   can be set to OrderBook.minExecutionFee
+        shouldWrap:     true if 'tokenIn' is native and should be wrapped
+    @return bool - Returns 'true' if order was successfully created
+    */
     function _createIncreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bool) {}
+    ) internal returns (bool) {
+        (
+            address[] memory path,
+            uint256 amountIn,
+            address indexToken,
+            uint256 minOut,
+            uint256 sizeDelta,
+            bool isLong,
+            uint256 triggerPrice,
+            bool triggerAboveThreshold
+        ) = abi.decode(
+                tradeData,
+                (address[], uint256, address, uint256, uint256, bool, uint256, bool)
+            );
+        uint256 executionFee = IGmxOrderBook(gmxOrderBook).minExecutionFee();
+        if (address(this).balance < executionFee) revert InsufficientEtherBalance();
 
+        if (ratio != ratioDenominator) {
+            // scaling for Vault
+            amountIn = amountIn * ratio / ratioDenominator;
+            sizeDelta = sizeDelta * ratio / ratioDenominator;
+            minOut = minOut * ratio / ratioDenominator;
+        }
+        address collateralToken = path[path.length-1];
+
+
+        _checkUpdateAllowance(path[0], address(gmxRouter), amountIn);
+
+        (bool success, bytes memory data) = 
+            gmxOrderBook.call{value: executionFee}(
+                abi.encodeWithSelector(
+                    IGmxOrderBook.createIncreaseOrder.selector,
+                    path,
+                    amountIn,
+                    indexToken,
+                    minOut,
+                    sizeDelta,
+                    collateralToken,
+                    isLong,
+                    triggerPrice,
+                    triggerAboveThreshold,
+                    executionFee,
+                    false  // 'shouldWrap'
+                )
+            );
+
+        if(!success) {
+            revert CreateIncreasePositionOrderFail(_getRevertMsg(data));
+        }
+        return true;
+    }
+
+
+    /* 
+    @notice Updates exist increase order
+    @param tradeData must contain parameters:
+        orderIndexes:      the array with Wallet and Vault indexes of the exist orders to update
+        sizeDelta:       the USD value of the change in position size  (scaled 1e30)
+        triggerPrice:    the price at which the order should be executed
+        triggerAboveThreshold:
+            in terms of Long position:
+                'true' for creating new Long order
+                'true' for take-profit orders, 'false' for stop-loss orders
+            in terms of Short position:
+                'false' for creating new Short order
+                'false' for take-profit orders', true' for stop-loss orders 
+
+    @return bool - Returns 'true' if order was successfully updated
+    */
     function _updateIncreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bool) {}
+    ) internal returns (bool) {
+        (
+            uint256[] memory orderIndexes,
+            uint256 sizeDelta,
+            uint256 triggerPrice,
+            bool triggerAboveThreshold
+        ) = abi.decode(
+                tradeData,
+                (uint256[], uint256, uint256, bool)
+            );
 
+        // default trader Wallet value
+        uint256 orderIndex = orderIndexes[0];
+        if (ratio != ratioDenominator) {
+            // scaling for Vault
+            sizeDelta = sizeDelta * ratio / ratioDenominator;
+            orderIndex = orderIndexes[1];
+        }
+
+        IGmxOrderBook(gmxOrderBook).updateIncreaseOrder(
+            orderIndex,
+            sizeDelta,
+            triggerPrice,
+            triggerAboveThreshold
+        );
+        return true;
+    }
+
+    /* 
+    @notice Cancels exist increase order
+    @param tradeData must contain parameters:
+        orderIndexes:  the array with Wallet and Vault indexes of the exist orders to update
+    @return bool - Returns 'true' if order was canceled
+    */
     function _cancelIncreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bool) {}
+    ) internal returns (bool) {
+        (uint256[] memory orderIndexes) = abi.decode(tradeData, (uint256[]));
 
+        // default trader Wallet value
+        uint256 orderIndex = orderIndexes[0];
+        if (ratio != ratioDenominator) {
+            // value for Vault
+            orderIndex = orderIndexes[1];
+        }
+        
+        IGmxOrderBook(gmxOrderBook).cancelIncreaseOrder(orderIndex);
+        return true;
+    }
+
+
+    /* 
+    @notice Creates new order to close or decrease position
+            Also can be used to create (partial) stop-loss or take-profit orders
+    @param tradeData must contain parameters:
+        indexToken:      the address of the token that was longed (or shorted)
+        sizeDelta:       the USD value of the change in position size (scaled to 1e30)
+        collateralToken: the collateral token address
+        collateralDelta: the amount of collateral in USD value to withdraw
+        isLong:          whether the position is a long or short
+        triggerPrice:    the price at which the order should be executed
+        triggerAboveThreshold:
+            in terms of Long position:
+                'true' for take-profit orders, 'false' for stop-loss orders
+            in terms of Short position:
+                'false' for take-profit orders', true' for stop-loss orders 
+    @return bool - Returns 'true' if order was successfully created
+    */
     function _createDecreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bool) {}
+    ) internal returns (bool) {
+        (
+            address indexToken,
+            uint256 sizeDelta,
+            address collateralToken,
+            uint256 collateralDelta,
+            bool isLong,
+            uint256 triggerPrice,
+            bool triggerAboveThreshold
+        ) = abi.decode(
+                tradeData,
+                (address, uint256, address, uint256, bool, uint256, bool)
+            );
+        
+        // for decrease order gmx requires strict: 'msg.value > minExecutionFee'
+        // thats why we need to add 1
+        uint256 executionFee = IGmxOrderBook(gmxOrderBook).minExecutionFee() + 1; 
+        if (address(this).balance < executionFee) revert InsufficientEtherBalance();
+
+        if (ratio != ratioDenominator) {
+            // scaling for Vault
+            sizeDelta = sizeDelta * ratio / ratioDenominator;
+        }
+
+        (bool success, bytes memory data) = 
+            gmxOrderBook.call{value: executionFee}(
+                abi.encodeWithSelector(
+                    IGmxOrderBook.createDecreaseOrder.selector,
+                    indexToken,
+                    sizeDelta,
+                    collateralToken,
+                    collateralDelta,
+                    isLong,
+                    triggerPrice,
+                    triggerAboveThreshold
+                )
+            );
+
+        if(!success) {
+            revert CreateDecreasePositionOrderFail(_getRevertMsg(data));
+        }
+        return true;
+    }
 
     function _updateDecreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bool) {}
+    ) internal returns (bool) {
+        (
+            uint256[] memory orderIndexes,
+            uint256 collateralDelta,
+            uint256 sizeDelta,
+            uint256 triggerPrice,
+            bool triggerAboveThreshold
+        ) = abi.decode(
+                tradeData,
+                (uint256[], uint256, uint256, uint256, bool)
+            );
 
+        // default trader Wallet value
+        uint256 orderIndex = orderIndexes[0];
+        if (ratio != ratioDenominator) {
+            // scaling for Vault
+            collateralDelta = collateralDelta * ratio / ratioDenominator;
+            sizeDelta = sizeDelta * ratio / ratioDenominator;
+            orderIndex = orderIndexes[1];
+        }
+    
+        IGmxOrderBook(gmxOrderBook).updateDecreaseOrder(
+            orderIndex,
+            collateralDelta,
+            sizeDelta,
+            triggerPrice,
+            triggerAboveThreshold
+        );
+        return true;
+    }
+
+
+    /* 
+        @notice Cancels exist decrease order
+        @param tradeData must contain parameters:
+            orderIndexes:      the array with Wallet and Vault indexes of the exist orders to update
+        @return bool - Returns 'true' if order was canceled
+    */
     function _cancelDecreaseOrder(
         uint256 ratio,
         bytes memory tradeData
-    ) internal returns (bool) {}
+    ) internal returns (bool) {
+        (uint256[] memory orderIndexes) = abi.decode(tradeData, (uint256[]));
 
-    function _cancelMultipleOrder(
-        uint256 ratio,
-        bytes memory tradeData
-    ) internal returns (bool) {}
-
-
-
-    // @todo move to 'Lens' contract
-    /// /// /// /// /// ///
-    /// View functions
-    /// /// /// /// /// ///
-
-    /// @notice Calculates the max amount of tokenIn that can be swapped
-    /// @param tokenIn The address of input token
-    /// @param tokenOut The address of output token
-    /// @return amountIn Maximum available amount to be swapped
-    function getMaxAmountIn(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (uint256 amountIn) {
-        return IGmxReader(gmxReader).getMaxAmountIn(address(gmxVault), tokenIn, tokenOut);
+        // default trader Wallet value
+        uint256 orderIndex = orderIndexes[0];
+        if (ratio != ratioDenominator) {
+            // value for Vault
+            orderIndex = orderIndexes[1];
+        }
+        
+        IGmxOrderBook(gmxOrderBook).cancelDecreaseOrder(orderIndex);
+        return true;
     }
 
-    /// @notice Returns amount out after fees and the fee amount
-    /// @param tokenIn The address of input token
-    /// @param tokenOut The address of output token
-    /// @param amountIn The amount of tokenIn to be swapped
-    /// @return amountOutAfterFees The amount out after fees,
-    /// @return feeAmount The fee amount in terms of tokenOut
-    function getAmountOut(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    ) external view returns (uint256 amountOutAfterFees, uint256 feeAmount) {
-        return
-            IGmxReader(gmxReader).getAmountOut(
-                address(gmxVault),
-                tokenIn,
-                tokenOut,
-                amountIn
-            );
-    }
 
-    /// @param account Wallet or Vault
-    function getPositions(
-        address account,
-        address[] memory collateralTokens,
-        address[] memory indexTokens,
-        bool[] memory isLong
-    ) external view returns (uint256[] memory) {
-        return
-            IGmxReader(gmxReader).getPositions(
-                address(gmxVault),
-                account,
-                collateralTokens,
-                indexTokens,
-                isLong
-            );
-    }
-
+    /// @notice Updates allowance amount for token 
     function _checkUpdateAllowance(
         address token,
         address spender,
@@ -343,6 +525,7 @@ library GMXAdapter {
         }
     }
 
+    /// @notice Helper function to track revers in call() 
     function _getRevertMsg(bytes memory _returnData) internal pure returns (string memory) {
         // If the _res length is less than 68, then the transaction failed silently (without a revert message)
         if (_returnData.length < 68) return "Transaction reverted silently";

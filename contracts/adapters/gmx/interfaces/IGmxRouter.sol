@@ -20,7 +20,7 @@ interface IGmxPositionRouter {
         address callbackTarget;
     }
 
-    function increasePositionRequests(bytes32 requestKey) external view returns(IncreasePositionRequest memory);
+    function increasePositionRequests(bytes32 requestKey) external view returns (IncreasePositionRequest memory);
 
 
     struct DecreasePositionRequest {
@@ -40,8 +40,11 @@ interface IGmxPositionRouter {
         address callbackTarget;
     }
 
-    function decreasePositionRequests(bytes32 requestKey) external view returns(DecreasePositionRequest memory);
+    function decreasePositionRequests(bytes32 requestKey) external view returns (DecreasePositionRequest memory);
 
+    function increasePositionsIndex(address positionRequester) external view returns (uint256);
+
+    function decreasePositionsIndex(address positionRequester) external view returns (uint256);
 
     function createIncreasePosition(
         address[] memory _path,

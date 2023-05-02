@@ -32,4 +32,7 @@ interface IGmxVault {
         address _indexToken,
         bool _isLong
     ) external view returns (bool, uint256);
+
+    function isLeverageEnabled() external view returns (bool);
+
 }

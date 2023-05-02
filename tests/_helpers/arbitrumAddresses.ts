@@ -14,7 +14,11 @@ export const gmx = {
   positionRouterAddress: "0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868",
   readerAddress: "0x22199a49A999c351eF7927602CFB187ec3cae489",
   vaultAddress: "0x489ee077994B6658eAfA855C308275EAd8097C4A",
+  orderBookAddress: "0x09f77E8A13De9a35a7231028187e9fD5DB8a2ACB",
+  vaultPriceFeedAddress: "0x2d68011bcA022ed0E474264145F46CC4de96a002",
+  positionManagerAddress: "0x75E42e6f01baf1D6022bEa862A28774a9f8a4A0C",
   keeper: "0x11D62807dAE812a0F1571243460Bf94325F43BB7",
+  limitOrderKeeper: "0xd4266f8f82f7405429ee18559e548979d49160f3",
 };
 
 export const tokenHolders = {

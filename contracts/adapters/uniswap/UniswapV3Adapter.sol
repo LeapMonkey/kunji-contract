@@ -53,6 +53,7 @@ contract UniswapV3Adapter is OwnableUpgradeable {
     /// @notice Executes operation with external protocol
     /// @param ratio Scaling ratio to 
     /// @param traderOperation Encoded operation data 
+    /// @return bool 'true' if the operation completed successfully 
     function executeOperation(
         uint256 ratio,
         IAdapter.AdapterOperation memory traderOperation
