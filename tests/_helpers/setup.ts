@@ -90,9 +90,9 @@ export const setupContracts = async (
 
   // deploy Trader Wallet
   TraderWalletFactory = await ethers.getContractFactory("TraderWallet", {
-    libraries: {
-      GMXAdapter: gmxAdapterContract.address,
-    },
+    // libraries: {
+    //   GMXAdapter: gmxAdapterContract.address,
+    // },
   });
 
   traderWalletContract = (await upgrades.deployProxy(
@@ -104,15 +104,15 @@ export const setupContracts = async (
       deployerAddress,
       deployerAddress, // not used
     ],
-    { unsafeAllowLinkedLibraries: true }
+    // { unsafeAllowLinkedLibraries: true }
   )) as TraderWallet;
   await traderWalletContract.deployed();
 
   // deploy User Vault
   UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
-    libraries: {
-      GMXAdapter: gmxAdapterContract.address,
-    },
+    // libraries: {
+    //   GMXAdapter: gmxAdapterContract.address,
+    // },
   });
 
   usersVaultContract = (await upgrades.deployProxy(
@@ -126,7 +126,7 @@ export const setupContracts = async (
       SHARES_NAME,
       SHARES_SYMBOL,
     ],
-    { unsafeAllowLinkedLibraries: true }
+    // { unsafeAllowLinkedLibraries: true }
   )) as UsersVault;
   await usersVaultContract.deployed();
 
