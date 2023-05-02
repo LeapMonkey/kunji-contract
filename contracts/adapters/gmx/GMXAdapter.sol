@@ -19,6 +19,8 @@ library GMXAdapter {
     error CreateSwapOrderFail();
     error CreateIncreasePositionFail(string);
     error CreateDecreasePositionFail(string);
+    error CreateIncreasePositionOrderFail(string);
+    error CreateDecreasePositionOrderFail(string);
 
     address constant public gmxRouter = 0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064;
     address constant public gmxPositionRouter = 0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868;
@@ -146,8 +148,7 @@ library GMXAdapter {
             );
 
         if(!success) {
-            string memory failMessage = _getRevertMsg(data);
-            revert CreateIncreasePositionFail(failMessage);
+            revert CreateIncreasePositionFail(_getRevertMsg(data));
         }
         emit CreateIncreasePosition(address(this), bytes32(data));
         return true;
@@ -229,8 +230,7 @@ library GMXAdapter {
             );
 
         if(!success) {
-            string memory failMessage = _getRevertMsg(data);
-            revert CreateDecreasePositionFail(failMessage);
+            revert CreateDecreasePositionFail(_getRevertMsg(data));
         }
         emit CreateDecreasePosition(address(this), bytes32(data));
         return true;
@@ -314,7 +314,7 @@ library GMXAdapter {
             );
 
         if(!success) {
-            revert CreateIncreasePositionFail(_getRevertMsg(data));
+            revert CreateIncreasePositionOrderFail(_getRevertMsg(data));
         }
         return true;
     }
@@ -364,7 +364,6 @@ library GMXAdapter {
             triggerPrice,
             triggerAboveThreshold
         );
-
         return true;
     }
 
@@ -451,10 +450,9 @@ library GMXAdapter {
             );
 
         if(!success) {
-            revert CreateIncreasePositionFail(_getRevertMsg(data));
+            revert CreateDecreasePositionOrderFail(_getRevertMsg(data));
         }
         return true;
-
     }
 
     function _updateDecreaseOrder(
