@@ -23,10 +23,6 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      initialBaseFeePerGas: 0
-    },
-    ropsten: {
-      url: process.env.ROPSTEN_URL || "",
       forking: {
         url: process.env.ARBITRUM_NODE || "",
         blockNumber: 77400001,

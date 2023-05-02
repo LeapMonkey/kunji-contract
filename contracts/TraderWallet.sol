@@ -2,22 +2,18 @@
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IUsersVault} from "./interfaces/IUsersVault.sol";
-import "./adapters/gmx/GMXAdapter.sol";
+import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 /// import its own interface as well
 
-import "hardhat/console.sol";
-
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
-    // using GMXAdapter for *;
-
     address public vaultAddress;
     address public underlyingTokenAddress;
     address public adaptersRegistryAddress;

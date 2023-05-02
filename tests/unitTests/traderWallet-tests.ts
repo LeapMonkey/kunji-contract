@@ -5,8 +5,8 @@ import {
   ContractTransaction,
   BigNumber,
 } from "ethers";
+import { SnapshotRestorer, takeSnapshot } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
-import Reverter from "./_helpers/reverter";
 import {
   TraderWallet,
   TraderWalletV2,
@@ -16,15 +16,15 @@ import {
   AdapterMock,
   UsersVaultMock,
   ERC20Mock,
-} from "../typechain-types";
+} from "../../typechain-types";
 import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
   AMOUNT_1E18,
-} from "./_helpers/constants";
+} from "./../_helpers/constants";
 
-const reverter = new Reverter();
+let snapshot: SnapshotRestorer;
 
 let deployer: Signer;
 let vault: Signer;
@@ -107,9 +107,9 @@ describe("Trader Wallet Contract Tests", function () {
         await gmxAdapterContract.deployed();
 
         TraderWalletFactory = await ethers.getContractFactory("TraderWallet", {
-          libraries: {
-            GMXAdapter: gmxAdapterContract.address,
-          },
+          // libraries: {
+          //   GMXAdapter: gmxAdapterContract.address,
+          // },
         });
 
         // deploy mocked Vault
@@ -152,7 +152,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -170,7 +170,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -188,7 +188,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -206,7 +206,7 @@ describe("Trader Wallet Contract Tests", function () {
                 ZERO_ADDRESS,
                 dynamicValueAddress,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -224,7 +224,7 @@ describe("Trader Wallet Contract Tests", function () {
                 traderAddress,
                 ZERO_ADDRESS,
               ],
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
@@ -242,8 +242,12 @@ describe("Trader Wallet Contract Tests", function () {
               contractsFactoryContract.address,
               traderAddress,
               dynamicValueAddress,
-            ],
-            { unsafeAllowLinkedLibraries: true }
+            ]
+            // ,
+            // { unsafeAllowLinkedLibraries: true }
+            // { 
+            //   initializer: "initialize",
+            // }
           )) as TraderWallet;
           await traderWalletContract.deployed();
 
@@ -276,7 +280,7 @@ describe("Trader Wallet Contract Tests", function () {
           );
 
           // take a snapshot
-          await reverter.snapshot();
+          snapshot = await takeSnapshot();
         });
 
         it("THEN it should return the same ones after deployment", async () => {
@@ -363,7 +367,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .setVaultAddress(otherAddress);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN new address should be stored", async () => {
               expect(await traderWalletContract.vaultAddress()).to.equal(
@@ -413,7 +417,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .setAdaptersRegistryAddress(otherAddress);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN new address should be stored", async () => {
               expect(
@@ -463,7 +467,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .setContractsFactoryAddress(otherAddress);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN new address should be stored", async () => {
               expect(
@@ -513,7 +517,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .setDynamicValueAddress(otherAddress);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN new address should be stored", async () => {
               expect(await traderWalletContract.dynamicValueAddress()).to.equal(
@@ -566,7 +570,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .setUnderlyingTokenAddress(otherAddress);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN new address should be stored", async () => {
               expect(
@@ -652,7 +656,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .setTraderAddress(otherAddress);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
 
             it("THEN new address should be stored", async () => {
@@ -676,7 +680,7 @@ describe("Trader Wallet Contract Tests", function () {
               .setAdaptersRegistryAddress(adaptersRegistryContract.address);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           describe("WHEN trying to add an adapter to use (addAdapterToUse)", async () => {
@@ -960,7 +964,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await usdcTokenContract.setReturnBoolValue(false);
               });
               after(async () => {
-                await reverter.revert();
+                await snapshot.restore();
               });
               it("THEN it should fail", async () => {
                 await expect(
@@ -984,7 +988,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .traderDeposit(AMOUNT);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN contract should return correct vaules", async () => {
               expect(
@@ -1093,7 +1097,7 @@ describe("Trader Wallet Contract Tests", function () {
                 .withdrawRequest(AMOUNT);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN contract should return correct vaules", async () => {
               expect(
@@ -1141,7 +1145,7 @@ describe("Trader Wallet Contract Tests", function () {
 
           describe("WHEN calling with invalid caller or parameters", function () {
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
 
             describe("WHEN caller is not trader", function () {
@@ -1225,7 +1229,7 @@ describe("Trader Wallet Contract Tests", function () {
                   .executeOnProtocol(2, traderOperation, false);
               });
               after(async () => {
-                await reverter.revert();
+                await snapshot.restore();
               });
               it("THEN it should emit an Event", async () => {
                 // await expect(txResult)
@@ -1258,7 +1262,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await traderWalletContract.connect(trader).addAdapterToUse(2);
               });
               after(async () => {
-                await reverter.revert();
+                await snapshot.restore();
               });
               describe("WHEN executed on wallet ok but revert in users vault", function () {
                 before(async () => {
@@ -1379,7 +1383,7 @@ describe("Trader Wallet Contract Tests", function () {
                     .withdrawRequest(AMOUNT_1E18.mul(100));
                 });
                 // after(async () => {
-                //   await reverter.revert();
+                //   await snapshot.restore();
                 // });
                 it("THEN rollover should fail", async () => {
                   await expect(
@@ -1403,7 +1407,7 @@ describe("Trader Wallet Contract Tests", function () {
                     .withdrawRequest(AMOUNT_1E18.mul(100).mul(10));
                 });
                 after(async () => {
-                  await reverter.revert();
+                  await snapshot.restore();
                 });
                 it("THEN rollover should fail", async () => {
                   await expect(
@@ -1544,16 +1548,16 @@ describe("Trader Wallet Contract Tests", function () {
           before(async () => {
             TraderWalletV2Factory = await ethers.getContractFactory(
               "TraderWalletV2",
-              {
-                libraries: {
-                  GMXAdapter: gmxAdapterContract.address,
-                },
-              }
+              // {
+              //   libraries: {
+              //     GMXAdapter: gmxAdapterContract.address,
+              //   },
+              // }
             );
             traderWalletV2Contract = (await upgrades.upgradeProxy(
               traderWalletContract.address,
               TraderWalletV2Factory,
-              { unsafeAllowLinkedLibraries: true }
+              // { unsafeAllowLinkedLibraries: true }
             )) as TraderWalletV2;
             await traderWalletV2Contract.deployed();
           });

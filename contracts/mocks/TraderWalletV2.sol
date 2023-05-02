@@ -2,16 +2,18 @@
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 
-import {IContractsFactory} from "../interfaces/IContractsFactory.sol";
-import {IAdaptersRegistry} from "../interfaces/IAdaptersRegistry.sol";
-import {IAdapter} from "../interfaces/IAdapter.sol";
-import {IUsersVault} from "../interfaces/IUsersVault.sol";
+import {IContractsFactory} from "./../interfaces/IContractsFactory.sol";
+import {IAdaptersRegistry} from "./../interfaces/IAdaptersRegistry.sol";
+import {IAdapter} from "./../interfaces/IAdapter.sol";
+import {IUsersVault} from "./../interfaces/IUsersVault.sol";
+import {GMXAdapter} from "./../adapters/gmx/GMXAdapter.sol";
 
-import "../adapters/gmx/GMXAdapter.sol";
+/// import its own interface as well
 
-contract TraderWalletV2 is OwnableUpgradeable {
+contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public vaultAddress;
     address public underlyingTokenAddress;
     address public adaptersRegistryAddress;
@@ -30,13 +32,11 @@ contract TraderWalletV2 is OwnableUpgradeable {
     uint256 public currentRound;
     address[] public traderSelectedAdaptersArray;
     mapping(uint256 => address) public adaptersPerProtocol;
-
     uint256 public addedVariable;
 
     error ZeroAddress(string target);
     error ZeroAmount();
     error InvalidVault();
-    error UnderlyingAssetNotAllowed();
     error CallerNotAllowed();
     error TraderNotAllowed();
     error InvalidProtocol();
@@ -69,7 +69,7 @@ contract TraderWalletV2 is OwnableUpgradeable {
         address indexed token,
         uint256 amount
     );
-    event WithdrawalRequest(
+    event WithdrawRequest(
         address indexed account,
         address indexed token,
         uint256 amount
@@ -82,13 +82,12 @@ contract TraderWalletV2 is OwnableUpgradeable {
         uint256 initialBalance,
         uint256 walletRatio
     );
-    event RolloverExecuted(uint256 timestamp, uint256 round);
-
-    modifier onlyUnderlying(address _tokenAddress) {
-        if (_tokenAddress != underlyingTokenAddress)
-            revert UnderlyingAssetNotAllowed();
-        _;
-    }
+    event RolloverExecuted(
+        uint256 timestamp,
+        uint256 round,
+        int256 traderProfit,
+        int256 vaultProfit
+    );
 
     modifier onlyTrader() {
         if (_msgSender() != traderAddress) revert CallerNotAllowed();
@@ -123,6 +122,8 @@ contract TraderWalletV2 is OwnableUpgradeable {
             revert ZeroAddress({target: "_dynamicValueAddress"});
 
         __Ownable_init();
+        __ReentrancyGuard_init();
+        GMXAdapter.__initApproveGmxPlugin();
 
         underlyingTokenAddress = _underlyingTokenAddress;
         adaptersRegistryAddress = _adaptersRegistryAddress;
@@ -137,6 +138,8 @@ contract TraderWalletV2 is OwnableUpgradeable {
         afterRoundTraderBalance = 0;
         afterRoundVaultBalance = 0;
         currentRound = 0;
+        traderProfit = 0;
+        vaultProfit = 0;
     }
 
     //
@@ -253,14 +256,13 @@ contract TraderWalletV2 is OwnableUpgradeable {
 
     //
     function traderDeposit(
-        address _tokenAddress,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_tokenAddress) {
+    ) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
             !(
-                IERC20Upgradeable(_tokenAddress).transferFrom(
+                IERC20Upgradeable(underlyingTokenAddress).transferFrom(
                     _msgSender(),
                     address(this),
                     _amount
@@ -268,15 +270,14 @@ contract TraderWalletV2 is OwnableUpgradeable {
             )
         ) revert TokenTransferFailed();
 
-        emit TraderDeposit(_msgSender(), _tokenAddress, _amount);
+        emit TraderDeposit(_msgSender(), underlyingTokenAddress, _amount);
 
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
     function withdrawRequest(
-        address _underlying,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_underlying) {
+    ) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         // require(
@@ -289,7 +290,7 @@ contract TraderWalletV2 is OwnableUpgradeable {
         //     "Token transfer failed"
         // );
 
-        emit WithdrawalRequest(_msgSender(), _underlying, _amount);
+        emit WithdrawRequest(_msgSender(), underlyingTokenAddress, _amount);
 
         cumulativePendingWithdrawals = cumulativePendingWithdrawals + _amount;
     }
@@ -326,17 +327,13 @@ contract TraderWalletV2 is OwnableUpgradeable {
             (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
         } else {
             afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
-                .balanceOf(traderAddress);
+                .balanceOf(address(this));
             afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
                 .balanceOf(vaultAddress);
         }
 
         bool success = IUsersVault(vaultAddress).rolloverFromTrader();
         if (!success) revert RolloverFailed();
-        emit RolloverExecuted(
-            block.timestamp,
-            IUsersVault(vaultAddress).getRound()
-        );
 
         if (cumulativePendingWithdrawals > 0) {
             // send to trader account
@@ -346,38 +343,49 @@ contract TraderWalletV2 is OwnableUpgradeable {
                 cumulativePendingWithdrawals
             );
             if (!success) revert SendToTraderFailed();
+
+            cumulativePendingWithdrawals = 0;
         }
 
-        // get profits ?
-        traderProfit =
-            int256(afterRoundTraderBalance) -
-            int256(initialTraderBalance);
-        vaultProfit =
-            int256(afterRoundVaultBalance) -
-            int256(initialVaultBalance);
-        /*
+        // put to zero this value so the round can start
+        cumulativePendingDeposits = 0;
 
-        DO SOMETHING HERE WITH PROFIT ?
-
-        */
+        // get profits
+        if (currentRound != 0) {
+            traderProfit =
+                int256(afterRoundTraderBalance) -
+                int256(initialTraderBalance);
+            vaultProfit =
+                int256(afterRoundVaultBalance) -
+                int256(initialVaultBalance);
+        }
+        if (traderProfit > 0) {
+            // DO SOMETHING HERE WITH PROFIT ?
+        }
 
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
 
-        cumulativePendingDeposits = 0;
-        cumulativePendingWithdrawals = 0;
+        currentRound = IUsersVault(vaultAddress).getRound();
+        emit RolloverExecuted(
+            block.timestamp,
+            currentRound,
+            traderProfit,
+            vaultProfit
+        );
+
         traderProfit = 0;
         vaultProfit = 0;
         ratioProportions = calculateRatio();
     }
 
+    // @todo rename '_traderOperation' to '_tradeOperation'
     function executeOnProtocol(
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
-    ) external onlyTrader returns (bool) {
-        address adapterAddress = adaptersPerProtocol[_protocolId];
-        if (adapterAddress == address(0)) revert InvalidAdapter();
+    ) external onlyTrader nonReentrant returns (bool) {
+        address adapterAddress;
 
         uint256 walletRatio = 1e18;
         // execute operation with ratio equals to 1 because it is for trader, not scaling
@@ -387,6 +395,9 @@ contract TraderWalletV2 is OwnableUpgradeable {
         if (_protocolId == 1) {
             success = _executeOnGmx(walletRatio, _traderOperation);
         } else {
+            adapterAddress = adaptersPerProtocol[_protocolId];
+            if (adapterAddress == address(0)) revert InvalidAdapter();
+
             success = _executeOnAdapter(
                 adapterAddress,
                 walletRatio,
@@ -456,7 +467,10 @@ contract TraderWalletV2 is OwnableUpgradeable {
     }
 
     function calculateRatio() public view returns (uint256) {
-        return (1e18 * initialVaultBalance) / initialTraderBalance;
+        return
+            initialTraderBalance > 0
+                ? (1e18 * initialVaultBalance) / initialTraderBalance
+                : 1;
     }
 
     function getRatio() public view returns (uint256) {
@@ -507,7 +521,10 @@ contract TraderWalletV2 is OwnableUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation
     ) internal returns (bool) {
         return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
+        // needs to mock a library responde to unit testing
     }
+
+
 
     function addedMethod(uint256 _newValue) external {
         addedVariable = _newValue;

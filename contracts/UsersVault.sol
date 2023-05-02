@@ -7,12 +7,12 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {MathUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-
-import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
-import "./adapters/gmx/GMXAdapter.sol";
+import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
+import {IAdapter} from "./interfaces/IAdapter.sol";
+import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 import "hardhat/console.sol";
 

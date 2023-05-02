@@ -10,7 +10,6 @@ import {
   constants
 } from "ethers";
 import {
-ContractsFactory,
 IQuoterV2,
 UniswapV3Adapter,
 ERC20Mock,
@@ -20,12 +19,6 @@ IUniswapV3Router,
 IUniswapV3Factory,
 INonfungiblePositionManager
 } from "../../typechain-types";
-import {
-    TEST_TIMEOUT,
-    ZERO_AMOUNT,
-    ZERO_ADDRESS,
-    AMOUNT_100,
-  } from "../_helpers/constants";
 import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
 import Reverter from "../_helpers/reverter";
 import { deployERC20 } from "../helpers/ERC20Mock/ERC20Mock";
@@ -65,8 +58,6 @@ let contractBalanceBefore: BigNumber;
 let contractBalanceAfter: BigNumber;
 let traderBalanceBefore: BigNumber;
 let traderBalanceAfter: BigNumber;
-
-let UniswapAdapterFactory: ContractsFactory;
 
 let uniswapAdapterContract: UniswapV3Adapter
 let uniswapRouter: IUniswapV3Router;

@@ -5,8 +5,8 @@ import {
   ContractTransaction,
   BigNumber,
 } from "ethers";
+import { SnapshotRestorer, takeSnapshot } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
-import Reverter from "./_helpers/reverter";
 import {
   UsersVault,
   UsersVaultV2,
@@ -15,21 +15,21 @@ import {
   AdapterMock,
   GMXAdapter,
   ERC20Mock,
-} from "../typechain-types";
+} from "../../typechain-types";
 import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
   AMOUNT_1E18,
-} from "./_helpers/constants";
+} from "./../_helpers/constants";
 import {
   usersDeposit,
   mintForUsers,
   approveForUsers,
   claimShares,
-} from "./_helpers/functions";
+} from "./../_helpers/functions";
 
-const reverter = new Reverter();
+let snapshot: SnapshotRestorer;
 
 let deployer: Signer;
 let traderWallet: Signer;
@@ -151,9 +151,9 @@ describe("User Vault Contract Tests", function () {
       await gmxAdapterContract.deployed();
 
       UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
-        libraries: {
-          GMXAdapter: gmxAdapterContract.address,
-        },
+        // libraries: {
+        //   GMXAdapter: gmxAdapterContract.address,
+        // },
       });
       ContractsFactoryFactory = await ethers.getContractFactory(
         "ContractsFactoryMock"
@@ -199,7 +199,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -219,7 +219,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -239,7 +239,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -259,7 +259,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -279,7 +279,7 @@ describe("User Vault Contract Tests", function () {
               SHARES_NAME,
               SHARES_SYMBOL,
             ],
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -300,7 +300,7 @@ describe("User Vault Contract Tests", function () {
             SHARES_NAME,
             SHARES_SYMBOL,
           ],
-          { unsafeAllowLinkedLibraries: true }
+          // { unsafeAllowLinkedLibraries: true }
         )) as UsersVault;
         await usersVaultContract.deployed();
 
@@ -321,7 +321,7 @@ describe("User Vault Contract Tests", function () {
         );
 
         // take a snapshot
-        await reverter.snapshot();
+        snapshot = await takeSnapshot();
       });
 
       it("THEN it should return the same ones after deployment", async () => {
@@ -378,7 +378,7 @@ describe("User Vault Contract Tests", function () {
               .setAdaptersRegistryAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.adaptersRegistryAddress()).to.equal(
@@ -428,7 +428,7 @@ describe("User Vault Contract Tests", function () {
               .setContractsFactoryAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.contractsFactoryAddress()).to.equal(
@@ -478,7 +478,7 @@ describe("User Vault Contract Tests", function () {
               .setDynamicValueAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.dynamicValueAddress()).to.equal(
@@ -528,7 +528,7 @@ describe("User Vault Contract Tests", function () {
               .setUnderlyingTokenAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
@@ -598,7 +598,7 @@ describe("User Vault Contract Tests", function () {
               .setTraderWalletAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           it("THEN new address should be stored", async () => {
@@ -633,7 +633,7 @@ describe("User Vault Contract Tests", function () {
             .setAdaptersRegistryAddress(adaptersRegistryContract.address);
         });
         after(async () => {
-          await reverter.revert();
+          await snapshot.restore();
         });
 
         describe("WHEN trying to add an adapter to use (addAdapterToUse)", async () => {
@@ -909,7 +909,7 @@ describe("User Vault Contract Tests", function () {
               await usdcTokenContract.setReturnBoolValue(false);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN it should fail", async () => {
               await expect(
@@ -937,7 +937,7 @@ describe("User Vault Contract Tests", function () {
               .userDeposit(AMOUNT);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           it("THEN contract should return correct values", async () => {
@@ -1026,7 +1026,7 @@ describe("User Vault Contract Tests", function () {
             await usersVaultContract.connect(traderWallet).rolloverFromTrader();
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           it("THEN round should be 1 and assetsPerShareXRound should be 1", async () => {
@@ -1426,13 +1426,13 @@ describe("User Vault Contract Tests", function () {
 
       describe("WHEN trying to make an executeOnProtocol call", async () => {
         const traderOperation = {
-          _operationId: 10,
-          _data: ethers.utils.hexlify("0x1234"),
+          operationId: 10,
+          data: ethers.utils.hexlify("0x1234"),
         };
 
         describe("WHEN calling with invalid caller or parameters", function () {
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           describe("WHEN caller is not trader", function () {
@@ -1512,7 +1512,7 @@ describe("User Vault Contract Tests", function () {
                 .executeOnProtocol(2, traderOperation, BigNumber.from(1));
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN it should emit an Event", async () => {
               // await expect(txResult)
@@ -1648,16 +1648,16 @@ describe("User Vault Contract Tests", function () {
         before(async () => {
           UsersVaultV2Factory = await ethers.getContractFactory(
             "UsersVaultV2",
-            {
-              libraries: {
-                GMXAdapter: gmxAdapterContract.address,
-              },
-            }
+            // {
+            //   libraries: {
+            //     GMXAdapter: gmxAdapterContract.address,
+            //   },
+            // }
           );
           usersVaultV2Contract = (await upgrades.upgradeProxy(
             usersVaultContract.address,
             UsersVaultV2Factory,
-            { unsafeAllowLinkedLibraries: true }
+            // { unsafeAllowLinkedLibraries: true }
           )) as UsersVaultV2;
           await usersVaultV2Contract.deployed();
         });

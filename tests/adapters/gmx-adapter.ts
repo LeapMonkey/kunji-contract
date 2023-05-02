@@ -1,5 +1,4 @@
-import { loadFixture, setBalance, setCode } from "@nomicfoundation/hardhat-network-helpers";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { setBalance, setCode } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import {
   Signer,
@@ -23,12 +22,6 @@ import {
   GmxVaultPriceFeedMock,
   IGmxPositionManager
 } from "../../typechain-types";
-import {
-    TEST_TIMEOUT,
-    ZERO_AMOUNT,
-    ZERO_ADDRESS,
-    AMOUNT_100,
-  } from "../_helpers/constants";
 import Reverter from "../_helpers/reverter";
 import { ReverterLocal }  from "../_helpers/reverter";
 import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
@@ -208,7 +201,7 @@ describe("GMXAdapter", function() {
       let tradeOperation: any;
       before(async () => {
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(amount);
         const isLong = true;
         const tokenIn = tokens.usdc;
         collateralToken = tokens.wbtc;
@@ -275,7 +268,7 @@ describe("GMXAdapter", function() {
       before(async () => {
         await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(amount);
         const tokenIn = tokens.usdc;
         collateralToken = tokens.wbtc;
         indexToken = collateralToken; 
@@ -434,7 +427,7 @@ describe("GMXAdapter", function() {
       before(async () => {
         await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(amount);
         const tokenIn = tokens.usdc;
         collateralToken = tokenIn;
         indexToken = tokens.wbtc; 
@@ -525,7 +518,7 @@ describe("GMXAdapter", function() {
       beforeEach(async () => {
         await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.2") });
         await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-        await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+        await traderWalletContract.connect(trader).traderDeposit(amount);
 
         keeper = await ethers.getImpersonatedSigner(gmx.keeper);
         await setBalance(gmx.keeper, utils.parseEther("10"));
@@ -624,7 +617,7 @@ describe("GMXAdapter", function() {
             { to: traderWalletContract.address, value: utils.parseEther("0.2") }
             );
           await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-          await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+          await traderWalletContract.connect(trader).traderDeposit(amount);
 
           limitOrderKeeper = await ethers.getImpersonatedSigner(gmx.limitOrderKeeper);
           await setBalance(gmx.limitOrderKeeper, utils.parseEther("10"));
@@ -810,7 +803,7 @@ describe("GMXAdapter", function() {
           // prepare - open new long position         
           await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.5") });
           await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-          await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+          await traderWalletContract.connect(trader).traderDeposit(amount);
 
           const tokenIn = tokens.usdc;
           collateralToken = tokens.wbtc;
@@ -1044,7 +1037,7 @@ describe("GMXAdapter", function() {
           // prepare - open new long position         
           await trader.sendTransaction({ to: traderWalletContract.address, value: utils.parseEther("0.5") });
           await usdcTokenContract.connect(trader).approve(traderWalletContract.address, amount);
-          await traderWalletContract.connect(trader).traderDeposit(usdcTokenContract.address, amount);
+          await traderWalletContract.connect(trader).traderDeposit(amount);
           
           const tokenIn = tokens.usdc;
           collateralToken = tokens.wbtc;
