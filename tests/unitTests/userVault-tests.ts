@@ -5,8 +5,8 @@ import {
   ContractTransaction,
   BigNumber,
 } from "ethers";
+import { SnapshotRestorer, takeSnapshot } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
-import Reverter from "./../_helpers/reverter";
 import {
   UsersVault,
   UsersVaultV2,
@@ -29,7 +29,7 @@ import {
   claimShares,
 } from "./../_helpers/functions";
 
-const reverter = new Reverter();
+let snapshot: SnapshotRestorer;
 
 let deployer: Signer;
 let traderWallet: Signer;
@@ -321,7 +321,7 @@ describe("User Vault Contract Tests", function () {
         );
 
         // take a snapshot
-        await reverter.snapshot();
+        snapshot = await takeSnapshot();
       });
 
       it("THEN it should return the same ones after deployment", async () => {
@@ -378,7 +378,7 @@ describe("User Vault Contract Tests", function () {
               .setAdaptersRegistryAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.adaptersRegistryAddress()).to.equal(
@@ -428,7 +428,7 @@ describe("User Vault Contract Tests", function () {
               .setContractsFactoryAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.contractsFactoryAddress()).to.equal(
@@ -478,7 +478,7 @@ describe("User Vault Contract Tests", function () {
               .setDynamicValueAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.dynamicValueAddress()).to.equal(
@@ -528,7 +528,7 @@ describe("User Vault Contract Tests", function () {
               .setUnderlyingTokenAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
           it("THEN new address should be stored", async () => {
             expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
@@ -598,7 +598,7 @@ describe("User Vault Contract Tests", function () {
               .setTraderWalletAddress(otherAddress);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           it("THEN new address should be stored", async () => {
@@ -633,7 +633,7 @@ describe("User Vault Contract Tests", function () {
             .setAdaptersRegistryAddress(adaptersRegistryContract.address);
         });
         after(async () => {
-          await reverter.revert();
+          await snapshot.restore();
         });
 
         describe("WHEN trying to add an adapter to use (addAdapterToUse)", async () => {
@@ -909,7 +909,7 @@ describe("User Vault Contract Tests", function () {
               await usdcTokenContract.setReturnBoolValue(false);
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN it should fail", async () => {
               await expect(
@@ -937,7 +937,7 @@ describe("User Vault Contract Tests", function () {
               .userDeposit(AMOUNT);
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           it("THEN contract should return correct values", async () => {
@@ -1026,7 +1026,7 @@ describe("User Vault Contract Tests", function () {
             await usersVaultContract.connect(traderWallet).rolloverFromTrader();
           });
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           it("THEN round should be 1 and assetsPerShareXRound should be 1", async () => {
@@ -1432,7 +1432,7 @@ describe("User Vault Contract Tests", function () {
 
         describe("WHEN calling with invalid caller or parameters", function () {
           after(async () => {
-            await reverter.revert();
+            await snapshot.restore();
           });
 
           describe("WHEN caller is not trader", function () {
@@ -1512,7 +1512,7 @@ describe("User Vault Contract Tests", function () {
                 .executeOnProtocol(2, traderOperation, BigNumber.from(1));
             });
             after(async () => {
-              await reverter.revert();
+              await snapshot.restore();
             });
             it("THEN it should emit an Event", async () => {
               // await expect(txResult)
