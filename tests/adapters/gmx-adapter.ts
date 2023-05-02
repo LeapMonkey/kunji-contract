@@ -82,7 +82,7 @@ let gmxVaultPriceFeedMockContract: GmxVaultPriceFeedMock;
 let gmxVaultPriceFeedMock: GmxVaultPriceFeedMock;
 let gmxPositionManager: IGmxPositionManager;
 let LensFactory: ContractFactory;
-let lens: Lens;
+let lensContract: Lens;
 
 const protocolId = 1;   // GMX
 
@@ -141,6 +141,10 @@ describe("GMXAdapter", function() {
 
     usdcHolder0 = await ethers.getImpersonatedSigner(tokenHolders.usdc[0]);
     await usdcTokenContract.connect(usdcHolder0).transfer(traderAddress, utils.parseUnits("1000", 6));
+
+    LensFactory = await ethers.getContractFactory("Lens");
+    lensContract = (await LensFactory.deploy()) as Lens;
+    await lensContract.deployed();
 
     GMXAdapterFactory = await ethers.getContractFactory("GMXAdapter");
     gmxAdapterLibrary = (await GMXAdapterFactory.deploy()) as GMXAdapter;
@@ -336,7 +340,7 @@ describe("GMXAdapter", function() {
         });
 
         it("Should return opened position from positions list", async() => {
-          const position = await gmxAdapterLibrary.getPositions(
+          const position = await lensContract.getPositions(
               traderWalletContract.address,
               [collateralToken],
               [indexToken],
@@ -403,7 +407,7 @@ describe("GMXAdapter", function() {
           });
   
           it("Should return zeros for traderWallet position from positions list", async() => {
-            const position = await gmxAdapterLibrary.getPositions(
+            const position = await lensContract.getPositions(
                 traderWalletContract.address,
                 [collateralToken],
                 [indexToken],
@@ -495,7 +499,7 @@ describe("GMXAdapter", function() {
         });
 
         it("Should return opened position from positions list", async() => {
-          const position = await gmxAdapterLibrary.getPositions(
+          const position = await lensContract.getPositions(
               traderWalletContract.address,
               [collateralToken],
               [indexToken],
@@ -773,7 +777,7 @@ describe("GMXAdapter", function() {
             expect(await gmxOrderBook.increaseOrdersIndex(traderWalletContract.address))
               .to.equal(1); // first increase order
 
-            const position = await gmxAdapterLibrary.getPositions(
+            const position = await lensContract.getPositions(
               traderWalletContract.address,
               [collateralToken],
               [indexToken],
@@ -846,7 +850,7 @@ describe("GMXAdapter", function() {
         });
 
         it("Should return opened position from positions list", async() => {
-          const position = await gmxAdapterLibrary.getPositions(
+          const position = await lensContract.getPositions(
               traderWalletContract.address,
               [collateralToken],
               [indexToken],
@@ -1005,7 +1009,7 @@ describe("GMXAdapter", function() {
               expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
                 .to.equal(1); // first decrease order
 
-              const position = await gmxAdapterLibrary.getPositions(
+              const position = await lensContract.getPositions(
                 traderWalletContract.address,
                 [collateralToken],
                 [indexToken],
@@ -1080,7 +1084,7 @@ describe("GMXAdapter", function() {
         });
 
         it("Should return opened position from positions list", async() => {
-          const position = await gmxAdapterLibrary.getPositions(
+          const position = await lensContract.getPositions(
               traderWalletContract.address,
               [collateralToken],
               [indexToken],
@@ -1236,7 +1240,7 @@ describe("GMXAdapter", function() {
               expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
                 .to.equal(1); // first decrease order
   
-              const position = await gmxAdapterLibrary.getPositions(
+              const position = await lensContract.getPositions(
                 traderWalletContract.address,
                 [collateralToken],
                 [indexToken],

@@ -514,59 +514,7 @@ library GMXAdapter {
     }
 
 
-    // @todo move to 'Lens' contract
-    /// /// /// /// /// ///
-    /// View functions
-    /// /// /// /// /// ///
-
-    /// @notice Calculates the max amount of tokenIn that can be swapped
-    /// @param tokenIn The address of input token
-    /// @param tokenOut The address of output token
-    /// @return amountIn Maximum available amount to be swapped
-    function getMaxAmountIn(
-        address tokenIn,
-        address tokenOut
-    ) external view returns (uint256 amountIn) {
-        return IGmxReader(gmxReader).getMaxAmountIn(address(gmxVault), tokenIn, tokenOut);
-    }
-
-    /// @notice Returns amount out after fees and the fee amount
-    /// @param tokenIn The address of input token
-    /// @param tokenOut The address of output token
-    /// @param amountIn The amount of tokenIn to be swapped
-    /// @return amountOutAfterFees The amount out after fees,
-    /// @return feeAmount The fee amount in terms of tokenOut
-    function getAmountOut(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    ) external view returns (uint256 amountOutAfterFees, uint256 feeAmount) {
-        return
-            IGmxReader(gmxReader).getAmountOut(
-                address(gmxVault),
-                tokenIn,
-                tokenOut,
-                amountIn
-            );
-    }
-
-    /// @param account Wallet or Vault
-    function getPositions(
-        address account,
-        address[] memory collateralTokens,
-        address[] memory indexTokens,
-        bool[] memory isLong
-    ) external view returns (uint256[] memory) {
-        return
-            IGmxReader(gmxReader).getPositions(
-                address(gmxVault),
-                account,
-                collateralTokens,
-                indexTokens,
-                isLong
-            );
-    }
-
+    /// @notice Updates allowance amount for token 
     function _checkUpdateAllowance(
         address token,
         address spender,
@@ -577,6 +525,7 @@ library GMXAdapter {
         }
     }
 
+    /// @notice Helper function to track revers in call() 
     function _getRevertMsg(bytes memory _returnData) internal pure returns (string memory) {
         // If the _res length is less than 68, then the transaction failed silently (without a revert message)
         if (_returnData.length < 68) return "Transaction reverted silently";
