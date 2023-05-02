@@ -13,7 +13,7 @@ import "./adapters/gmx/GMXAdapter.sol";
 
 /// import its own interface as well
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     // using GMXAdapter for *;
@@ -40,7 +40,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     error ZeroAddress(string target);
     error ZeroAmount();
     error InvalidVault();
-    error UnderlyingAssetNotAllowed();
     error CallerNotAllowed();
     error TraderNotAllowed();
     error InvalidProtocol();
@@ -73,7 +72,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address indexed token,
         uint256 amount
     );
-    event WithdrawalRequest(
+    event WithdrawRequest(
         address indexed account,
         address indexed token,
         uint256 amount
@@ -86,13 +85,12 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         uint256 initialBalance,
         uint256 walletRatio
     );
-    event RolloverExecuted(uint256 timestamp, uint256 round);
-
-    modifier onlyUnderlying(address _tokenAddress) {
-        if (_tokenAddress != underlyingTokenAddress)
-            revert UnderlyingAssetNotAllowed();
-        _;
-    }
+    event RolloverExecuted(
+        uint256 timestamp,
+        uint256 round,
+        int256 traderProfit,
+        int256 vaultProfit
+    );
 
     modifier onlyTrader() {
         if (_msgSender() != traderAddress) revert CallerNotAllowed();
@@ -143,6 +141,8 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         afterRoundTraderBalance = 0;
         afterRoundVaultBalance = 0;
         currentRound = 0;
+        traderProfit = 0;
+        vaultProfit = 0;
     }
 
     //
@@ -259,14 +259,13 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
     //
     function traderDeposit(
-        address _tokenAddress,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_tokenAddress) {
+    ) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
             !(
-                IERC20Upgradeable(_tokenAddress).transferFrom(
+                IERC20Upgradeable(underlyingTokenAddress).transferFrom(
                     _msgSender(),
                     address(this),
                     _amount
@@ -274,15 +273,14 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             )
         ) revert TokenTransferFailed();
 
-        emit TraderDeposit(_msgSender(), _tokenAddress, _amount);
+        emit TraderDeposit(_msgSender(), underlyingTokenAddress, _amount);
 
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
     function withdrawRequest(
-        address _underlying,
         uint256 _amount
-    ) external onlyTrader onlyUnderlying(_underlying) {
+    ) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         // require(
@@ -295,7 +293,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         //     "Token transfer failed"
         // );
 
-        emit WithdrawalRequest(_msgSender(), _underlying, _amount);
+        emit WithdrawRequest(_msgSender(), underlyingTokenAddress, _amount);
 
         cumulativePendingWithdrawals = cumulativePendingWithdrawals + _amount;
     }
@@ -332,17 +330,13 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
         } else {
             afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
-                .balanceOf(traderAddress);
+                .balanceOf(address(this));
             afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
                 .balanceOf(vaultAddress);
         }
 
         bool success = IUsersVault(vaultAddress).rolloverFromTrader();
         if (!success) revert RolloverFailed();
-        emit RolloverExecuted(
-            block.timestamp,
-            IUsersVault(vaultAddress).getRound()
-        );
 
         if (cumulativePendingWithdrawals > 0) {
             // send to trader account
@@ -352,26 +346,37 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
                 cumulativePendingWithdrawals
             );
             if (!success) revert SendToTraderFailed();
+
+            cumulativePendingWithdrawals = 0;
         }
 
-        // get profits ?
-        traderProfit =
-            int256(afterRoundTraderBalance) -
-            int256(initialTraderBalance);
-        vaultProfit =
-            int256(afterRoundVaultBalance) -
-            int256(initialVaultBalance);
-        /*
+        // put to zero this value so the round can start
+        cumulativePendingDeposits = 0;
 
-        DO SOMETHING HERE WITH PROFIT ?
-
-        */
+        // get profits
+        if (currentRound != 0) {
+            traderProfit =
+                int256(afterRoundTraderBalance) -
+                int256(initialTraderBalance);
+            vaultProfit =
+                int256(afterRoundVaultBalance) -
+                int256(initialVaultBalance);
+        }
+        if (traderProfit > 0) {
+            // DO SOMETHING HERE WITH PROFIT ?
+        }
 
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
 
-        cumulativePendingDeposits = 0;
-        cumulativePendingWithdrawals = 0;
+        currentRound = IUsersVault(vaultAddress).getRound();
+        emit RolloverExecuted(
+            block.timestamp,
+            currentRound,
+            traderProfit,
+            vaultProfit
+        );
+
         traderProfit = 0;
         vaultProfit = 0;
         ratioProportions = calculateRatio();
@@ -465,7 +470,10 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     function calculateRatio() public view returns (uint256) {
-        return (1e18 * initialVaultBalance) / initialTraderBalance;
+        return
+            initialTraderBalance > 0
+                ? (1e18 * initialVaultBalance) / initialTraderBalance
+                : 1;
     }
 
     function getRatio() public view returns (uint256) {

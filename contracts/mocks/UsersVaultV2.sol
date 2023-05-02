@@ -21,7 +21,7 @@ contract UsersVaultV2 is
     OwnableUpgradeable,
     PausableUpgradeable
 {
-    using MathUpgradeable for uint256;
+using MathUpgradeable for uint256;
 
     struct UserDeposit {
         uint256 round;
@@ -47,8 +47,10 @@ contract UsersVaultV2 is
 
     // Total amount of total withdrawal shares in mapped round
     uint256 public pendingWithdrawShares;
+
     uint256 public processedWithdrawAssets;
     uint256 public ratioShares;
+    int256 public vaultProfit;
 
     address[] public traderSelectedAdaptersArray;
     mapping(uint256 => address) public adaptersPerProtocol;
@@ -62,6 +64,7 @@ contract UsersVaultV2 is
     // ratio per round
     mapping(uint256 => uint256) public assetsPerShareXRound;
 
+    // added variable
     uint256 public addedVariable;
 
     error ZeroAddress(string target);
@@ -72,7 +75,6 @@ contract UsersVaultV2 is
     error InvalidRound();
     error InsufficientShares(uint256 unclaimedShareBalance);
     error InsufficientAssets(uint256 unclaimedAssetBalance);
-    error UnderlyingAssetNotAllowed();
     error InvalidRollover();
     error InvalidProtocol();
     error AdapterPresent();
@@ -101,7 +103,11 @@ contract UsersVaultV2 is
         address tokenAddress,
         uint256 assetsAmount
     );
-    event WithdrawRequest(address indexed caller, uint256 sharesAmount);
+    event WithdrawRequest(
+        address indexed account,
+        address indexed token,
+        uint256 amount
+    );
     event SharesClaimed(
         uint256 round,
         uint256 shares,
@@ -114,7 +120,7 @@ contract UsersVaultV2 is
         address owner,
         address receiver
     );
-    event BatchRollover(
+    event RolloverExecuted(
         uint256 round,
         uint256 newDeposit,
         uint256 newWithdrawal
@@ -161,6 +167,7 @@ contract UsersVaultV2 is
         traderWalletAddress = _traderWalletAddress;
         dynamicValueAddress = _dynamicValueAddress;
         currentRound = 0;
+        vaultProfit = 0;
     }
 
     receive() external payable {}
@@ -279,14 +286,14 @@ contract UsersVaultV2 is
         return true;
     }
 
-    function userDeposit(address _tokenAddress, uint256 _amount) external {
+    function userDeposit(uint256 _amount) external {
         _onlyValidInvestors(_msgSender());
-        _onlyUnderlying(_tokenAddress);
+
         if (_amount == 0) revert ZeroAmount();
 
         if (
             !(
-                IERC20Upgradeable(_tokenAddress).transferFrom(
+                IERC20Upgradeable(underlyingTokenAddress).transferFrom(
                     _msgSender(),
                     address(this),
                     _amount
@@ -294,7 +301,7 @@ contract UsersVaultV2 is
             )
         ) revert TokenTransferFailed();
 
-        emit UserDeposited(_msgSender(), _tokenAddress, _amount);
+        emit UserDeposited(_msgSender(), underlyingTokenAddress, _amount);
 
         // good only for first time (round zero)
         uint256 assetPerShare = 1e18;
@@ -331,8 +338,13 @@ contract UsersVaultV2 is
     function withdrawRequest(uint256 _sharesAmount) external {
         _onlyValidInvestors(_msgSender());
         _checkZeroRound();
+        if (_sharesAmount == 0) revert ZeroAmount();
 
-        emit WithdrawRequest(_msgSender(), _sharesAmount);
+        emit WithdrawRequest(
+            _msgSender(),
+            underlyingTokenAddress,
+            _sharesAmount
+        );
         _burn(_msgSender(), _sharesAmount);
 
         // Convert previous round pending shares into unclaimed assets
@@ -375,16 +387,12 @@ contract UsersVaultV2 is
         if (currentRound != 0) {
             afterRoundVaultBalance = getUnderlyingLiquidity();
 
-            assetsPerShare = getUnderlyingLiquidity().mulDiv(
-                1e18,
-                totalSupply()
-            );
+            assetsPerShare = afterRoundVaultBalance.mulDiv(1e18, totalSupply());
             sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
             console.log(
                 "CNT - getUnderlyingLiquidity : ",
-                getUnderlyingLiquidity()
+                afterRoundVaultBalance
             );
-            console.log("CNT - assetsPerShare         : ", assetsPerShare);
             console.log("CNT - sharesToMint           : ", sharesToMint);
         } else {
             // first round dont consider pendings
@@ -409,6 +417,7 @@ contract UsersVaultV2 is
             1e18
         );
 
+        console.log("CNT - round                  : ", currentRound);
         console.log("CNT - assetsPerShare         : ", assetsPerShare);
         console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
 
@@ -422,13 +431,14 @@ contract UsersVaultV2 is
             );
         }
 
-        int256 vaultProfit = int256(afterRoundVaultBalance) -
+        // get profits
+        if (currentRound != 0) {
+            vaultProfit = int256(afterRoundVaultBalance) -
             int256(initialVaultBalance);
-        /*
-
-        DO SOMETHING HERE WITH PROFIT ?
-
-        */
+        }
+        if (vaultProfit > 0) {
+            // DO SOMETHING HERE WITH PROFIT ?
+        }
 
         // Make pending withdrawals 0
         pendingWithdrawShares = 0;
@@ -436,7 +446,7 @@ contract UsersVaultV2 is
 
         initialVaultBalance = getUnderlyingLiquidity();
 
-        emit BatchRollover(
+        emit RolloverExecuted(
             currentRound,
             pendingDepositAssets,
             pendingWithdrawShares
@@ -453,13 +463,15 @@ contract UsersVaultV2 is
         uint256 _walletRatio
     ) external returns (bool) {
         _onlyTraderWallet(_msgSender());
-        address adapterAddress = adaptersPerProtocol[_protocolId];
-        if (adapterAddress == address(0)) revert InvalidAdapter();
+        address adapterAddress;
 
         bool success = false;
         if (_protocolId == 1) {
             success = _executeOnGmx(_walletRatio, _traderOperation);
         } else {
+            adapterAddress = adaptersPerProtocol[_protocolId];
+            if (adapterAddress == address(0)) revert InvalidAdapter();
+
             success = _executeOnAdapter(
                 adapterAddress,
                 _walletRatio,
@@ -535,10 +547,11 @@ contract UsersVaultV2 is
         return traderSelectedAdaptersArray.length;
     }
 
-    // anybody can call this
     function claimShares(uint256 _sharesAmount, address _receiver) public {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());
+
+        if (_sharesAmount == 0) revert ZeroAmount();
 
         // Convert previous round glp balance into unredeemed shares
         if (
@@ -578,9 +591,11 @@ contract UsersVaultV2 is
         _transfer(address(this), _receiver, _sharesAmount);
     }
 
-    // anybody can call this
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
+        _checkZeroRound();
         _onlyValidInvestors(_msgSender());
+
+        if (_assetsAmount == 0) revert ZeroAmount();
 
         if (
             userWithdrawals[_msgSender()].round < currentRound &&
@@ -589,6 +604,7 @@ contract UsersVaultV2 is
             uint256 assetsPerShare = assetsPerShareXRound[
                 userWithdrawals[_msgSender()].round
             ];
+
             userWithdrawals[_msgSender()].unclaimedAssets =
                 userWithdrawals[_msgSender()].unclaimedAssets +
                 userWithdrawals[_msgSender()].pendingShares.mulDiv(
@@ -627,6 +643,7 @@ contract UsersVaultV2 is
     //
     //
     function getUnderlyingLiquidity() public view returns (uint256) {
+        console.log("-------------------------------------------------------");
         console.log(
             "CNT - USDC Balance           : ",
             IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this))
@@ -634,6 +651,7 @@ contract UsersVaultV2 is
         console.log("CNT - pendingDepositAssets   : ", pendingDepositAssets);
         console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
         console.log("CNT - totalSupply()          : ", totalSupply());
+        console.log("-------------------------------------------------------");
         return
             IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -
@@ -658,11 +676,6 @@ contract UsersVaultV2 is
         IAdapter.AdapterOperation memory _traderOperation
     ) internal returns (bool) {
         return GMXAdapter.executeOperation(_ratio, _traderOperation);
-    }
-
-    function _onlyUnderlying(address _tokenAddress) internal view {
-        if (_tokenAddress != underlyingTokenAddress)
-            revert UnderlyingAssetNotAllowed();
     }
 
     function _onlyValidInvestors(address _account) internal view {

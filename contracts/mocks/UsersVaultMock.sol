@@ -8,21 +8,15 @@ import "hardhat/console.sol";
 
 contract UsersVaultMock {
     bool public generalReturnValue;
-    address public returnAddress;
     bool public executedOperation;
     uint256 public returnAmount;
-    address public underlyingTokenAddress;
     uint256 public round;
     uint256 public liquidity;
+    uint256 public variableToPreventWarning;
 
     // not used yet
     function setReturnValue(bool _value) external {
         generalReturnValue = _value;
-    }
-
-    // not used yet
-    function setReturnAddress(address _value) external {
-        returnAddress = _value;
     }
 
     function setExecuteOnProtocol(bool _value) external {
@@ -39,6 +33,11 @@ contract UsersVaultMock {
 
     function setLiquidity(uint256 _value) external {
         liquidity = _value;
+    }
+
+    function rolloverFromTrader() external returns(bool) {
+        variableToPreventWarning = 0;     
+        return generalReturnValue;
     }
 
     function executeOnProtocol(
