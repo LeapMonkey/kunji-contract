@@ -8,6 +8,7 @@ import {
   AdapterMock,
   GMXAdapter,
   ERC20Mock,
+  UniswapV3Adapter,
 } from "../../typechain-types";
 
 export const setupContracts = async (
@@ -22,6 +23,8 @@ export const setupContracts = async (
   let contractsFactoryContract: ContractsFactoryMock;
   let GMXAdapterLibraryFactory: ContractFactory;
   let gmxAdapterContract: GMXAdapter;
+  let UniswapAdapterFactory: ContractFactory;
+  let uniswapAdapterContract: UniswapV3Adapter;
   let AdaptersRegistryFactory: ContractFactory;
   let adaptersRegistryContract: AdaptersRegistryMock;
   let AdapterFactory: ContractFactory;
@@ -63,6 +66,13 @@ export const setupContracts = async (
   gmxAdapterContract = (await GMXAdapterLibraryFactory.deploy()) as GMXAdapter;
   await gmxAdapterContract.deployed();
 
+  // deploy uniswap adapter
+  UniswapAdapterFactory = await ethers.getContractFactory("UniswapV3Adapter");
+  uniswapAdapterContract = (await upgrades.deployProxy(UniswapAdapterFactory, [], {
+      initializer: "initialize"
+  })) as UniswapV3Adapter;
+  await uniswapAdapterContract.deployed();
+
   // deploy mocked ContractsFactory
   ContractsFactoryFactory = await ethers.getContractFactory(
     "ContractsFactoryMock"
@@ -82,6 +92,9 @@ export const setupContracts = async (
   adaptersRegistryContract =
     (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
   await adaptersRegistryContract.deployed();
+  // set uniswap
+  await adaptersRegistryContract.setReturnValue(true);
+  await adaptersRegistryContract.setReturnAddress(uniswapAdapterContract.address);
 
   // deploy mocked adapter
   AdapterFactory = await ethers.getContractFactory("AdapterMock");
@@ -136,6 +149,30 @@ export const setupContracts = async (
     .connect(deployer)
     .setVaultAddress(usersVaultContract.address);
 
+  await traderWalletContract
+    .connect(deployer)
+    .addAdapterToUse(2);
+
+  await traderWalletContract
+    .connect(deployer)
+    .setAdapterAllowanceOnToken(2, usdcTokenContract.address, false);
+
+  await traderWalletContract
+    .connect(deployer)
+    .setAdapterAllowanceOnToken(2, wethTokenContract.address, false);
+
+  await usersVaultContract
+    .connect(deployer)
+    .addAdapterToUse(2);
+
+  await usersVaultContract
+    .connect(deployer)
+    .setAdapterAllowanceOnToken(2, usdcTokenContract.address, false);
+
+  await usersVaultContract
+    .connect(deployer)
+    .setAdapterAllowanceOnToken(2, wethTokenContract.address, false);
+
   return {
     usdcTokenContract,
     wethTokenContract,
@@ -145,5 +182,6 @@ export const setupContracts = async (
     adapterContract,
     traderWalletContract,
     usersVaultContract,
+    uniswapAdapterContract,
   };
 };
