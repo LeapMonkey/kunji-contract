@@ -366,7 +366,7 @@ contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
 
-        currentRound = IUsersVault(vaultAddress).getRound();
+        currentRound = IUsersVault(vaultAddress).currentRound();
         emit RolloverExecuted(
             block.timestamp,
             currentRound,
