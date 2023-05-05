@@ -56,7 +56,7 @@ contract UsersVaultMock {
         return liquidity;
     }
 
-    function getRound() external view returns (uint256) {
+    function currentRound() external view returns (uint256) {
         return round;
     }
 }

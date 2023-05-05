@@ -50,7 +50,7 @@ interface ITraderWallet {
 
     function getUnderlyingLiquidity() external view returns (uint256);
 
-    function getRound() external view returns (uint256);
+    function currentRound() external view returns (uint256);
 
     /*
     function rolloverBatch() external;
