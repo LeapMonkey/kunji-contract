@@ -10,7 +10,7 @@ import {
   // TraderWalletMock,
   ERC20Mock,
 } from "../../typechain-types";
-import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18, AMOUNT_1E18 } from "../_helpers/constants";
+import { TEST_TIMEOUT, ZERO_AMOUNT, ZERO_ADDRESS, AMOUNT_1E18 } from "../_helpers/constants";
 
 const reverter = new Reverter();
 

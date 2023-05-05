@@ -12,6 +12,7 @@ import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 /// import its own interface as well
+import "hardhat/console.sol";
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public vaultAddress;
@@ -121,6 +122,8 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             revert ZeroAddress({target: "_dynamicValueAddress"});
 
         __Ownable_init();
+        transferOwnership(_traderAddress);
+
         __ReentrancyGuard_init();
         GMXAdapter.__initApproveGmxPlugin();
 
@@ -254,9 +257,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     //
-    function traderDeposit(
-        uint256 _amount
-    ) external onlyTrader {
+    function traderDeposit(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
@@ -274,9 +275,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
-    function withdrawRequest(
-        uint256 _amount
-    ) external onlyTrader {
+    function withdrawRequest(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         // require(

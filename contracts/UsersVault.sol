@@ -549,6 +549,10 @@ contract UsersVault is
         return traderSelectedAdaptersArray.length;
     }
 
+    function getRound() external view returns (uint256) {
+        return currentRound;
+    }
+
     function claimShares(uint256 _sharesAmount, address _receiver) public {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());

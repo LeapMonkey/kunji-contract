@@ -12,10 +12,12 @@ import {
 } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import {
-  TraderWallet,
-  ContractsFactory,
   AdaptersRegistryMock,
-  UsersVault,
+  ContractsFactory,
+  TraderWalletDeployer,
+  TraderWallet,
+  // UsersVaultDeployer,
+  // UsersVault,
   ERC20Mock,
 } from "../../typechain-types";
 import {
@@ -41,15 +43,18 @@ let deployerAddress: string;
 let vaultAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
-let contractsFactoryAddress: string;
 let traderAddress: string;
 let dynamicValueAddress: string;
+let traderWalletAddress: string;
 let nonAuthorizedAddress: string;
 let otherAddress: string;
 let ownerAddress: string;
 
 let txResult: ContractTransaction;
 let txReceipt: ContractReceipt;
+
+let TraderWalletDeployerFactory: ContractFactory;
+let traderWalletDeployerContract: TraderWalletDeployer;
 let ContractsFactoryFactory: ContractFactory;
 let contractsFactoryContract: ContractsFactory;
 let traderWalletContract: TraderWallet;
@@ -65,6 +70,22 @@ describe("ContractsFactory Tests", function () {
   this.timeout(TEST_TIMEOUT);
 
   before(async () => {
+    [deployer, trader, dynamicValue, nonAuthorized, otherSigner] =
+      await ethers.getSigners();
+    [
+      deployerAddress,
+      traderAddress,
+      dynamicValueAddress,
+      nonAuthorizedAddress,
+      otherAddress,
+    ] = await Promise.all([
+      deployer.getAddress(),
+      trader.getAddress(),
+      dynamicValue.getAddress(),
+      nonAuthorized.getAddress(),
+      otherSigner.getAddress(),
+    ]);
+
     const ERC20MockFactory = await ethers.getContractFactory("ERC20Mock");
     usdcTokenContract = (await ERC20MockFactory.deploy(
       "USDC",
@@ -74,69 +95,48 @@ describe("ContractsFactory Tests", function () {
     await usdcTokenContract.deployed();
     underlyingTokenAddress = usdcTokenContract.address;
 
-    [
-      deployer,
-      vault,
-      trader,
-      adaptersRegistry,
-      contractsFactory,
-      dynamicValue,
-      nonAuthorized,
-      otherSigner,
-    ] = await ethers.getSigners();
+    const AdapterRegistryFactory = await ethers.getContractFactory(
+      "AdaptersRegistryMock"
+    );
+    adaptersRegistryContract = (await upgrades.deployProxy(
+      AdapterRegistryFactory,
+      []
+    )) as AdaptersRegistryMock;
+    await adaptersRegistryContract.deployed();
 
-    [
-      deployerAddress,
-      vaultAddress,
-      traderAddress,
-      adaptersRegistryAddress,
-      contractsFactoryAddress,
-      dynamicValueAddress,
-      nonAuthorizedAddress,
-      otherAddress,
-    ] = await Promise.all([
-      deployer.getAddress(),
-      vault.getAddress(),
-      trader.getAddress(),
-      adaptersRegistry.getAddress(),
-      contractsFactory.getAddress(),
-      dynamicValue.getAddress(),
-      nonAuthorized.getAddress(),
-      otherSigner.getAddress(),
-    ]);
+    // Deploy Library
+    TraderWalletDeployerFactory = await ethers.getContractFactory(
+      "TraderWalletDeployer"
+    );
+    traderWalletDeployerContract =
+      (await TraderWalletDeployerFactory.deploy()) as TraderWalletDeployer;
+    await traderWalletDeployerContract.deployed();
+
+    ContractsFactoryFactory = await ethers.getContractFactory(
+      "ContractsFactory",
+      {
+        libraries: {
+          TraderWalletDeployer: traderWalletDeployerContract.address,
+        },
+      }
+    );
   });
 
-  describe("Contracts Factory tests", function () {
-    describe("Given a _ _ _ ", function () {
+  describe("Contracts Factory tests: ", function () {
+    describe("Given a scenario to create Trader Wallet and Users Vault", function () {
       before(async () => {
-        ContractsFactoryFactory = await ethers.getContractFactory(
-          "ContractsFactory"
-        );
-
         owner = deployer;
         ownerAddress = deployerAddress;
       });
 
       describe("WHEN trying to deploy ContractsFactory contract with invalid parameters", function () {
-        it("THEN it should FAIL when _vaultAddress is ZERO", async () => {
-          await expect(
-            upgrades.deployProxy(ContractsFactoryFactory, [
-              ZERO_ADDRESS,
-              feeRate,
-            ])
-          )
-            .to.be.revertedWithCustomError(
-              ContractsFactoryFactory,
-              "ZeroAddress"
-            )
-            .withArgs("_adaptersRegistryAddress");
-        });
         it("THEN it should FAIL when feeRate is greater than 100", async () => {
           await expect(
-            upgrades.deployProxy(ContractsFactoryFactory, [
-              otherAddress,
-              BigNumber.from(101),
-            ])
+            upgrades.deployProxy(
+              ContractsFactoryFactory,
+              [BigNumber.from(101)],
+              { unsafeAllowLinkedLibraries: true }
+            )
           ).to.be.revertedWithCustomError(
             ContractsFactoryFactory,
             "FeeRateError"
@@ -146,18 +146,10 @@ describe("ContractsFactory Tests", function () {
 
       describe("WHEN trying to deploy ContractsFactory contract with correct parameters", function () {
         before(async () => {
-          const AdapterRegistryFactory = await ethers.getContractFactory(
-            "AdaptersRegistryMock"
-          );
-          adaptersRegistryContract = (await upgrades.deployProxy(
-            AdapterRegistryFactory,
-            []
-          )) as AdaptersRegistryMock;
-          await adaptersRegistryContract.deployed();
-
           contractsFactoryContract = (await upgrades.deployProxy(
             ContractsFactoryFactory,
-            [adaptersRegistryAddress, feeRate]
+            [feeRate],
+            { unsafeAllowLinkedLibraries: true }
           )) as ContractsFactory;
           await contractsFactoryContract.deployed();
 
@@ -265,15 +257,22 @@ describe("ContractsFactory Tests", function () {
         });
 
         describe("WHEN trying to create a trader wallet", async () => {
-          it("THEN contract should be deployed", async () => {
+          before(async () => {
+            // set adapters registry on factory to deploy wallet and vault
+            await contractsFactoryContract.setAdaptersRegistryAddress(
+              adaptersRegistryContract.address
+            );
+
             txResult = await contractsFactoryContract
               .connect(deployer)
               .deployTraderWallet(
-                deployerAddress,
-                deployerAddress,
-                deployerAddress
+                usdcTokenContract.address,
+                traderAddress,
+                otherAddress
               );
+          });
 
+          it("THEN Trader Wallet Contract should be deployed", async () => {
             const abi = [
               "event TraderWalletDeployed(address indexed _traderWalletAddress, address indexed _traderAddress, address indexed _underlyingTokenAddress)",
             ];
@@ -281,15 +280,74 @@ describe("ContractsFactory Tests", function () {
 
             txReceipt = await txResult.wait();
             const decodedEvent = await decodeEvent(abi, signature, txReceipt);
-            const traderWalletAddress = decodedEvent.args._traderWalletAddress;
-            
-            const traderWalletContract = (await ethers.getContractAt(
-              'TraderWallet',
-              traderWalletAddress,
-            )) as TraderWallet;
+            traderWalletAddress = decodedEvent.args._traderWalletAddress;
 
-            expect(await traderWalletContract.currentRound()).to.equal(
-              ZERO_AMOUNT
+            traderWalletContract = (await ethers.getContractAt(
+              "TraderWallet",
+              traderWalletAddress
+            )) as TraderWallet;
+          });
+
+          it("THEN it should return the same ones after deployment", async () => {
+            console.log("traderWallet     :>> ", traderWalletAddress);
+            console.log("deployer         :>> ", deployerAddress);
+            console.log(
+              "factory          :>> ",
+              contractsFactoryContract.address
+            );
+            console.log(
+              "factory owner    :>> ",
+              await contractsFactoryContract.owner()
+            );
+            console.log(
+              "wallet owner     :>> ",
+              await traderWalletContract.owner()
+            );
+            console.log("traderAddress    :>> ", traderAddress);
+
+            expect(await traderWalletContract.vaultAddress()).to.equal(
+              ZERO_ADDRESS
+            );
+            expect(
+              await traderWalletContract.underlyingTokenAddress()
+            ).to.equal(usdcTokenContract.address);
+            expect(
+              await traderWalletContract.adaptersRegistryAddress()
+            ).to.equal(adaptersRegistryContract.address);
+            expect(
+              await traderWalletContract.contractsFactoryAddress()
+            ).to.equal(contractsFactoryContract.address);
+
+            expect(await traderWalletContract.traderAddress()).to.equal(
+              traderAddress
+            );
+            expect(await traderWalletContract.dynamicValueAddress()).to.equal(
+              otherAddress
+            );
+            expect(await traderWalletContract.owner()).to.equal(
+              traderAddress
+            );
+
+            expect(
+              await traderWalletContract.cumulativePendingDeposits()
+            ).to.equal(ZERO_AMOUNT);
+            expect(
+              await traderWalletContract.cumulativePendingWithdrawals()
+            ).to.equal(ZERO_AMOUNT);
+          });
+
+          it("THEN it should return the same ones after deployment", async () => {
+            // await contractsFactoryContract
+            //   .connect(deployer)
+            //   .changeOwnershipToWallet(
+            //     traderWalletContract.address,
+            //     deployerAddress
+            //   );
+
+            await traderWalletContract.connect(trader).transferOwnership(deployerAddress);
+
+            expect(await traderWalletContract.owner()).to.equal(
+              deployerAddress
             );
           });
         });
