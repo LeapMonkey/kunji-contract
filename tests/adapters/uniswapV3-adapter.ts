@@ -10,14 +10,14 @@ import {
   constants
 } from "ethers";
 import {
-IQuoterV2,
-UniswapV3Adapter,
-ERC20Mock,
-IUniswapV3Pool,
-IAdapter,
-IUniswapV3Router,
-IUniswapV3Factory,
-INonfungiblePositionManager
+  IQuoterV2,
+  UniswapV3Adapter,
+  ERC20Mock,
+  IUniswapV3Pool,
+  IAdapter,
+  IUniswapV3Router,
+  IUniswapV3Factory,
+  INonfungiblePositionManager
 } from "../../typechain-types";
 import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
 import Reverter from "../_helpers/reverter";
@@ -52,7 +52,7 @@ let ownerAddress: string;
 
 let txResult: ContractTransaction;
 let TraderWalletFactory: ContractFactory;
-let traderWalletContract: TraderWallet;
+// let traderWalletContract: TraderWallet;
 let usdcTokenContract: ERC20Mock;
 let contractBalanceBefore: BigNumber;
 let contractBalanceAfter: BigNumber;

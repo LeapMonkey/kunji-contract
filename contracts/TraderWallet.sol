@@ -11,6 +11,8 @@ import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
+// import "hardhat/console.sol";
+
 /// import its own interface as well
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
@@ -336,8 +338,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         if (cumulativePendingWithdrawals > 0) {
             // send to trader account
-            success = IERC20Upgradeable(underlyingTokenAddress).transferFrom(
-                address(this),
+            success = IERC20Upgradeable(underlyingTokenAddress).transfer(
                 traderAddress,
                 cumulativePendingWithdrawals
             );
@@ -365,7 +366,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
 
-        currentRound = IUsersVault(vaultAddress).getRound();
+        currentRound = IUsersVault(vaultAddress).currentRound();
         emit RolloverExecuted(
             block.timestamp,
             currentRound,

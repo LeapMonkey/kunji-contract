@@ -9,7 +9,11 @@ import {
   GMXAdapter,
   ERC20Mock,
   UniswapV3Adapter,
+  ERC20,
+  Lens
 } from "../../typechain-types";
+import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
+
 
 export const setupContracts = async (
   deployer: Signer,
@@ -29,37 +33,26 @@ export const setupContracts = async (
   let adaptersRegistryContract: AdaptersRegistryMock;
   let AdapterFactory: ContractFactory;
   let adapterContract: AdapterMock;
-  let usdcTokenContract: ERC20Mock;
-  let wethTokenContract: ERC20Mock;
-  let usdxTokenContract: ERC20Mock;
+  let usdcTokenContract: ERC20;
+  let wbtcTokenContract: ERC20;
+  let underlyingTokenAddress: string;
+  let usdcHolder0: Signer;
+  let LensFactory: ContractFactory;
+  let lensContract: Lens;
+
 
   const SHARES_NAME = "UserVaultShares";
   const SHARES_SYMBOL = "UVS";
 
+  
   // USDC contract
-  const ERC20MockFactory = await ethers.getContractFactory("ERC20Mock");
-  usdcTokenContract = (await ERC20MockFactory.deploy(
-    "USDC",
-    "USDC",
-    6
-  )) as ERC20Mock;
-  await usdcTokenContract.deployed();
+  wbtcTokenContract = await ethers.getContractAt("ERC20", tokens.wbtc)
+  usdcTokenContract = await ethers.getContractAt("ERC20", tokens.usdc);
+  underlyingTokenAddress = usdcTokenContract.address;
 
-  // WETH contract
-  wethTokenContract = (await ERC20MockFactory.deploy(
-    "WETH",
-    "WETH",
-    18
-  )) as ERC20Mock;
-  await wethTokenContract.deployed();
-
-  // USDX contract
-  usdxTokenContract = (await ERC20MockFactory.deploy(
-    "USDX",
-    "USDX",
-    8
-  )) as ERC20Mock;
-  await usdxTokenContract.deployed();
+  LensFactory = await ethers.getContractFactory("Lens");
+  lensContract = (await LensFactory.deploy()) as Lens;
+  await lensContract.deployed();
 
   // deploy library
   GMXAdapterLibraryFactory = await ethers.getContractFactory("GMXAdapter");
@@ -159,7 +152,7 @@ export const setupContracts = async (
 
   await traderWalletContract
     .connect(deployer)
-    .setAdapterAllowanceOnToken(2, wethTokenContract.address, false);
+    .setAdapterAllowanceOnToken(2, wbtcTokenContract.address, false);
 
   await usersVaultContract
     .connect(deployer)
@@ -171,17 +164,17 @@ export const setupContracts = async (
 
   await usersVaultContract
     .connect(deployer)
-    .setAdapterAllowanceOnToken(2, wethTokenContract.address, false);
+    .setAdapterAllowanceOnToken(2, wbtcTokenContract.address, false);
 
   return {
     usdcTokenContract,
-    wethTokenContract,
-    usdxTokenContract,
+    wbtcTokenContract,
     contractsFactoryContract,
     adaptersRegistryContract,
     adapterContract,
     traderWalletContract,
     usersVaultContract,
     uniswapAdapterContract,
+    lensContract
   };
 };

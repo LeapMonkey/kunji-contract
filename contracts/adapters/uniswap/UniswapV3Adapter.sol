@@ -148,6 +148,12 @@ contract UniswapV3Adapter is OwnableUpgradeable {
             amountIn = amountIn * ratio / ratioDenominator;
             // increasing slippage allowance due to higher amounts
             amountOutMinimum = amountOutMinimum * ratio / (ratioDenominator + slippage);
+            
+            uint256 amountInAvailable = IERC20(tokenIn).balanceOf(msg.sender);
+            // decrease amountIn according to current balance
+            if (amountInAvailable <= amountIn) {
+                amountIn = amountInAvailable;
+            }
         }
 
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
@@ -210,7 +216,7 @@ contract UniswapV3Adapter is OwnableUpgradeable {
         uint256 amount
     ) internal {
         if (IERC20(token).allowance(address(this), spender) < amount) {
-            IERC20(token).approve(spender, amount);
+            IERC20(token).approve(spender, type(uint256).max);
         }
     }
 
