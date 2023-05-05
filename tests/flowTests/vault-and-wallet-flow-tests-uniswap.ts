@@ -31,16 +31,16 @@ import {
   ZERO_ADDRESS,
   AMOUNT_1E18,
   AMOUNT_1E6,
-} from "./../_helpers/constants";
+} from "../_helpers/constants";
 import {
   usersDeposit,
   mintForUsers,
   approveForUsers,
   claimShares,
-} from "./../_helpers/functions";
-import { setupContracts } from "./../_helpers/setup";
+} from "../_helpers/functions";
+import { setupContracts } from "../_helpers/setup";
 import { addLiquidity, createPool, initializePool } from "../helpers/UniswapV3/createPool";
-import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
+import { tokens, uniswap } from "../_helpers/arbitrumAddresses";
 
 const abiCoder = new utils.AbiCoder();
 let snapshot: SnapshotRestorer;
@@ -302,173 +302,199 @@ describe("Vault and Wallet Flow Tests", function () {
     }); 
   
     describe("Uniswap Trading Flow", function () {
-    let pool: IUniswapV3Pool;
-    before(async() => {
-      await mintForUsers(
-        [deployerAddress],
-        usdcTokenContract,
-        AMOUNT_1E6.mul(5000000),
-        1
-      );
-      await mintForUsers(
-        [deployerAddress],
-        wethTokenContract,
-        AMOUNT_1E18.mul(5000000),
-        1
-      );
-  
-      uniswapRouter = await ethers.getContractAt("IUniswapV3Router", uniswap.routerAddress);
-      uniswapFactory = await ethers.getContractAt("IUniswapV3Factory", uniswap.factoryAddress);
-      uniswapPositionManager = await ethers.getContractAt("INonfungiblePositionManager", uniswap.positionManagerAddress);
-
-      const fee = 500;
-      await createPool(usdcTokenContract.address, wethTokenContract.address, fee);
-      const poolAddress = await uniswapFactory.getPool(usdcTokenContract.address, wethTokenContract.address, fee);
-      pool = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
-      const token0 = await pool.token0();  // usdc
-      const token1 = await pool.token1();  // weth
-      // console.log("token0", token0, usdcTokenContract.address);
-      // console.log("token1", token1, wethTokenContract.address);
-      const initSqrtPrice = BigNumber.from("1841935813391833257190961412530039");
-      await initializePool(poolAddress, initSqrtPrice);
-      const tickMiddle = 201090;
-      const tickLower = tickMiddle - 5000;
-      const tickUpper = tickMiddle + 5000;
-      const amount0Desired = utils.parseUnits("1000000", 6);
-      const amount1Desired = utils.parseUnits("540.172", 18);
-      await addLiquidity(token0, token1, tickLower, tickUpper, fee, amount0Desired, amount1Desired);
-
-    });
-
-    describe("Sell execution for Wallet and Vault with whole balance", function () {
-      const protocolId = 2;
-      const operationId = 1;
-      const replicate = true;
-      const amountIn = utils.parseUnits("1000", 6);
-      const fee = 500;
-
-      let amountOutMin: BigNumber;
-      // let balanceUsdt: BigNumber;
-      let balanceUsdc: BigNumber;
-      let expectedAmountOutWallet: BigNumber;
-      let expectedAmountOutVault: BigNumber;
-
-      before(async () => {
-        const path = utils.solidityPack(
-          ["address", "uint24", "address"],
-          [usdcTokenContract.address, fee, wethTokenContract.address]
+      let pool: IUniswapV3Pool;
+      before(async() => {
+        await mintForUsers(
+          [deployerAddress],
+          usdcTokenContract,
+          AMOUNT_1E6.mul(5000000),
+          1
         );
+        await mintForUsers(
+          [deployerAddress],
+          wethTokenContract,
+          AMOUNT_1E18.mul(5000000),
+          1
+        );
+    
+        uniswapRouter = await ethers.getContractAt("IUniswapV3Router", uniswap.routerAddress);
+        uniswapFactory = await ethers.getContractAt("IUniswapV3Factory", uniswap.factoryAddress);
+        uniswapPositionManager = await ethers.getContractAt("INonfungiblePositionManager", uniswap.positionManagerAddress);
 
-        [ expectedAmountOutWallet ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
-        [ expectedAmountOutVault] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn.mul(5));
-
-        amountOutMin = expectedAmountOutWallet.mul(90).div(100);
-
-        const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
-        const tradeOperation = { operationId, data: tradeData };
-
-        txResult = await traderWalletContract
-          .connect(trader)
-          .executeOnProtocol(protocolId, tradeOperation, replicate);
+        const fee = 500;
+        await createPool(usdcTokenContract.address, wethTokenContract.address, fee);
+        const poolAddress = await uniswapFactory.getPool(usdcTokenContract.address, wethTokenContract.address, fee);
+        pool = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+        const token0 = await pool.token0();  // usdc
+        const token1 = await pool.token1();  // weth
+        // console.log("token0", token0, usdcTokenContract.address);
+        // console.log("token1", token1, wethTokenContract.address);
+        const initSqrtPrice = BigNumber.from("1841935813391833257190961412530039");
+        await initializePool(poolAddress, initSqrtPrice);
+        const tickMiddle = 201090;
+        const tickLower = tickMiddle - 5000;
+        const tickUpper = tickMiddle + 5000;
+        const amount0Desired = utils.parseUnits("1000000", 6);
+        const amount1Desired = utils.parseUnits("540.172", 18);
+        await addLiquidity(token0, token1, tickLower, tickUpper, fee, amount0Desired, amount1Desired);
       });
 
-      it("Should sell all USDC tokens", async () => {
-        expect(
-          await usdcTokenContract.balanceOf(traderWalletContract.address)
-          ).to.equal(ZERO_AMOUNT);
-        expect(
-          await usdcTokenContract.balanceOf(usersVaultContract.address)
-          ).to.equal(ZERO_AMOUNT);  
-      });
+      describe("Sell execution for Wallet and Vault with whole balance", function () {
+        const protocolId = 2;
+        const operationId = 1;
+        const replicate = true;
+        const amountIn = utils.parseUnits("1000", 6);
+        const fee = 500;
 
-      it("Should buy WETH tokens and increase balances of Wallet and Vault", async () => {
-        expect(await wethTokenContract.balanceOf(traderWalletContract.address))
-          .to.be.lte(expectedAmountOutWallet)
-          .to.be.gt(expectedAmountOutWallet.mul(90).div(100))
-          .to.be.gt(ZERO_AMOUNT);
+        let amountOutMin: BigNumber;
+        // let balanceUsdt: BigNumber;
+        let balanceUsdc: BigNumber;
+        let expectedAmountOutWallet: BigNumber;
+        let expectedAmountOutVault: BigNumber;
 
-        expect(await wethTokenContract.balanceOf(usersVaultContract.address))
-          .to.be.lte(expectedAmountOutVault)
-          .to.be.gt(expectedAmountOutVault.mul(90).div(100))
-          .to.be.gt(ZERO_AMOUNT);
-      });
-
-      describe("Sell WETH tokens after increasing price of WETH", function () {
         before(async () => {
-          // increase weth price by swapping huge amount of USDC to WETH
-          let path = utils.solidityPack(
+          const path = utils.solidityPack(
             ["address", "uint24", "address"],
             [usdcTokenContract.address, fee, wethTokenContract.address]
           );
-          const amountIn = utils.parseUnits("500000", 6);
-          const deadline = 1746350000;
-          const swapParams= {
-            path,
-            recipient: deployerAddress,
-            deadline,
-            amountIn,
-            amountOutMinimum: 0
-          }
-          await usdcTokenContract.connect(deployer).approve(uniswapRouter.address, constants.MaxUint256);
-          await uniswapRouter.connect(deployer).exactInput(swapParams);
-        
-          // sell all weth tokens
-          const currentWethBalance = await wethTokenContract.balanceOf(traderWalletContract.address);
-          path = utils.solidityPack(
-            ["address", "uint24", "address"],
-            [wethTokenContract.address, fee, usdcTokenContract.address]
-          );
-          const amountOutMin = 0;
-          const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, currentWethBalance, amountOutMin]);
+
+          [ expectedAmountOutWallet ] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn);
+          [ expectedAmountOutVault] = await uniswapAdapterContract.callStatic.getAmountOut(path, amountIn.mul(5));
+
+          amountOutMin = expectedAmountOutWallet.mul(90).div(100);
+
+          const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, amountIn, amountOutMin]);
           const tradeOperation = { operationId, data: tradeData };
-  
+
           txResult = await traderWalletContract
             .connect(trader)
             .executeOnProtocol(protocolId, tradeOperation, replicate);
         });
 
-        it("Should sell all WETH tokens", async () => {
-          expect(await wethTokenContract.balanceOf(traderWalletContract.address)).to.equal(ZERO_AMOUNT);
-          expect(await wethTokenContract.balanceOf(usersVaultContract.address)).to.equal(ZERO_AMOUNT);
+        it("Should sell all USDC tokens", async () => {
+          expect(
+            await usdcTokenContract.balanceOf(traderWalletContract.address)
+            ).to.equal(ZERO_AMOUNT);
+          expect(
+            await usdcTokenContract.balanceOf(usersVaultContract.address)
+            ).to.equal(ZERO_AMOUNT);  
         });
 
-        it("Should close position with profit of USDC", async () => {
-          expect(await usdcTokenContract.balanceOf(traderWalletContract.address)).to.be.gt(traderInputAmount);
-          expect(await usdcTokenContract.balanceOf(usersVaultContract.address)).to.be.gt(user1InputAmount);
-          // console.log("cumulativePendingDeposits", await traderWalletContract.cumulativePendingDeposits());
-          // console.log("cumulativePendingWithdrawals", await traderWalletContract.cumulativePendingWithdrawals());
+        it("Should buy WETH tokens and increase balances of Wallet and Vault", async () => {
+          expect(await wethTokenContract.balanceOf(traderWalletContract.address))
+            .to.be.lte(expectedAmountOutWallet)
+            .to.be.gt(expectedAmountOutWallet.mul(90).div(100))
+            .to.be.gt(ZERO_AMOUNT);
 
+          expect(await wethTokenContract.balanceOf(usersVaultContract.address))
+            .to.be.lte(expectedAmountOutVault)
+            .to.be.gt(expectedAmountOutVault.mul(90).div(100))
+            .to.be.gt(ZERO_AMOUNT);
         });
-        
-        describe("Rollover after first trade", function() {
-          before(async() => {
-            roundCounter = roundCounter.add(1);
 
-            //// Mock actions
-            await traderWalletContract.connect(trader).withdrawRequest(1);
-            await usersVaultContract.connect(user1).withdrawRequest(1);
-            console.log("cumulativePendingWithdrawals", await traderWalletContract.cumulativePendingWithdrawals());
-
-            ////
-            await traderWalletContract.connect(trader).rollover();
+        describe("Sell WETH tokens after increasing price of WETH", function () {
+          before(async () => {
+            // increase weth price by swapping huge amount of USDC to WETH
+            let path = utils.solidityPack(
+              ["address", "uint24", "address"],
+              [usdcTokenContract.address, fee, wethTokenContract.address]
+            );
+            const amountIn = utils.parseUnits("500000", 6);
+            const deadline = 1746350000;
+            const swapParams= {
+              path,
+              recipient: deployerAddress,
+              deadline,
+              amountIn,
+              amountOutMinimum: 0
+            }
+            await usdcTokenContract.connect(deployer).approve(uniswapRouter.address, constants.MaxUint256);
+            await uniswapRouter.connect(deployer).exactInput(swapParams);
+          
+            // sell all weth tokens
+            const currentWethBalance = await wethTokenContract.balanceOf(traderWalletContract.address);
+            path = utils.solidityPack(
+              ["address", "uint24", "address"],
+              [wethTokenContract.address, fee, usdcTokenContract.address]
+            );
+            const amountOutMin = 0;
+            const tradeData = abiCoder.encode(["bytes", "uint256", "uint256"], [path, currentWethBalance, amountOutMin]);
+            const tradeOperation = { operationId, data: tradeData };
+    
+            txResult = await traderWalletContract
+              .connect(trader)
+              .executeOnProtocol(protocolId, tradeOperation, replicate);
           });
 
-          it("Should increase current round counter", async () => {
-            expect(
-              await traderWalletContract.currentRound()
-            ).to.equal(roundCounter);
-            expect(
-              await usersVaultContract.currentRound()
-            ).to.equal(roundCounter);
+          it("Should sell all WETH tokens", async () => {
+            expect(await wethTokenContract.balanceOf(traderWalletContract.address)).to.equal(ZERO_AMOUNT);
+            expect(await wethTokenContract.balanceOf(usersVaultContract.address)).to.equal(ZERO_AMOUNT);
           });
-        });
 
+          it("Should close position with profit of USDC", async () => {
+            expect(await usdcTokenContract.balanceOf(traderWalletContract.address)).to.be.gt(traderInputAmount);
+            expect(await usdcTokenContract.balanceOf(usersVaultContract.address)).to.be.gt(user1InputAmount);
+            // console.log("cumulativePendingDeposits", await traderWalletContract.cumulativePendingDeposits());
+            // console.log("cumulativePendingWithdrawals", await traderWalletContract.cumulativePendingWithdrawals());
+
+          });
+          
+          describe("Rollover after first trade", function() {
+            let traderBalanceBefore: BigNumber;
+            let walletBalance: BigNumber;
+
+            before(async() => {
+              roundCounter = roundCounter.add(1);
+
+              traderBalanceBefore = await usdcTokenContract.balanceOf(traderAddress);
+              walletBalance = await usdcTokenContract.balanceOf(traderWalletContract.address);
+              console.log("User balance before", await usdcTokenContract.balanceOf(user1Address));
+
+
+              await traderWalletContract.connect(trader).withdrawRequest(walletBalance);
+              await usersVaultContract.connect(user1).claimShares(amountIn, user1Address);
+              await usersVaultContract.connect(user1).withdrawRequest(amountIn);
+              await traderWalletContract.connect(trader).rollover();
+            });
+
+            it("Should increase current round counter", async () => {
+              expect(
+                await traderWalletContract.currentRound()
+              ).to.equal(roundCounter);
+              expect(
+                await usersVaultContract.currentRound()
+              ).to.equal(roundCounter);
+            });
+
+            it("Should pay out whole profit to trader (increase trader balance)", async () => {
+              expect(await usdcTokenContract.balanceOf(traderWalletContract.address))
+                .to.equal(ZERO_AMOUNT);
+              expect(await usdcTokenContract.balanceOf(traderAddress))
+                .to.equal(traderBalanceBefore.add(walletBalance));
+              // console.log("wallet balance:", await usdcTokenContract.balanceOf(traderWalletContract.address))
+              // console.log("vault balance:", await usdcTokenContract.balanceOf(usersVaultContract.address))
+            });
+
+            xit("Should pay to user1 trader (increase user1 balance)", async () => {
+
+            });
+
+            xdescribe("User withdraws profit after trading", function() {
+              before(async() => {
+                // @todo issue ZeroAmount();
+                await usersVaultContract.connect(user1).claimAllAssets(user1Address)
+              });
+              
+              xit("Should increase users balance", async () => {
+                console.log("User balance after ", await usdcTokenContract.balanceOf(user1Address));
+              });
+            });
+
+          });
+
+        });
       });
     });
-
-
-  });
-
   
   });
 
