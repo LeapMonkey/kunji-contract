@@ -338,8 +338,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         if (cumulativePendingWithdrawals > 0) {
             // send to trader account
-            success = IERC20Upgradeable(underlyingTokenAddress).transferFrom(
-                address(this),
+            success = IERC20Upgradeable(underlyingTokenAddress).transfer(
                 traderAddress,
                 cumulativePendingWithdrawals
             );
