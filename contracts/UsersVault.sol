@@ -389,7 +389,9 @@ contract UsersVault is
         if (currentRound != 0) {
             afterRoundVaultBalance = getUnderlyingLiquidity();
 
-            assetsPerShare = afterRoundVaultBalance.mulDiv(1e18, totalSupply());
+            assetsPerShare = totalSupply() != 0
+                ? afterRoundVaultBalance.mulDiv(1e18, totalSupply())
+                : 0;
             sharesToMint = pendingDepositAssets.mulDiv(assetsPerShare, 1e18);
             console.log(
                 "CNT - getUnderlyingLiquidity : ",
@@ -435,8 +437,9 @@ contract UsersVault is
 
         // get profits
         if (currentRound != 0) {
-            vaultProfit = int256(afterRoundVaultBalance) -
-            int256(initialVaultBalance);
+            vaultProfit =
+                int256(afterRoundVaultBalance) -
+                int256(initialVaultBalance);
         }
         if (vaultProfit > 0) {
             // DO SOMETHING HERE WITH PROFIT ?

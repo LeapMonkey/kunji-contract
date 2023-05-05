@@ -443,7 +443,6 @@ describe("GMXAdapter", function() {
           );
         const operationId = 0;  // increasePosition
         const tradeOperation = {operationId, data: tradeData};
-        const msgValue = await gmxPositionRouter.minExecutionFee();
 
         txResult = await traderWalletContract.connect(trader).executeOnProtocol(
           protocolId,
@@ -1229,7 +1228,6 @@ describe("GMXAdapter", function() {
 
             it("Should execute created decrease order", async () => {
               // check opened position
-              const amountIn = utils.parseUnits("1000", 30);
               expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
                 .to.equal(1); // first decrease order
   

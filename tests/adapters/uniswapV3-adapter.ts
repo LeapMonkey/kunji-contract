@@ -3,7 +3,6 @@ import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
 import {
   Signer,
-  ContractFactory,
   ContractTransaction,
   BigNumber,
   utils,
@@ -21,8 +20,8 @@ INonfungiblePositionManager
 } from "../../typechain-types";
 import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
 import Reverter from "../_helpers/reverter";
-import { deployERC20 } from "../helpers/ERC20Mock/ERC20Mock";
-import { addLiquidity, createPool, initializePool } from "../helpers/UniswapV3/createPool";
+import { deployERC20 } from "../_helpers/ERC20Mock/ERC20Mock";
+import { addLiquidity, createPool, initializePool } from "../_helpers/UniswapV3/createPool";
 
 
 
@@ -37,27 +36,14 @@ let contractsFactory: Signer;
 let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
-let owner: Signer;
 
 let deployerAddress: string;
 let vaultAddress: string;
-let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
 let traderAddress: string;
-let dynamicValueAddress: string;
-let nonAuthorizedAddress: string;
-let otherAddress: string;
-let ownerAddress: string;
 
 let txResult: ContractTransaction;
-let TraderWalletFactory: ContractFactory;
-let traderWalletContract: TraderWallet;
-let usdcTokenContract: ERC20Mock;
-let contractBalanceBefore: BigNumber;
-let contractBalanceAfter: BigNumber;
-let traderBalanceBefore: BigNumber;
-let traderBalanceAfter: BigNumber;
 
 let uniswapAdapterContract: UniswapV3Adapter
 let uniswapRouter: IUniswapV3Router;
@@ -71,8 +57,6 @@ let contractUSDC: ERC20Mock;
 
 describe("UniswapAdapter", function() {
   async function deploy() {
-    const [ deployer, user ] = await ethers.getSigners();
-
     const UniswapAdapterF = await ethers.getContractFactory("UniswapV3Adapter");
     const uniswapAdapter: UniswapV3Adapter = (await upgrades.deployProxy(UniswapAdapterF, [], {
         initializer: "initialize"
@@ -105,18 +89,12 @@ describe("UniswapAdapter", function() {
       traderAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
-      dynamicValueAddress,
-      nonAuthorizedAddress,
-      otherAddress,
     ] = await Promise.all([
       deployer.getAddress(),
       vault.getAddress(),
       trader.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
-      dynamicValue.getAddress(),
-      nonAuthorized.getAddress(),
-      otherSigner.getAddress(),
     ]);
   });
 
