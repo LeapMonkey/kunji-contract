@@ -109,6 +109,7 @@ export const setupContracts = async (
       contractsFactoryContract.address,
       deployerAddress,
       deployerAddress, // not used
+      deployerAddress, // owner
     ],
     // { unsafeAllowLinkedLibraries: true }
   )) as TraderWallet;
@@ -128,7 +129,7 @@ export const setupContracts = async (
       adaptersRegistryContract.address,
       contractsFactoryContract.address,
       traderWalletContract.address,
-      deployerAddress, // not used
+      deployerAddress, // owner
       SHARES_NAME,
       SHARES_SYMBOL,
     ],
@@ -154,9 +155,9 @@ export const setupContracts = async (
     .connect(deployer)
     .setAdapterAllowanceOnToken(2, wbtcTokenContract.address, false);
 
-  await usersVaultContract
-    .connect(deployer)
-    .addAdapterToUse(2);
+  // await usersVaultContract
+  //   .connect(deployer)
+  //   .addAdapterToUse(2);
 
   await usersVaultContract
     .connect(deployer)
