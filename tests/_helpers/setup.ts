@@ -103,6 +103,7 @@ export const setupContracts = async (
       contractsFactoryContract.address,
       deployerAddress,
       deployerAddress, // not used
+      deployerAddress, // owner
     ],
     // { unsafeAllowLinkedLibraries: true }
   )) as TraderWallet;
@@ -123,6 +124,7 @@ export const setupContracts = async (
       contractsFactoryContract.address,
       traderWalletContract.address,
       deployerAddress, // not used
+      deployerAddress, // owner
       SHARES_NAME,
       SHARES_SYMBOL,
     ],

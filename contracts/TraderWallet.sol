@@ -12,7 +12,7 @@ import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 /// import its own interface as well
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public vaultAddress;
@@ -104,7 +104,8 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
         address _traderAddress,
-        address _dynamicValueAddress
+        address _dynamicValueAddress,
+        address _ownerAddress
     ) external initializer {
         // CHECK CALLER IS THE FACTORY
 
@@ -120,9 +121,11 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         if (_dynamicValueAddress == address(0))
             revert ZeroAddress({target: "_dynamicValueAddress"});
+        if (_ownerAddress == address(0))
+            revert ZeroAddress({target: "_ownerAddress"});
 
         __Ownable_init();
-        transferOwnership(_traderAddress);
+        transferOwnership(_ownerAddress);
 
         __ReentrancyGuard_init();
         GMXAdapter.__initApproveGmxPlugin();
@@ -256,6 +259,10 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // REMOVE ALLOWANCE OF UNDERLYING ????
     }
 
+    function getAdapterAddressPerProtocol(uint256 _protocolId) external view returns(address) {
+        return _getAdapterAddress(_protocolId);
+    }
+
     //
     function traderDeposit(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
@@ -335,8 +342,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         if (cumulativePendingWithdrawals > 0) {
             // send to trader account
-            success = IERC20Upgradeable(underlyingTokenAddress).transferFrom(
-                address(this),
+            success = IERC20Upgradeable(underlyingTokenAddress).transfer(
                 traderAddress,
                 cumulativePendingWithdrawals
             );

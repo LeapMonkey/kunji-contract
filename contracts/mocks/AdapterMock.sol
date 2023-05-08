@@ -3,8 +3,6 @@ pragma solidity ^0.8.9;
 
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
-import "hardhat/console.sol";
-
 contract AdapterMock {
     bool public executedOperation;
     

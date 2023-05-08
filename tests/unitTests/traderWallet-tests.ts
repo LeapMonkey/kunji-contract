@@ -5,7 +5,10 @@ import {
   ContractTransaction,
   BigNumber,
 } from "ethers";
-import { SnapshotRestorer, takeSnapshot } from "@nomicfoundation/hardhat-network-helpers";
+import {
+  SnapshotRestorer,
+  takeSnapshot,
+} from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import {
   TraderWallet,
@@ -75,7 +78,7 @@ describe("Trader Wallet Contract Tests", function () {
     await usdcTokenContract.deployed();
     underlyingTokenAddress = usdcTokenContract.address;
 
-    [deployer, vault, trader, dynamicValue, nonAuthorized, otherSigner] =
+    [deployer, vault, trader, dynamicValue, nonAuthorized, otherSigner, owner] =
       await ethers.getSigners();
 
     [
@@ -84,12 +87,14 @@ describe("Trader Wallet Contract Tests", function () {
       traderAddress,
       dynamicValueAddress,
       otherAddress,
+      ownerAddress,
     ] = await Promise.all([
       deployer.getAddress(),
       vault.getAddress(),
       trader.getAddress(),
       dynamicValue.getAddress(),
       otherSigner.getAddress(),
+      owner.getAddress(),
     ]);
   });
 
@@ -151,7 +156,8 @@ describe("Trader Wallet Contract Tests", function () {
                 contractsFactoryContract.address,
                 traderAddress,
                 dynamicValueAddress,
-              ],
+                ownerAddress,
+              ]
               // { unsafeAllowLinkedLibraries: true }
             )
           )
@@ -169,7 +175,8 @@ describe("Trader Wallet Contract Tests", function () {
                 contractsFactoryContract.address,
                 traderAddress,
                 dynamicValueAddress,
-              ],
+                ownerAddress,
+              ]
               // { unsafeAllowLinkedLibraries: true }
             )
           )
@@ -187,7 +194,8 @@ describe("Trader Wallet Contract Tests", function () {
                 ZERO_ADDRESS,
                 traderAddress,
                 dynamicValueAddress,
-              ],
+                ownerAddress,
+              ]
               // { unsafeAllowLinkedLibraries: true }
             )
           )
@@ -205,7 +213,8 @@ describe("Trader Wallet Contract Tests", function () {
                 contractsFactoryContract.address,
                 ZERO_ADDRESS,
                 dynamicValueAddress,
-              ],
+                ownerAddress,
+              ]
               // { unsafeAllowLinkedLibraries: true }
             )
           )
@@ -223,12 +232,32 @@ describe("Trader Wallet Contract Tests", function () {
                 contractsFactoryContract.address,
                 traderAddress,
                 ZERO_ADDRESS,
-              ],
+                ownerAddress,
+              ]
               // { unsafeAllowLinkedLibraries: true }
             )
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_dynamicValueAddress");
+        });
+
+        it("THEN it should FAIL when ownerAddress, is ZERO", async () => {
+          await expect(
+            upgrades.deployProxy(
+              TraderWalletFactory,
+              [
+                underlyingTokenAddress,
+                adaptersRegistryContract.address,
+                contractsFactoryContract.address,
+                traderAddress,
+                dynamicValueAddress,
+                ZERO_ADDRESS,
+              ]
+              // { unsafeAllowLinkedLibraries: true }
+            )
+          )
+            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
+            .withArgs("_ownerAddress");
         });
       });
 
@@ -242,10 +271,11 @@ describe("Trader Wallet Contract Tests", function () {
               contractsFactoryContract.address,
               traderAddress,
               dynamicValueAddress,
+              ownerAddress,
             ]
             // ,
             // { unsafeAllowLinkedLibraries: true }
-            // { 
+            // {
             //   initializer: "initialize",
             // }
           )) as TraderWallet;
@@ -1153,11 +1183,7 @@ describe("Trader Wallet Contract Tests", function () {
                 await expect(
                   traderWalletContract
                     .connect(nonAuthorized)
-                    .executeOnProtocol(
-                      1,
-                      traderOperation,
-                      false
-                    )
+                    .executeOnProtocol(1, traderOperation, false)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
                   "CallerNotAllowed"
@@ -1537,7 +1563,6 @@ describe("Trader Wallet Contract Tests", function () {
           });
         });
 
-
         /// UPGRADABILITY TESTS
         /// UPGRADABILITY TESTS
         /// UPGRADABILITY TESTS
@@ -1547,7 +1572,7 @@ describe("Trader Wallet Contract Tests", function () {
           let traderWalletV2Contract: TraderWalletV2;
           before(async () => {
             TraderWalletV2Factory = await ethers.getContractFactory(
-              "TraderWalletV2",
+              "TraderWalletV2"
               // {
               //   libraries: {
               //     GMXAdapter: gmxAdapterContract.address,
@@ -1556,7 +1581,7 @@ describe("Trader Wallet Contract Tests", function () {
             );
             traderWalletV2Contract = (await upgrades.upgradeProxy(
               traderWalletContract.address,
-              TraderWalletV2Factory,
+              TraderWalletV2Factory
               // { unsafeAllowLinkedLibraries: true }
             )) as TraderWalletV2;
             await traderWalletV2Contract.deployed();

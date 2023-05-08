@@ -32,6 +32,8 @@ contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     uint256 public currentRound;
     address[] public traderSelectedAdaptersArray;
     mapping(uint256 => address) public adaptersPerProtocol;
+
+    // added variable
     uint256 public addedVariable;
 
     error ZeroAddress(string target);
@@ -524,8 +526,7 @@ contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // needs to mock a library responde to unit testing
     }
 
-
-
+    // added method
     function addedMethod(uint256 _newValue) external {
         addedVariable = _newValue;
     }

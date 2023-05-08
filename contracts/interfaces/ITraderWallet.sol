@@ -52,6 +52,5 @@ interface ITraderWallet {
 
     function getRound() external view returns (uint256);
 
-    // function transferOwnership(address) external;
-    function transferWalletOwnership(address) external;
+    function getAdapterAddressPerProtocol(uint256) external view returns (address);
 }

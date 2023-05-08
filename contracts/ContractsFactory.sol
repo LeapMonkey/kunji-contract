@@ -3,23 +3,22 @@ pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {TraderWalletDeployer} from "./factoryLibraries/TraderWalletDeployer.sol";
-import {ITraderWallet} from "./interfaces/ITraderWallet.sol";
-import {IUsersVault} from "./interfaces/IUsersVault.sol";
+import {UsersVaultDeployer} from "./factoryLibraries/UsersVaultDeployer.sol";
 
 // import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 contract ContractsFactory is OwnableUpgradeable {
     uint256 public feeRate;
     address public adaptersRegistryAddress;
-    
+
     mapping(address => bool) public investorsAllowList;
     mapping(address => bool) public tradersAllowList;
 
-    mapping(address => bool) public deployedWallets;
-    mapping(address => bool) public deployedVaults;
-    mapping(address => address) public vaultsXTraderWallet;
-    mapping(address => address) public traderWalletsXVault;
+    // wallet ==> Underlying
+    mapping(address => address) public underlyingPerDeployedWallet;
+    // vault ==> wallet
+    mapping(address => address) public walletPerDeployedVault;
 
     error ZeroAddress(string _target);
     error InvalidCaller();
@@ -28,8 +27,10 @@ contract ContractsFactory is OwnableUpgradeable {
     error InvestorNotExists();
     error TraderNotExists();
     error FailedWalletDeployment();
-    error InvalidVault();
+    error FailedVaultDeployment();
     error InvalidWallet();
+    error InvalidVault();
+    error InvalidTrader();
 
     event FeeRateSet(uint256 _newFeeRate);
     event InvestorAdded(address indexed _investorAddress);
@@ -47,12 +48,14 @@ contract ContractsFactory is OwnableUpgradeable {
         address indexed _traderAddress,
         address indexed _underlyingTokenAddress
     );
-
-    modifier notZeroAddress(address _receivedAddress, string memory _message) {
-        if (_receivedAddress == address(0))
-            revert ZeroAddress({_target: _message});
-        _;
-    }
+    event OwnershipToWalletChanged(
+        address indexed traderWalletAddress,
+        address indexed newOwner
+    );
+    event OwnershipToVaultChanged(
+        address indexed usersVaultAddress,
+        address indexed newOwner
+    );
 
     function initialize(uint256 _feeRate) external initializer {
         if (_feeRate > 100) revert FeeRateError();
@@ -61,16 +64,14 @@ contract ContractsFactory is OwnableUpgradeable {
         feeRate = _feeRate;
     }
 
-    function addInvestor(
-        address _investorAddress
-    ) external onlyOwner notZeroAddress(_investorAddress, "_investorAddress") {
+    function addInvestor(address _investorAddress) external onlyOwner {
+        _checkZeroAddress(_investorAddress, "_investorAddress");
         investorsAllowList[_investorAddress] = true;
         emit InvestorAdded(_investorAddress);
     }
 
-    function removeInvestor(
-        address _investorAddress
-    ) external onlyOwner notZeroAddress(_investorAddress, "_investorAddress") {
+    function removeInvestor(address _investorAddress) external onlyOwner {
+        _checkZeroAddress(_investorAddress, "_investorAddress");
         if (!investorsAllowList[_investorAddress]) {
             revert InvestorNotExists();
         }
@@ -78,16 +79,14 @@ contract ContractsFactory is OwnableUpgradeable {
         delete investorsAllowList[_investorAddress];
     }
 
-    function addTrader(
-        address _traderAddress
-    ) external onlyOwner notZeroAddress(_traderAddress, "_traderAddress") {
+    function addTrader(address _traderAddress) external onlyOwner {
+        _checkZeroAddress(_traderAddress, "_traderAddress");
         tradersAllowList[_traderAddress] = true;
         emit TraderAdded(_traderAddress);
     }
 
-    function removeTrader(
-        address _traderAddress
-    ) external onlyOwner notZeroAddress(_traderAddress, "_traderAddress") {
+    function removeTrader(address _traderAddress) external onlyOwner {
+        _checkZeroAddress(_traderAddress, "_traderAddress");
         if (!tradersAllowList[_traderAddress]) {
             revert TraderNotExists();
         }
@@ -97,11 +96,8 @@ contract ContractsFactory is OwnableUpgradeable {
 
     function setAdaptersRegistryAddress(
         address _adaptersRegistryAddress
-    )
-        external
-        onlyOwner
-        notZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress")
-    {
+    ) external onlyOwner {
+        _checkZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress");
         emit AdaptersRegistryAddressSet(_adaptersRegistryAddress);
         adaptersRegistryAddress = _adaptersRegistryAddress;
     }
@@ -112,104 +108,63 @@ contract ContractsFactory is OwnableUpgradeable {
         feeRate = _newFeeRate;
     }
 
-    function changeOwnershipToWallet(
-        address _traderWalletAddress,
-        address _newOwner
-    ) public onlyOwner {
-        // if (_msgSender() != owner() && _msgSender() != address(this))
-        //     revert InvalidCaller();
-
-        // if (!deployedWallets[_traderWalletAddress]) revert InvalidWallet();
-
-        console.log("factory caller: ", _msgSender());
-        ITraderWallet(_traderWalletAddress).transferWalletOwnership(_newOwner);
-        console.log("200");
-    }
-
-    function changeOwnershipToVault(
-        address _targetContract,
-        address _newOwner
-    ) public {
-        if (_msgSender() != owner() && _msgSender() != address(this))
-            revert InvalidCaller();
-
-        if (traderWalletsXVault[address(_targetContract)] == address(0))
-            revert InvalidVault();
-
-        IUsersVault(_targetContract).transferOwnership(_newOwner);
-    }
-
     function deployTraderWallet(
         address _underlyingTokenAddress,
         address _traderAddress,
-        address _dynamicValueAddress
+        address _dynamicValueAddress,
+        address _owner
     ) external onlyOwner {
-        (
-            address proxyAddress,
-            address traderWalletAddress
-        ) = TraderWalletDeployer.deployTraderWallet(
-                _underlyingTokenAddress,
-                _traderAddress,
-                _dynamicValueAddress,
-                adaptersRegistryAddress,
-                address(this)
-            );
+        _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
+        _checkZeroAddress(_traderAddress, "_traderAddress");
+        _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
+        _checkZeroAddress(_owner, "_owner");
+        if (tradersAllowList[_traderAddress]) revert InvalidTrader();
 
-        if (proxyAddress == address(0) || traderWalletAddress == address(0))
-            revert FailedWalletDeployment();
+        address proxyAddress = TraderWalletDeployer.deployTraderWallet(
+            _underlyingTokenAddress,
+            _traderAddress,
+            _dynamicValueAddress,
+            adaptersRegistryAddress,
+            address(this),
+            _owner
+        );
 
-        deployedWallets[proxyAddress] = true;
+        if (proxyAddress == address(0)) revert FailedWalletDeployment();
 
-        console.log("proxyAddress:        ", proxyAddress);
-        console.log("traderWalletAddress: ", traderWalletAddress);
-        console.log("this:                ", address(this));
-        console.log("library:             ", address(TraderWalletDeployer));
-        console.log("sender:              ", _msgSender());
-
-
-        // changeOwnershipToWallet(traderWalletAddress, _msgSender());
-        // ITraderWallet(traderWalletAddress).transferWalletOwnership(_msgSender());
-
-        // mapping(address => address) public vaultsXTraderWallet;
-        // mapping(address => address) public traderWalletsXVault;
-
-        // lastTraderWalletContractAddress = address(traderWalletAddress);
+        underlyingPerDeployedWallet[proxyAddress] = _underlyingTokenAddress;
     }
 
-    // function deployUsersVault(
-    //     address _underlyingTokenAddress,
-    //     address _traderWalletAddress,
-    //     address _dynamicValueAddress,
-    //     string memory _sharesName,
-    //     string memory _sharesSymbol,
-    //     bool _useLastTraderWalletContracAddress
-    // ) external onlyOwner {
-    //     bytes32 salt = keccak256(abi.encodePacked(_msgSender(), block.number));
-    //     bytes memory data = abi.encodeWithSignature(
-    //         "initialize(address,address,address,address,address)",
-    //         _underlyingTokenAddress,
-    //         adaptersRegistryAddress,
-    //         address(this),
-    //         _traderAddress,
-    //         _dynamicValueAddress
-    //     );
-    //     TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-    //         address(new TraderWallet{salt: salt}()), // Address of the contract to be proxied
-    //         address(this), // Address of the contract that will own the proxy
-    //         data
-    //     );
+    function deployUsersVault(
+        address _traderWalletAddress,
+        // address _dynamicValueAddress,
+        address _owner,
+        string memory _sharesName,
+        string memory _sharesSymbol
+    ) external onlyOwner {
+        _checkZeroAddress(_traderWalletAddress, "_traderWalletAddress");
+        // _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
+        _checkZeroAddress(_owner, "_owner");
 
-    //     // mapping(address => address) public vaultsXTraderWallet;
-    //     // mapping(address => address) public traderWalletsXVault;
+        // get underlying from wallet
+        address underlyingTokenAddress = underlyingPerDeployedWallet[_traderWalletAddress];
 
-    //     emit TraderWalletDeployed(
-    //         address(proxy),
-    //         _traderAddress,
-    //         _underlyingTokenAddress
-    //     );
+        if (underlyingTokenAddress == address(0)) revert InvalidWallet();
 
-    //     lastTraderWalletContractAddress = address(proxy);
-    // }
+        address proxyAddress = UsersVaultDeployer.deployUsersVault(
+            underlyingTokenAddress,
+            adaptersRegistryAddress,
+            address(this),
+            _traderWalletAddress,
+            // _dynamicValueAddress,
+            _owner,
+            _sharesName,
+            _sharesSymbol
+        );
+
+        if (proxyAddress == address(0)) revert FailedVaultDeployment();
+
+        walletPerDeployedVault[proxyAddress] = _traderWalletAddress;
+    }
 
     function isTraderAllowed(
         address _traderAddress
@@ -223,7 +178,14 @@ contract ContractsFactory is OwnableUpgradeable {
         return investorsAllowList[_investorAddress];
     }
 
-    function getComissionPercentage() external view returns (uint256) {
+    function getFeeRate() external view returns (uint256) {
         return feeRate;
+    }
+
+    function _checkZeroAddress(
+        address _variable,
+        string memory _message
+    ) internal pure {
+        if (_variable == address(0)) revert ZeroAddress({_target: _message});
     }
 }

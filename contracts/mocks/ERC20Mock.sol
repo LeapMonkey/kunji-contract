@@ -42,4 +42,15 @@ contract ERC20Mock is ERC20 {
 
         return true;
     }
+
+    function transfer(
+        address recipient,
+        uint256 amount
+    ) public virtual override returns (bool) {
+        if (!returnBoolValue) return false;
+
+        super.transfer(recipient, amount);
+
+        return true;
+    }
 }
