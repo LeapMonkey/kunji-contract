@@ -4,6 +4,7 @@ import { ethers, upgrades } from "hardhat";
 import {
   Signer,
   ContractTransaction,
+  ContractFactory,
   BigNumber,
   utils,
   constants,
@@ -16,7 +17,7 @@ import {
   IAdapter,
   IUniswapV3Router,
   IUniswapV3Factory,
-  INonfungiblePositionManager,
+  INonfungiblePositionManager
 } from "../../typechain-types";
 import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
 import Reverter from "../_helpers/reverter";
@@ -48,8 +49,15 @@ let traderAddress: string;
 let ownerAddress: string;
 
 let txResult: ContractTransaction;
+let TraderWalletFactory: ContractFactory;
+// let traderWalletContract: TraderWallet;
+let usdcTokenContract: ERC20Mock;
+let contractBalanceBefore: BigNumber;
+let contractBalanceAfter: BigNumber;
+let traderBalanceBefore: BigNumber;
+let traderBalanceAfter: BigNumber;
 
-let uniswapAdapterContract: UniswapV3Adapter;
+let uniswapAdapterContract: UniswapV3Adapter
 let uniswapRouter: IUniswapV3Router;
 let uniswapQuoter: IQuoterV2;
 let uniswapFactory: IUniswapV3Factory;

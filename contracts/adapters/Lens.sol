@@ -76,23 +76,37 @@ contract Lens is OwnableUpgradeable {
     /// /// /// /// /// ///
 
     /// increase requests
-    function getIncreasePositionRequest(bytes32 requestKey) external view returns (IGmxPositionRouter.IncreasePositionRequest memory) {
+    function getIncreasePositionRequest(bytes32 requestKey) public view returns (IGmxPositionRouter.IncreasePositionRequest memory) {
         return gmxPositionRouter.increasePositionRequests(requestKey);
     }
 
-
-    /// increase requests
-    function getDecreasePositionRequest(bytes32 requestKey) external view returns (IGmxPositionRouter.DecreasePositionRequest memory) {
+    /// decrease requests
+    function getDecreasePositionRequest(bytes32 requestKey) public view returns (IGmxPositionRouter.DecreasePositionRequest memory) {
         return gmxPositionRouter.decreasePositionRequests(requestKey);
     }
 
-
-    function getIncreasePositionsIndex(address positionRequester) external view returns (uint256) {
-        return gmxPositionRouter.increasePositionsIndex(positionRequester);
+    function getIncreasePositionsIndex(address account) public view returns (uint256) {
+        return gmxPositionRouter.increasePositionsIndex(account);
     }
 
-    function getDecreasePositionsIndex(address positionRequester) external view returns (uint256) {
-        return gmxPositionRouter.decreasePositionsIndex(positionRequester);
+    function getDecreasePositionsIndex(address account) public view returns (uint256) {
+        return gmxPositionRouter.decreasePositionsIndex(account);
+    }
+
+    function getLatestIncreaseRequest(address account) external view returns (IGmxPositionRouter.IncreasePositionRequest memory) {
+        uint256 index = getIncreasePositionsIndex(account);
+        bytes32 latestIncreaseKey = gmxPositionRouter.getRequestKey(account, index);
+        return getIncreasePositionRequest(latestIncreaseKey);
+    }
+
+    function getLatestDecreaseRequest(address account) external view returns (IGmxPositionRouter.DecreasePositionRequest memory) {
+        uint256 index = getDecreasePositionsIndex(account);
+        bytes32 latestIncreaseKey = gmxPositionRouter.getRequestKey(account, index);
+        return getDecreasePositionRequest(latestIncreaseKey);
+    }
+
+    function getRequestKey(address account, uint256 index) external view returns (bytes32) {
+        return gmxPositionRouter.getRequestKey(account, index);
     }
 
     /// @param account Wallet or Vault
