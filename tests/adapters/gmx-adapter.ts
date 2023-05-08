@@ -361,7 +361,7 @@ describe("GMXAdapter", function() {
           );
           const operationId = 1; // decrease position
           const tradeOperation = { operationId, data: tradeData };
-          const msgValue = await gmxPositionRouter.minExecutionFee();
+          // const msgValue = await gmxPositionRouter.minExecutionFee();
           
           txResult = await traderWalletContract.connect(trader).executeOnProtocol(
             protocolId,
