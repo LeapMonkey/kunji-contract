@@ -42,9 +42,14 @@ interface IGmxPositionRouter {
 
     function decreasePositionRequests(bytes32 requestKey) external view returns (DecreasePositionRequest memory);
 
-    function increasePositionsIndex(address positionRequester) external view returns (uint256);
+    /// @notice Returns current account's increase position index 
+    function increasePositionsIndex(address account) external view returns (uint256);
 
+    /// @notice Returns current account's decrease position index 
     function decreasePositionsIndex(address positionRequester) external view returns (uint256);
+
+    /// @notice Returns request key
+    function getRequestKey(address account, uint256 index) external view returns (bytes32);
 
     function createIncreasePosition(
         address[] memory _path,
