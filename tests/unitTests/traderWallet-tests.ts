@@ -311,10 +311,6 @@ describe("Trader Wallet Contract Tests", function () {
             traderAddress
           );
 
-          console.log("adaptersRegistryContract Owner: ", await adaptersRegistryContract.owner());
-          console.log("deployerAddress               : ", deployerAddress);
-          console.log("ownerAddress                  : ", ownerAddress);
-
           // take a snapshot
           snapshot = await takeSnapshot();
         });

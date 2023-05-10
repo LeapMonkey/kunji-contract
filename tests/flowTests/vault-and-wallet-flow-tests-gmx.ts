@@ -564,13 +564,9 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
                     walletBalance = await usdcTokenContract.balanceOf(traderWalletContract.address);
       
                     await traderWalletContract.connect(trader).withdrawRequest(walletBalance);
-                    console.log("1000");
                     await usersVaultContract.connect(user1).claimShares(1, user1Address);
-                    console.log("2000");
                     await usersVaultContract.connect(user1).withdrawRequest(1);
-                    console.log("3000");
                     await traderWalletContract.connect(trader).rollover();
-                    console.log("4000");
                   });
       
                   it("Should increase current round counter", async () => {
