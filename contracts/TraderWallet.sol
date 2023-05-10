@@ -12,9 +12,7 @@ import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 // import "hardhat/console.sol";
-
-/// import its own interface as well
-// import "hardhat/console.sol";
+// import its own interface as well
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public vaultAddress;
@@ -158,7 +156,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _vaultAddress
     ) external onlyOwner notZeroAddress(_vaultAddress, "_vaultAddress") {
         if (
-            !IContractsFactory(contractsFactoryAddress).isVaultWalletAllowed(
+            !IContractsFactory(contractsFactoryAddress).isVaultAllowed(
                 _vaultAddress
             )
         ) revert InvalidVault();
@@ -286,16 +284,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
     function withdrawRequest(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
-
-        // require(
-        //     IERC20Upgradeable(_underlying).balanceOf(address(this)) >= _amount,
-        //     "Insufficient balance to withdraw"
-        // );
-
-        // require(
-        //     IERC20Upgradeable(_underlying).transfer(_msgSender(), _amount),
-        //     "Token transfer failed"
-        // );
 
         emit WithdrawRequest(_msgSender(), underlyingTokenAddress, _amount);
 
@@ -527,6 +515,5 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation
     ) internal returns (bool) {
         return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
-        // needs to mock a library responde to unit testing
     }
 }

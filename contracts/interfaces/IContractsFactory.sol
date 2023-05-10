@@ -6,13 +6,9 @@ interface IContractsFactory {
 
     function isInvestorAllowed(address) external view returns (bool);
 
-    function isVaultWalletAllowed(address) external view returns (bool);
+    function isVaultAllowed(address) external view returns (bool);
 
     function isTraderWalletAllowed(address) external view returns (bool);
 
-    function getComissionPercentage() external view returns (uint256);
-
-    function getTraderFromWallet(address) external view returns (address);
-
-    function getVaultFromTrader(address) external view returns (address);
+    function getFeeRate() external view returns (uint256);
 }

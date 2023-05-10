@@ -30,19 +30,14 @@ import { decodeEvent } from "./../_helpers/functions";
 let snapshot: SnapshotRestorer;
 
 let deployer: Signer;
-let vault: Signer;
 let trader: Signer;
-let adaptersRegistry: Signer;
-let contractsFactory: Signer;
 let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
 
 let deployerAddress: string;
-let vaultAddress: string;
 let underlyingTokenAddress: string;
-let adaptersRegistryAddress: string;
 let traderAddress: string;
 let dynamicValueAddress: string;
 let traderWalletAddress: string;
@@ -64,10 +59,6 @@ let traderWalletContract: TraderWallet;
 let usersVaultContract: UsersVault;
 let usdcTokenContract: ERC20Mock;
 let adaptersRegistryContract: AdaptersRegistryMock;
-let contractBalanceBefore: BigNumber;
-let contractBalanceAfter: BigNumber;
-let traderBalanceBefore: BigNumber;
-let traderBalanceAfter: BigNumber;
 let feeRate: BigNumber = BigNumber.from(30);
 
 describe("ContractsFactory Tests", function () {

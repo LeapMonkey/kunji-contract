@@ -208,7 +208,7 @@ contract UsersVaultV2 is
         _checkOwner();
         _checkZeroAddress(_traderWalletAddress, "_traderWalletAddress");
         if (
-            !IContractsFactory(contractsFactoryAddress).isVaultWalletAllowed(
+            !IContractsFactory(contractsFactoryAddress).isTraderWalletAllowed(
                 _traderWalletAddress
             )
         ) revert InvalidTraderWallet();

@@ -153,7 +153,7 @@ contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _vaultAddress
     ) external onlyOwner notZeroAddress(_vaultAddress, "_vaultAddress") {
         if (
-            !IContractsFactory(contractsFactoryAddress).isVaultWalletAllowed(
+            !IContractsFactory(contractsFactoryAddress).isVaultAllowed(
                 _vaultAddress
             )
         ) revert InvalidVault();

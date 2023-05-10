@@ -58,7 +58,7 @@ contract ContractsFactory is OwnableUpgradeable {
     );
 
     function initialize(uint256 _feeRate) external initializer {
-        if (_feeRate > 100) revert FeeRateError();
+        if (_feeRate > (1e18 * 100)) revert FeeRateError();
         __Ownable_init();
 
         feeRate = _feeRate;
@@ -136,17 +136,17 @@ contract ContractsFactory is OwnableUpgradeable {
 
     function deployUsersVault(
         address _traderWalletAddress,
-        // address _dynamicValueAddress,
         address _owner,
         string memory _sharesName,
         string memory _sharesSymbol
     ) external onlyOwner {
         _checkZeroAddress(_traderWalletAddress, "_traderWalletAddress");
-        // _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
         _checkZeroAddress(_owner, "_owner");
 
         // get underlying from wallet
-        address underlyingTokenAddress = underlyingPerDeployedWallet[_traderWalletAddress];
+        address underlyingTokenAddress = underlyingPerDeployedWallet[
+            _traderWalletAddress
+        ];
 
         if (underlyingTokenAddress == address(0)) revert InvalidWallet();
 
@@ -155,7 +155,6 @@ contract ContractsFactory is OwnableUpgradeable {
             adaptersRegistryAddress,
             address(this),
             _traderWalletAddress,
-            // _dynamicValueAddress,
             _owner,
             _sharesName,
             _sharesSymbol
@@ -165,6 +164,9 @@ contract ContractsFactory is OwnableUpgradeable {
 
         walletPerDeployedVault[proxyAddress] = _traderWalletAddress;
     }
+
+    // disable vault/wallet
+    // change mapping of vault and trader wallet
 
     function isTraderAllowed(
         address _traderAddress
@@ -180,6 +182,20 @@ contract ContractsFactory is OwnableUpgradeable {
 
     function getFeeRate() external view returns (uint256) {
         return feeRate;
+    }
+
+    function isTraderWalletAllowed(
+        address _traderWalletAddress
+    ) external view returns (bool) {
+        if (underlyingPerDeployedWallet[_traderWalletAddress] != address(0))
+            return true;
+        return false;
+    }
+
+    function isVaultAllowed(address _usersVaultAddress) external view returns (bool) {
+        if (walletPerDeployedVault[_usersVaultAddress] != address(0))
+            return true;
+        return false;
     }
 
     function _checkZeroAddress(
