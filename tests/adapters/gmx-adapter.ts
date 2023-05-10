@@ -643,14 +643,14 @@ describe("GMXAdapter", function() {
         });
 
         it("Should create increase order index for trader wallet account", async () => {
-          expect(await gmxOrderBook.increaseOrdersIndex(traderWalletContract.address))
+          expect(await lensContract.increaseOrdersIndex(traderWalletContract.address))
             .to.equal(1); // first increase order
         });
 
         it("Should return correct data of created limit order", async () => {
           const index = 0;
           
-          const order = await gmxOrderBook.increaseOrders(traderWalletContract.address, index);
+          const order = await lensContract.increaseOrders(traderWalletContract.address, index);
           expect(order.account).to.equal(traderWalletContract.address);
           expect(order.purchaseToken).to.equal(collateralToken);
           expect(order.collateralToken).to.equal(collateralToken);
@@ -685,7 +685,7 @@ describe("GMXAdapter", function() {
           it("Should return empty data at zero limit order index", async () => {
             const index = 0;
             
-            const order = await gmxOrderBook.increaseOrders(traderWalletContract.address, index);
+            const order = await lensContract.increaseOrders(traderWalletContract.address, index);
             expect(order.account).to.equal(constants.AddressZero);
             expect(order.purchaseToken).to.equal(constants.AddressZero);
             expect(order.collateralToken).to.equal(constants.AddressZero);
@@ -727,7 +727,7 @@ describe("GMXAdapter", function() {
           it("Should return updated data at zero increase limit order index", async () => {
             const index = 0;
             
-            const order = await gmxOrderBook.increaseOrders(traderWalletContract.address, index);
+            const order = await lensContract.increaseOrders(traderWalletContract.address, index);
             expect(order.account).to.equal(traderWalletContract.address);
             expect(order.purchaseToken).to.equal(collateralToken);
             expect(order.collateralToken).to.equal(collateralToken);
@@ -767,7 +767,7 @@ describe("GMXAdapter", function() {
 
           it("Should execute created increase order", async () => {
             // check opened position
-            expect(await gmxOrderBook.increaseOrdersIndex(traderWalletContract.address))
+            expect(await lensContract.increaseOrdersIndex(traderWalletContract.address))
               .to.equal(1); // first increase order
 
             const position = await lensContract.getPositions(
@@ -876,14 +876,14 @@ describe("GMXAdapter", function() {
           });
 
           it("Should create decrease order index for trader wallet account", async () => {
-            expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
+            expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
               .to.equal(1); // first decrease order
           });
 
           it("Should return correct data of created decrease limit order", async () => {
             const index = 0;
             
-            const order = await gmxOrderBook.decreaseOrders(traderWalletContract.address, index);
+            const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
             expect(order.account).to.equal(traderWalletContract.address);
             expect(order.collateralToken).to.equal(collateralToken);
             expect(order.collateralDelta).to.equal(collateralDelta);
@@ -919,7 +919,7 @@ describe("GMXAdapter", function() {
             it("Should return empty data at zero limit order index", async () => {
               const index = 0;
               
-              const order = await gmxOrderBook.decreaseOrders(traderWalletContract.address, index);
+              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
               expect(order.account).to.equal(constants.AddressZero);
               expect(order.collateralToken).to.equal(constants.AddressZero);
               expect(order.collateralDelta).to.equal(0);
@@ -960,7 +960,7 @@ describe("GMXAdapter", function() {
             it("Should return updated data at zero decrease limit order index", async () => {
               const index = 0;
 
-              const order = await gmxOrderBook.decreaseOrders(traderWalletContract.address, index);
+              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
               expect(order.account).to.equal(traderWalletContract.address);
               expect(order.collateralToken).to.equal(collateralToken);
               expect(order.indexToken).to.equal(indexToken);
@@ -999,7 +999,7 @@ describe("GMXAdapter", function() {
             it("Should execute created decrease order", async () => {
               // check opened position
               const amountIn = utils.parseUnits("1000", 30);
-              expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
+              expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
                 .to.equal(1); // first decrease order
 
               const position = await lensContract.getPositions(
@@ -1110,14 +1110,14 @@ describe("GMXAdapter", function() {
           });
 
           it("Should create decrease order index for trader wallet account", async () => {
-            expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
+            expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
               .to.equal(1); // first decrease order
           });
 
           it("Should return correct data of created decrease limit order", async () => {
             const index = 0;
             
-            const order = await gmxOrderBook.decreaseOrders(traderWalletContract.address, index);
+            const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
             expect(order.account).to.equal(traderWalletContract.address);
             expect(order.collateralToken).to.equal(collateralToken);
             expect(order.collateralDelta).to.equal(collateralDelta);
@@ -1153,7 +1153,7 @@ describe("GMXAdapter", function() {
             it("Should return empty data at zero limit order index", async () => {
               const index = 0;
               
-              const order = await gmxOrderBook.decreaseOrders(traderWalletContract.address, index);
+              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
               expect(order.account).to.equal(constants.AddressZero);
               expect(order.collateralToken).to.equal(constants.AddressZero);
               expect(order.collateralDelta).to.equal(0);
@@ -1194,7 +1194,7 @@ describe("GMXAdapter", function() {
             it("Should return updated data at zero decrease limit order index", async () => {
               const index = 0;
               
-              const order = await gmxOrderBook.decreaseOrders(traderWalletContract.address, index);
+              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
               expect(order.account).to.equal(traderWalletContract.address);
               expect(order.collateralToken).to.equal(collateralToken);
               expect(order.indexToken).to.equal(indexToken);
@@ -1230,7 +1230,7 @@ describe("GMXAdapter", function() {
             it("Should execute created decrease order", async () => {
               // check opened position
               const amountIn = utils.parseUnits("1000", 30);
-              expect(await gmxOrderBook.decreaseOrdersIndex(traderWalletContract.address))
+              expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
                 .to.equal(1); // first decrease order
   
               const position = await lensContract.getPositions(
