@@ -109,6 +109,12 @@ contract Lens is OwnableUpgradeable {
         return gmxPositionRouter.getRequestKey(account, index);
     }
 
+    /// @notice Returns current min request execution fee 
+    function requestMinExecutionFee() external view returns (uint256) {
+        return IGmxPositionRouter(gmxPositionRouter).minExecutionFee();
+    }
+
+
     /// @param account Wallet or Vault
     /// @param collateralTokens array of collaterals
     /// @param indexTokens array of shorted (or longed) tokens
@@ -137,6 +143,33 @@ contract Lens is OwnableUpgradeable {
                 indexTokens,
                 isLong
             );
+    }
+
+    /// GMX Limit Orders
+
+    /// @notice Returns current account's increase order index
+    function increaseOrdersIndex(address account) external view returns (uint256) {
+        return IGmxOrderBook(gmxOrderBook).increaseOrdersIndex(account);
+    }
+
+    /// @notice Returns current account's decrease order index
+    function decreaseOrdersIndex(address account) external view returns (uint256) {
+        return IGmxOrderBook(gmxOrderBook).decreaseOrdersIndex(account);
+    }
+
+    /// @notice Returns struct with increase order properties
+    function increaseOrders(address account, uint256 index) external view returns (IGmxOrderBook.IncreaseOrder memory) {
+        return IGmxOrderBook(gmxOrderBook).increaseOrders(account, index);
+    }
+
+    /// @notice Returns struct with decrease order properties
+    function decreaseOrders(address account, uint256 index) external view returns (IGmxOrderBook.DecreaseOrder memory) {
+        return IGmxOrderBook(gmxOrderBook).decreaseOrders(account, index);
+    }
+
+    /// @notice Returns current min order execution fee
+    function limitOrderMinExecutionFee() external view returns(uint256) {
+        return IGmxOrderBook(gmxOrderBook).minExecutionFee();
     }
 
     function getIncreaseOrders(
