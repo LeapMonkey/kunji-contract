@@ -1,5 +1,5 @@
 // import { ethers } from "hardhat";
-import { Signer, BigNumber, Contract } from "ethers";
+import { Signer, BigNumber, Contract, utils, ContractReceipt } from "ethers";
 
 export const mintForUsers = async (
   _userAddresses: Array<string>,
@@ -31,9 +31,7 @@ export const usersDeposit = async (
   _times: number
 ) => {
   for (let i = 0; i < _times; i++) {
-    await _contract
-      .connect(_user[i])
-      .userDeposit((_amount).mul(i + 1));
+    await _contract.connect(_user[i]).userDeposit(_amount.mul(i + 1));
   }
 };
 
@@ -47,4 +45,24 @@ export const claimShares = async (
   for (let i = 0; i < _times; i++) {
     await _contract.connect(_user[i]).claimShares(_amount, _receiver[i]);
   }
+};
+
+export const decodeEvent = async (
+  _abi: string[],
+  _signature: string,
+  _txReceipt: ContractReceipt
+) => {
+  const iface = new utils.Interface(_abi);
+  const eventTopic = iface.getEventTopic(_signature);
+
+  const eventObject = _txReceipt.events?.find(
+    (event) => event.topics[0] === eventTopic
+  );
+
+  const data = eventObject?.data || "";
+  const topics = eventObject?.topics || [];
+
+  const decodedEvent = iface.parseLog({ data, topics });
+
+  return decodedEvent;
 };

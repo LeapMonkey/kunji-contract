@@ -53,12 +53,5 @@ interface IUsersVault {
 
     function claimAssets(uint256, address) external;
 
-    /*
-    function claimShares(uint256, address) external;
-
-    function claimAssets(uint256, address) external;
-
-    function claimAllShares(address) external returns (uint256);
-
-    */
+    // function claimAllShares(address) external returns (uint256);
 }

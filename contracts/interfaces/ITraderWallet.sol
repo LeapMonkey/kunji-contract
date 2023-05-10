@@ -52,15 +52,5 @@ interface ITraderWallet {
 
     function currentRound() external view returns (uint256);
 
-    /*
-    function rolloverBatch() external;
-
-    function claimShares(uint256 shares, address receiver) external;
-
-    function claimAssets(uint256 assets, address receiver) external;
-
-    function claimAllShares(address receiver) external returns (uint256 shares);
-
-    function claimAllAssets(address receiver) external returns (uint256 assets);
-    */
+    function getAdapterAddressPerProtocol(uint256) external view returns (address);
 }

@@ -12,8 +12,7 @@ import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 // import "hardhat/console.sol";
-
-/// import its own interface as well
+// import its own interface as well
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     address public vaultAddress;
@@ -105,7 +104,8 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
         address _traderAddress,
-        address _dynamicValueAddress
+        address _dynamicValueAddress,
+        address _ownerAddress
     ) external initializer {
         // CHECK CALLER IS THE FACTORY
 
@@ -121,8 +121,12 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         if (_dynamicValueAddress == address(0))
             revert ZeroAddress({target: "_dynamicValueAddress"});
+        if (_ownerAddress == address(0))
+            revert ZeroAddress({target: "_ownerAddress"});
 
         __Ownable_init();
+        transferOwnership(_ownerAddress);
+
         __ReentrancyGuard_init();
         GMXAdapter.__initApproveGmxPlugin();
 
@@ -152,7 +156,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _vaultAddress
     ) external onlyOwner notZeroAddress(_vaultAddress, "_vaultAddress") {
         if (
-            !IContractsFactory(contractsFactoryAddress).isVaultWalletAllowed(
+            !IContractsFactory(contractsFactoryAddress).isVaultAllowed(
                 _vaultAddress
             )
         ) revert InvalidVault();
@@ -255,10 +259,12 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // REMOVE ALLOWANCE OF UNDERLYING ????
     }
 
+    function getAdapterAddressPerProtocol(uint256 _protocolId) external view returns(address) {
+        return _getAdapterAddress(_protocolId);
+    }
+
     //
-    function traderDeposit(
-        uint256 _amount
-    ) external onlyTrader {
+    function traderDeposit(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
@@ -276,20 +282,8 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
-    function withdrawRequest(
-        uint256 _amount
-    ) external onlyTrader {
+    function withdrawRequest(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
-
-        // require(
-        //     IERC20Upgradeable(_underlying).balanceOf(address(this)) >= _amount,
-        //     "Insufficient balance to withdraw"
-        // );
-
-        // require(
-        //     IERC20Upgradeable(_underlying).transfer(_msgSender(), _amount),
-        //     "Token transfer failed"
-        // );
 
         emit WithdrawRequest(_msgSender(), underlyingTokenAddress, _amount);
 
@@ -521,6 +515,5 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation
     ) internal returns (bool) {
         return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
-        // needs to mock a library responde to unit testing
     }
 }

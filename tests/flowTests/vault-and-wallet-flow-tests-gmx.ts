@@ -40,7 +40,7 @@ import {
   claimShares,
 } from "../_helpers/functions";
 import { setupContracts } from "../_helpers/setupFork";
-import { addLiquidity, createPool, initializePool } from "../helpers/UniswapV3/createPool";
+import { addLiquidity, createPool, initializePool } from "../_helpers/UniswapV3/createPool";
 import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
 
 const createIncreasePositionEvent = utils.keccak256(utils.toUtf8Bytes("CreateIncreasePosition(address,bytes32)"))

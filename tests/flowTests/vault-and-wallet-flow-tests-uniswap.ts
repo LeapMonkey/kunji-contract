@@ -39,7 +39,7 @@ import {
   claimShares,
 } from "../_helpers/functions";
 import { setupContracts } from "../_helpers/setup";
-import { addLiquidity, createPool, initializePool } from "../helpers/UniswapV3/createPool";
+import { addLiquidity, createPool, initializePool } from "../_helpers/UniswapV3/createPool";
 import { tokens, uniswap } from "../_helpers/arbitrumAddresses";
 
 const abiCoder = new utils.AbiCoder();
