@@ -24,6 +24,7 @@ import {
   TEST_TIMEOUT,
   ZERO_AMOUNT,
   ZERO_ADDRESS,
+  AMOUNT_1E18,
 } from "./../_helpers/constants";
 import { decodeEvent } from "./../_helpers/functions";
 
@@ -140,7 +141,7 @@ describe("ContractsFactory Tests", function () {
           await expect(
             upgrades.deployProxy(
               ContractsFactoryFactory,
-              [BigNumber.from(101)],
+              [AMOUNT_1E18.mul(1000)],
               { unsafeAllowLinkedLibraries: true }
             )
           ).to.be.revertedWithCustomError(

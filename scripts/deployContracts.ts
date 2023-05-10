@@ -1,12 +1,11 @@
 import { ethers, upgrades } from "hardhat";
-import { ContractFactory, BigNumber, Signer } from "ethers";
+import { BigNumber } from "ethers";
 import {
+  Lens,
   TraderWallet,
   UsersVault,
   ContractsFactory,
-  ContractsFactoryMock,
   AdaptersRegistryMock,
-  AdapterMock,
   GMXAdapter,
   UniswapV3Adapter,
   TraderWalletDeployer,
@@ -21,6 +20,7 @@ import { decodeEvent } from "./../tests/_helpers/functions";
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
+const DEPLOY_LENS = true;
 const DEPLOY_LIBRARY = true;
 const DEPLOY_ADAPTER = true;
 const DEPLOY_REGISTRY = true;
@@ -32,6 +32,7 @@ const DEPLOY_USERS_VAULT = true;
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
+let LensAddress = "";
 let UnderlyingTokenAddress = "";
 let GmxAdapterAddress = "";
 let UniswapAdapterAddress = "";
@@ -48,10 +49,26 @@ let UsersVaultAddress = "";
 const FEE = BigNumber.from("3000000000000000000"); // 3 % base 18
 const SHARES_NAME = "UserVaultShares";
 const SHARES_SYMBOL = "UVS";
+
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
+
+// deploy Lens
+const deployLens = async () => {
+  console.log("DEPLOYING Lens Contract");
+  const LensFactory = await ethers.getContractFactory("Lens");
+  const lensContract = (await LensFactory.deploy()) as Lens;
+  await lensContract.deployed();
+
+  console.log(
+    "Lens Contract DEPLOYED. txHash: ",
+    lensContract.deployTransaction.hash
+  );
+  console.log("Contract Address: ", lensContract.address, "\n\n");
+  return lensContract;
+};
 
 // deploy library
 const deployGMXAdapter = async () => {
@@ -164,8 +181,9 @@ const deployUsersVaultDeployer = async () => {
 
 // deploy ContractsFactory
 const deployContractsFactory = async (
+  traderWalletDeployerAddress: string,
   usersVaultDeployerAddress: string,
-  traderWalletDeployerAddress: string
+  adaptersRegistryAddress: string
 ) => {
   console.log("DEPLOYING ContractsFactory");
 
@@ -191,6 +209,16 @@ const deployContractsFactory = async (
     contractsFactoryContract.deployTransaction.hash
   );
   console.log("Contract Address: ", contractsFactoryContract.address, "\n\n");
+
+  console.log("Set Adapter Registry in Factory");
+
+  // Set Adapter Registry in Factory
+  // Set Adapter Registry in Factory
+  const txResult = await contractsFactoryContract
+    // .connect(deployer)
+    .setAdaptersRegistryAddress(adaptersRegistryAddress);
+  console.log("Adapter Registry Set txHash: ", txResult.hash, "\n\n");
+
   return contractsFactoryContract;
 };
 
@@ -208,20 +236,17 @@ const deployTraderWallet = async (
   );
 
   console.log("CALLING DEPLOY Function on factory");
-  const txResult = await contractsFactoryContract
-    .deployTraderWallet(
-      underlyingTokenAddress,
-      deployerAddress, // trader address
-      deployerAddress, // not used
-      deployerAddress // owner
-    );
+  const txResult = await contractsFactoryContract.deployTraderWallet(
+    underlyingTokenAddress,
+    deployerAddress, // trader address
+    deployerAddress, // not used
+    deployerAddress // owner
+  );
 
-  console.log("100000");
   const abi = [
     "event TraderWalletDeployed(address indexed _traderWalletAddress, address indexed _traderAddress, address indexed _underlyingTokenAddress)",
   ];
   const signature = "TraderWalletDeployed(address,address,address)";
-  console.log("200000");
   const txReceipt = await txResult.wait();
   const decodedEvent = await decodeEvent(abi, signature, txReceipt);
   const traderWalletAddress = decodedEvent.args._traderWalletAddress;
@@ -231,10 +256,7 @@ const deployTraderWallet = async (
     traderWalletAddress
   )) as TraderWallet;
 
-  console.log(
-    "TraderWallet DEPLOYED. txHash: ",
-    traderWalletContract.deployTransaction.hash
-  );
+  console.log("TraderWallet DEPLOYED. txHash: ", txResult.hash);
   console.log("Contract Address: ", traderWalletAddress, "\n\n");
   return traderWalletContract;
 };
@@ -278,10 +300,7 @@ const deployUsersVault = async (
     usersVaultAddress
   )) as UsersVault;
 
-  console.log(
-    "UsersVault DEPLOYED. txHash: ",
-    usersVaultContract.deployTransaction.hash
-  );
+  console.log("UsersVault DEPLOYED. txHash: ", txResult.hash);
   console.log("Contract Address: ", usersVaultContract.address, "\n\n");
 
   console.log("Set Vault Address in Trader Wallet Contract");
@@ -305,6 +324,7 @@ async function main(): Promise<void> {
   const [deployer] = await ethers.getSigners();
   const deployerAddress = await deployer.getAddress();
 
+  let lensContract: Lens;
   let traderWalletDeployerContract: TraderWalletDeployer;
   let usersVaultDeployerContract: UsersVaultDeployer;
   let contractsFactoryContract: ContractsFactory;
@@ -319,6 +339,11 @@ async function main(): Promise<void> {
   console.log(
     "==================================================================\n\n"
   );
+
+  if (DEPLOY_LENS) {
+    lensContract = await deployLens();
+    LensAddress = lensContract.address;
+  }
 
   if (DEPLOY_LIBRARY) {
     gmxAdapterContract = await deployGMXAdapter();
@@ -350,10 +375,15 @@ async function main(): Promise<void> {
   }
 
   if (DEPLOY_FACTORY) {
-    if (TraderWalletDeployerAddress != "" && UsersVaultDeployerAddress != "") {
+    if (
+      TraderWalletDeployerAddress != "" &&
+      UsersVaultDeployerAddress != "" &&
+      AdaptersRegistryAddress != ""
+    ) {
       contractsFactoryContract = await deployContractsFactory(
         TraderWalletDeployerAddress,
-        UsersVaultDeployerAddress
+        UsersVaultDeployerAddress,
+        AdaptersRegistryAddress
       );
       ContractsFactoryAddress = contractsFactoryContract.address;
     } else {
@@ -361,6 +391,10 @@ async function main(): Promise<void> {
     }
   }
 
+  // PUT VALUE HERE TO DEPLOY VAULT AND WALLET WITHOUT DEPLOYING FACTORY
+  // ContractsFactoryAddress = ""; 
+  // PUT DEPLOY_FACTORY constant ON FALSE AT THE TOP
+  
   // asign address of usdc token to underlying
   UnderlyingTokenAddress = tokens.usdc;
   if (

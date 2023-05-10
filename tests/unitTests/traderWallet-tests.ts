@@ -140,8 +140,10 @@ describe("Trader Wallet Contract Tests", function () {
         AdaptersRegistryFactory = await ethers.getContractFactory(
           "AdaptersRegistryMock"
         );
-        adaptersRegistryContract =
-          (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
+        adaptersRegistryContract = (await upgrades.deployProxy(
+          AdaptersRegistryFactory,
+          []
+        )) as AdaptersRegistryMock;
         await adaptersRegistryContract.deployed();
       });
 
@@ -284,7 +286,7 @@ describe("Trader Wallet Contract Tests", function () {
           // change address to mocked adaptersRegistry
           await traderWalletContract
             .connect(owner)
-            .setAdaptersRegistryAddress(adaptersRegistryContract.address);
+            .setAdaptersRegistryAddress(adaptersRegistryContract.address);          
 
           // set the vault in the trader wallet contract
           await traderWalletContract
@@ -308,6 +310,10 @@ describe("Trader Wallet Contract Tests", function () {
           traderBalanceBefore = await usdcTokenContract.balanceOf(
             traderAddress
           );
+
+          console.log("adaptersRegistryContract Owner: ", await adaptersRegistryContract.owner());
+          console.log("deployerAddress               : ", deployerAddress);
+          console.log("ownerAddress                  : ", ownerAddress);
 
           // take a snapshot
           snapshot = await takeSnapshot();
@@ -730,8 +736,8 @@ describe("Trader Wallet Contract Tests", function () {
               describe("WHEN protocol does not exist in registry", function () {
                 before(async () => {
                   // change returnValue to adapter registry to fail on function call
-                  await adaptersRegistryContract.setReturnValue(false);
-                  await adaptersRegistryContract.setReturnAddress(otherAddress);
+                  await adaptersRegistryContract.connect(deployer).setReturnValue(false);
+                  await adaptersRegistryContract.connect(deployer).setReturnAddress(otherAddress);
                 });
                 it("THEN it should fail", async () => {
                   await expect(
@@ -750,8 +756,8 @@ describe("Trader Wallet Contract Tests", function () {
               before(async () => {
                 // change returnValue to return true on function call
                 adapter1Address = otherAddress;
-                await adaptersRegistryContract.setReturnValue(true);
-                await adaptersRegistryContract.setReturnAddress(
+                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+                await adaptersRegistryContract.connect(deployer).setReturnAddress(
                   adapter1Address
                 );
 
@@ -808,14 +814,14 @@ describe("Trader Wallet Contract Tests", function () {
               adapter4Address = dynamicValueAddress;
               adapter10Address = vaultAddress;
 
-              await adaptersRegistryContract.setReturnValue(true);
-              await adaptersRegistryContract.setReturnAddress(adapter2Address);
+              await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+              await adaptersRegistryContract.connect(deployer).setReturnAddress(adapter2Address);
               await traderWalletContract.connect(trader).addAdapterToUse(2);
 
-              await adaptersRegistryContract.setReturnAddress(adapter3Address);
+              await adaptersRegistryContract.connect(deployer).setReturnAddress(adapter3Address);
               await traderWalletContract.connect(trader).addAdapterToUse(3);
 
-              await adaptersRegistryContract.setReturnAddress(adapter4Address);
+              await adaptersRegistryContract.connect(deployer).setReturnAddress(adapter4Address);
               await traderWalletContract.connect(trader).addAdapterToUse(4);
             });
             describe("WHEN checking adapters", function () {
@@ -876,8 +882,8 @@ describe("Trader Wallet Contract Tests", function () {
               describe("WHEN protocol does not exist in registry", function () {
                 before(async () => {
                   // change returnValue to adapter registry to fail on function call
-                  await adaptersRegistryContract.setReturnValue(false);
-                  await adaptersRegistryContract.setReturnAddress(otherAddress);
+                  await adaptersRegistryContract.connect(deployer).setReturnValue(false);
+                  await adaptersRegistryContract.connect(deployer).setReturnAddress(otherAddress);
                 });
                 it("THEN it should fail", async () => {
                   await expect(
@@ -891,8 +897,8 @@ describe("Trader Wallet Contract Tests", function () {
 
               describe("WHEN adapter does not exist in array", function () {
                 before(async () => {
-                  await adaptersRegistryContract.setReturnValue(true);
-                  await adaptersRegistryContract.setReturnAddress(
+                  await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+                  await adaptersRegistryContract.connect(deployer).setReturnAddress(
                     adapter10Address
                   );
                 });
@@ -909,8 +915,8 @@ describe("Trader Wallet Contract Tests", function () {
 
             describe("WHEN calling with correct caller and address", function () {
               before(async () => {
-                await adaptersRegistryContract.setReturnValue(true);
-                await adaptersRegistryContract.setReturnAddress(
+                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+                await adaptersRegistryContract.connect(deployer).setReturnAddress(
                   adapter3Address
                 );
                 txResult = await traderWalletContract
@@ -1207,8 +1213,8 @@ describe("Trader Wallet Contract Tests", function () {
             describe("WHEN Adapter exists but execution fails", function () {
               before(async () => {
                 // change returnValue to return true on function call
-                await adaptersRegistryContract.setReturnValue(true);
-                await adaptersRegistryContract.setReturnAddress(
+                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+                await adaptersRegistryContract.connect(deployer).setReturnAddress(
                   adapterContract.address
                 );
 
@@ -1238,8 +1244,8 @@ describe("Trader Wallet Contract Tests", function () {
             describe("WHEN executed correctly no replication needed", function () {
               before(async () => {
                 // change returnValue to return true on function call
-                await adaptersRegistryContract.setReturnValue(true);
-                await adaptersRegistryContract.setReturnAddress(
+                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+                await adaptersRegistryContract.connect(deployer).setReturnAddress(
                   adapterContract.address
                 );
 
@@ -1278,8 +1284,8 @@ describe("Trader Wallet Contract Tests", function () {
             describe("WHEN replication is issued", function () {
               before(async () => {
                 // change returnValue to return true on function call
-                await adaptersRegistryContract.setReturnValue(true);
-                await adaptersRegistryContract.setReturnAddress(
+                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
+                await adaptersRegistryContract.connect(deployer).setReturnAddress(
                   adapterContract.address
                 );
 

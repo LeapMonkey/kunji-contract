@@ -36,5 +36,10 @@ contract ContractsFactoryMock is OwnableUpgradeable {
         _vault; // just to avoid warnings
         return returnValue;
     }
+
+    function getFeeRate() external view returns (uint256) {
+        returnValue; // just to avoid warnings        
+        return 1e18;
+    }
 }
 

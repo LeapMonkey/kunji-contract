@@ -118,6 +118,7 @@ contract ContractsFactory is OwnableUpgradeable {
         _checkZeroAddress(_traderAddress, "_traderAddress");
         _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
         _checkZeroAddress(_owner, "_owner");
+        _checkZeroAddress(adaptersRegistryAddress, "adaptersRegistryAddress");
         if (tradersAllowList[_traderAddress]) revert InvalidTrader();
 
         address proxyAddress = TraderWalletDeployer.deployTraderWallet(

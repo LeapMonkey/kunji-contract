@@ -82,9 +82,12 @@ export const setupContracts = async (
   AdaptersRegistryFactory = await ethers.getContractFactory(
     "AdaptersRegistryMock"
   );
-  adaptersRegistryContract =
-    (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
+  adaptersRegistryContract = (await upgrades.deployProxy(
+    AdaptersRegistryFactory,
+    []
+  )) as AdaptersRegistryMock;
   await adaptersRegistryContract.deployed();
+  
   // set uniswap
   await adaptersRegistryContract.setReturnValue(true);
   await adaptersRegistryContract.setReturnAddress(uniswapAdapterContract.address);

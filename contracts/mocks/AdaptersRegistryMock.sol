@@ -12,7 +12,7 @@ contract AdaptersRegistryMock is OwnableUpgradeable {
     function initialize() external initializer {
         __Ownable_init();
         validProtocols = [1, 2];
-        returnValue = true;
+        returnValue = false;
     }
 
     function setReturnValue(bool _value) external onlyOwner {

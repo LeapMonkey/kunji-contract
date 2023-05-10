@@ -181,10 +181,12 @@ describe("User Vault Contract Tests", function () {
       AdaptersRegistryFactory = await ethers.getContractFactory(
         "AdaptersRegistryMock"
       );
-      adaptersRegistryContract =
-        (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
+      adaptersRegistryContract = (await upgrades.deployProxy(
+        AdaptersRegistryFactory,
+        []
+      )) as AdaptersRegistryMock;
       await adaptersRegistryContract.deployed();
-
+            
       // deploy mocked adapter
       AdapterFactory = await ethers.getContractFactory("AdapterMock");
       adapterContract = (await AdapterFactory.deploy()) as AdapterMock;
@@ -1765,6 +1767,3 @@ describe("User Vault Contract Tests", function () {
     });
   });
 });
-
-//// claim assets no claiming shares
-////
