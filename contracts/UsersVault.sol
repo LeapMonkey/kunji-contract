@@ -13,7 +13,7 @@ import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 // import its own interface as well
 
 contract UsersVault is
@@ -67,13 +67,13 @@ contract UsersVault is
     error InsufficientShares(uint256 unclaimedShareBalance);
     error InsufficientAssets(uint256 unclaimedAssetBalance);
     error InvalidRollover();
-    error InvalidProtocol();
-    error AdapterPresent();
-    error AdapterNotPresent();
     error InvalidAdapter();
     error AdapterOperationFailed(string target);
-    error UsersVaultOperationFailed();
     error ApproveFailed(address caller, address token, uint256 amount);
+    error NotEnoughAssetsForWithdraw(
+        uint256 underlyingContractBalance,
+        uint256 processedWithdrawAssets
+    );
 
     event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
@@ -323,12 +323,16 @@ contract UsersVault is
 
         if (currentRound != 0) {
             afterRoundVaultBalance = getUnderlyingLiquidity();
-
             assetsPerShare = totalSupply() != 0
                 ? (afterRoundVaultBalance * 1e18) / totalSupply()
                 : 0;
 
             sharesToMint = (pendingDepositAssets * assetsPerShare) / 1e18;
+            
+            console.log("totalSupply           : ", totalSupply());
+            console.log("afterRoundVaultBalance: ", afterRoundVaultBalance);
+            console.log("assetsPerShare:         ", assetsPerShare);
+            console.log("sharesToMint:           ", sharesToMint);
         } else {
             // first round dont consider pendings
             afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
@@ -351,14 +355,18 @@ contract UsersVault is
             (assetsPerShare * pendingWithdrawShares) /
             1e18;
 
+        console.log("processedWithdrawAsset: ", processedWithdrawAssets);
+
         // Revert if the assets required for withdrawals < asset balance present in the vault
         if (processedWithdrawAssets > 0) {
-            require(
-                IERC20Upgradeable(underlyingTokenAddress).balanceOf(
-                    address(this)
-                ) > processedWithdrawAssets,
-                "Not enough assets for withdrawal"
-            );
+            uint256 underlyingContractBalance = IERC20Upgradeable(
+                underlyingTokenAddress
+            ).balanceOf(address(this));
+            if (underlyingContractBalance < processedWithdrawAssets)
+                revert NotEnoughAssetsForWithdraw(
+                    underlyingContractBalance,
+                    processedWithdrawAssets
+                );
         }
 
         // get profits
@@ -379,6 +387,7 @@ contract UsersVault is
         // Make pending withdrawals 0
         pendingWithdrawShares = 0;
         vaultProfit = 0;
+        processedWithdrawAssets = 0;
 
         initialVaultBalance = getUnderlyingLiquidity();
 
@@ -439,21 +448,6 @@ contract UsersVault is
         return currentRound;
     }
 
-    function pendAssetsToUnclaimedShares(
-        address _receiver
-    ) internal view returns (uint256) {
-        uint256 assetsPerShare = assetsPerShareXRound[
-            userDeposits[_receiver].round
-        ];
-
-        if (assetsPerShare == 0) assetsPerShare = 1e18;
-
-        return
-            userDeposits[_receiver].unclaimedShares +
-            (userDeposits[_receiver].pendingAssets * 1e18) /
-            assetsPerShare;
-    }
-
     function previewShares(address _receiver) external view returns (uint256) {
         _checkZeroRound();
 
@@ -461,7 +455,9 @@ contract UsersVault is
             userDeposits[_receiver].round < currentRound &&
             userDeposits[_receiver].pendingAssets > 0
         ) {
-            uint256 newUnclaimedShares = pendAssetsToUnclaimedShares(_receiver);
+            uint256 newUnclaimedShares = _pendAssetsToUnclaimedShares(
+                _receiver
+            );
             return userDeposits[_receiver].unclaimedShares + newUnclaimedShares;
         }
 
@@ -479,7 +475,7 @@ contract UsersVault is
             userDeposits[_msgSender()].round < currentRound &&
             userDeposits[_msgSender()].pendingAssets > 0
         ) {
-            uint256 newUnclaimedShares = pendAssetsToUnclaimedShares(
+            uint256 newUnclaimedShares = _pendAssetsToUnclaimedShares(
                 _msgSender()
             );
             userDeposits[_msgSender()].unclaimedShares =
@@ -508,19 +504,6 @@ contract UsersVault is
         _transfer(address(this), _receiver, _sharesAmount);
     }
 
-    function pendSharesToUnclaimedAssets(
-        address _receiver
-    ) internal view returns (uint256) {
-        uint256 assetsPerShare = assetsPerShareXRound[
-            userWithdrawals[_receiver].round
-        ];
-
-        return
-            userWithdrawals[_receiver].unclaimedAssets +
-            (userWithdrawals[_receiver].pendingShares * assetsPerShare) /
-            1e18;
-    }
-
     function previewAssets(address _receiver) external view returns (uint256) {
         _checkZeroRound();
 
@@ -528,14 +511,14 @@ contract UsersVault is
             userWithdrawals[_receiver].round < currentRound &&
             userWithdrawals[_receiver].pendingShares > 0
         ) {
-            uint256 newUnclaimedAssets = pendSharesToUnclaimedAssets(
+            uint256 newUnclaimedAssets = _pendSharesToUnclaimedAssets(
                 _msgSender()
             );
             return
                 userWithdrawals[_receiver].unclaimedAssets + newUnclaimedAssets;
         }
 
-        return userWithdrawals[_msgSender()].unclaimedAssets;
+        return userWithdrawals[_receiver].unclaimedAssets;
     }
 
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
@@ -548,7 +531,7 @@ contract UsersVault is
             userWithdrawals[_msgSender()].round < currentRound &&
             userWithdrawals[_msgSender()].pendingShares > 0
         ) {
-            uint256 newUnclaimedAssets = pendSharesToUnclaimedAssets(
+            uint256 newUnclaimedAssets = _pendSharesToUnclaimedAssets(
                 _msgSender()
             );
 
@@ -586,21 +569,45 @@ contract UsersVault is
     }
 
     //
-    //
     function getUnderlyingLiquidity() public view returns (uint256) {
-        // console.log("-------------------------------------------------------");
-        // console.log(
-        //     "CNT - USDC Balance           : ",
-        //     IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this))
-        // );
-        // console.log("CNT - pendingDepositAssets   : ", pendingDepositAssets);
-        // console.log("CNT - processedWithdrawAssets: ", processedWithdrawAssets);
-        // console.log("CNT - totalSupply()          : ", totalSupply());
-        // console.log("-------------------------------------------------------");
+        uint256 contrBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this));
+
+        console.log("contrBalance          : ", contrBalance);
+        console.log("pendingDepositAssets  : ", pendingDepositAssets);
+        console.log("processedWithdrawAsset: ", processedWithdrawAssets);
+
         return
             IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -
             processedWithdrawAssets;
+    }
+
+    function _pendAssetsToUnclaimedShares(
+        address _receiver
+    ) internal view returns (uint256) {
+        uint256 assetsPerShare = assetsPerShareXRound[
+            userDeposits[_receiver].round
+        ];
+
+        if (assetsPerShare == 0) assetsPerShare = 1e18;
+
+        return
+            userDeposits[_receiver].unclaimedShares +
+            (userDeposits[_receiver].pendingAssets * 1e18) /
+            assetsPerShare;
+    }
+
+    function _pendSharesToUnclaimedAssets(
+        address _receiver
+    ) internal view returns (uint256) {
+        uint256 assetsPerShare = assetsPerShareXRound[
+            userWithdrawals[_receiver].round
+        ];
+
+        return
+            userWithdrawals[_receiver].unclaimedAssets +
+            (userWithdrawals[_receiver].pendingShares * assetsPerShare) /
+            1e18;
     }
 
     //
