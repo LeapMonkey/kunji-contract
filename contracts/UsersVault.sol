@@ -47,7 +47,6 @@ contract UsersVault is
     uint256 public pendingWithdrawShares;
 
     uint256 public processedWithdrawAssets;
-    uint256 public ratioShares;
     int256 public vaultProfit;
 
     // user specific deposits accounting
@@ -79,7 +78,7 @@ contract UsersVault is
     event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
-    event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
+    // event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
     event AdapterToUseAdded(
         uint256 protocolId,
         address indexed adapter,
@@ -194,14 +193,14 @@ contract UsersVault is
         traderWalletAddress = _traderWalletAddress;
     }
 
-    function setUnderlyingTokenAddress(
-        address _underlyingTokenAddress
-    ) external {
-        _checkOwner();
-        _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
-        emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
-        underlyingTokenAddress = _underlyingTokenAddress;
-    }
+    // function setUnderlyingTokenAddress(
+    //     address _underlyingTokenAddress
+    // ) external {
+    //     _checkOwner();
+    //     _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
+    //     emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
+    //     underlyingTokenAddress = _underlyingTokenAddress;
+    // }
 
     function setAdapterAllowanceOnToken(
         uint256 _protocolId,
@@ -300,10 +299,7 @@ contract UsersVault is
                 userWithdrawals[_msgSender()].unclaimedAssets +
                 (userWithdrawals[_msgSender()].pendingShares * assetsPerShare) /
                 1e18;
-            // userWithdrawals[_msgSender()].pendingShares.mulDiv(
-            //     assetsPerShare,
-            //     1e18
-            // );
+
             userWithdrawals[_msgSender()].pendingShares = 0;
         }
 
@@ -435,12 +431,27 @@ contract UsersVault is
         return true;
     }
 
-    function claimAllAssets(
+    function getSharesContractBalance() external view returns (uint256) {
+        return this.balanceOf(address(this));
+    }
+
+    function getRound() external view returns (uint256) {
+        return currentRound;
+    }
+
+    function pendAssetsToUnclaimedShares(
         address _receiver
-    ) external returns (uint256 _assetsAmount) {
-        _onlyValidInvestors(_msgSender());
-        _assetsAmount = balanceOf(_msgSender());
-        claimAssets(_assetsAmount, _receiver);
+    ) internal view returns (uint256) {
+        uint256 assetsPerShare = assetsPerShareXRound[
+            userDeposits[_receiver].round
+        ];
+
+        if (assetsPerShare == 0) assetsPerShare = 1e18;
+
+        return
+            userDeposits[_receiver].unclaimedShares +
+            (userDeposits[_receiver].pendingAssets * 1e18) /
+            assetsPerShare;
     }
 
     function previewShares(address _receiver) external view returns (uint256) {
@@ -450,27 +461,11 @@ contract UsersVault is
             userDeposits[_receiver].round < currentRound &&
             userDeposits[_receiver].pendingAssets > 0
         ) {
-            uint256 assetsPerShare = assetsPerShareXRound[
-                userDeposits[_receiver].round
-            ];
-
-            if (assetsPerShare == 0) assetsPerShare = 1e18;
-
-            return
-                userDeposits[_receiver].unclaimedShares +
-                ((userDeposits[_receiver].pendingAssets * 1e18) /
-                    assetsPerShare);
+            uint256 newUnclaimedShares = pendAssetsToUnclaimedShares(_receiver);
+            return userDeposits[_receiver].unclaimedShares + newUnclaimedShares;
         }
 
         return userDeposits[_receiver].unclaimedShares;
-    }
-
-    function getSharesContractBalance() external view returns (uint256) {
-        return this.balanceOf(address(this));
-    }
-
-    function getRound() external view returns (uint256) {
-        return currentRound;
     }
 
     function claimShares(uint256 _sharesAmount, address _receiver) public {
@@ -484,14 +479,12 @@ contract UsersVault is
             userDeposits[_msgSender()].round < currentRound &&
             userDeposits[_msgSender()].pendingAssets > 0
         ) {
-            uint256 assetsPerShare = assetsPerShareXRound[
-                userDeposits[_msgSender()].round
-            ];
-
+            uint256 newUnclaimedShares = pendAssetsToUnclaimedShares(
+                _msgSender()
+            );
             userDeposits[_msgSender()].unclaimedShares =
                 userDeposits[_msgSender()].unclaimedShares +
-                (userDeposits[_msgSender()].pendingAssets * 1e18) /
-                assetsPerShare;
+                newUnclaimedShares;
 
             userDeposits[_msgSender()].pendingAssets = 0;
         }
@@ -515,6 +508,36 @@ contract UsersVault is
         _transfer(address(this), _receiver, _sharesAmount);
     }
 
+    function pendSharesToUnclaimedAssets(
+        address _receiver
+    ) internal view returns (uint256) {
+        uint256 assetsPerShare = assetsPerShareXRound[
+            userWithdrawals[_receiver].round
+        ];
+
+        return
+            userWithdrawals[_receiver].unclaimedAssets +
+            (userWithdrawals[_receiver].pendingShares * assetsPerShare) /
+            1e18;
+    }
+
+    function previewAssets(address _receiver) external view returns (uint256) {
+        _checkZeroRound();
+
+        if (
+            userWithdrawals[_receiver].round < currentRound &&
+            userWithdrawals[_receiver].pendingShares > 0
+        ) {
+            uint256 newUnclaimedAssets = pendSharesToUnclaimedAssets(
+                _msgSender()
+            );
+            return
+                userWithdrawals[_receiver].unclaimedAssets + newUnclaimedAssets;
+        }
+
+        return userWithdrawals[_msgSender()].unclaimedAssets;
+    }
+
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());
@@ -525,14 +548,14 @@ contract UsersVault is
             userWithdrawals[_msgSender()].round < currentRound &&
             userWithdrawals[_msgSender()].pendingShares > 0
         ) {
-            uint256 assetsPerShare = assetsPerShareXRound[
-                userWithdrawals[_msgSender()].round
-            ];
+            uint256 newUnclaimedAssets = pendSharesToUnclaimedAssets(
+                _msgSender()
+            );
 
             userWithdrawals[_msgSender()].unclaimedAssets =
                 userWithdrawals[_msgSender()].unclaimedAssets +
-                (userWithdrawals[_msgSender()].pendingShares * assetsPerShare) /
-                1e18;
+                newUnclaimedAssets;
+
             userWithdrawals[_msgSender()].pendingShares = 0;
         }
 

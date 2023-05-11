@@ -49,7 +49,6 @@ contract UsersVaultV2 is
     uint256 public pendingWithdrawShares;
 
     uint256 public processedWithdrawAssets;
-    uint256 public ratioShares;
     int256 public vaultProfit;
 
     // address[] public traderSelectedAdaptersArray;
@@ -88,7 +87,7 @@ contract UsersVaultV2 is
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
     event TraderAddressSet(address indexed traderAddress);
     // event DynamicValueAddressSet(address indexed dynamicValueAddress);
-    event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
+    // event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
     event AdapterToUseAdded(
         uint256 protocolId,
         address indexed adapter,
@@ -216,14 +215,14 @@ contract UsersVaultV2 is
         traderWalletAddress = _traderWalletAddress;
     }
 
-    function setUnderlyingTokenAddress(
-        address _underlyingTokenAddress
-    ) external {
-        _checkOwner();
-        _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
-        emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
-        underlyingTokenAddress = _underlyingTokenAddress;
-    }
+    // function setUnderlyingTokenAddress(
+    //     address _underlyingTokenAddress
+    // ) external {
+    //     _checkOwner();
+    //     _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
+    //     emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
+    //     underlyingTokenAddress = _underlyingTokenAddress;
+    // }
 
     // function addAdapterToUse(uint256 _protocolId) external {
     //     _checkOwner();

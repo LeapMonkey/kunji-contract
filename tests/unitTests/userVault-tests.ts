@@ -531,55 +531,55 @@ describe("User Vault Contract Tests", function () {
       //   });
       // });
 
-      describe("WHEN trying to set the underlyingTokenAddress", async () => {
-        describe("WHEN calling with invalid caller or parameters", function () {
-          describe("WHEN caller is not owner", function () {
-            it("THEN it should fail", async () => {
-              await expect(
-                usersVaultContract
-                  .connect(nonAuthorized)
-                  .setUnderlyingTokenAddress(otherAddress)
-              ).to.be.revertedWith("Ownable: caller is not the owner");
-            });
-          });
+      // describe("WHEN trying to set the underlyingTokenAddress", async () => {
+      //   describe("WHEN calling with invalid caller or parameters", function () {
+      //     describe("WHEN caller is not owner", function () {
+      //       it("THEN it should fail", async () => {
+      //         await expect(
+      //           usersVaultContract
+      //             .connect(nonAuthorized)
+      //             .setUnderlyingTokenAddress(otherAddress)
+      //         ).to.be.revertedWith("Ownable: caller is not the owner");
+      //       });
+      //     });
 
-          describe("WHEN address is invalid", function () {
-            it("THEN it should fail", async () => {
-              await expect(
-                usersVaultContract
-                  .connect(owner)
-                  .setUnderlyingTokenAddress(ZERO_ADDRESS)
-              )
-                .to.be.revertedWithCustomError(
-                  usersVaultContract,
-                  "ZeroAddress"
-                )
-                .withArgs("_underlyingTokenAddress");
-            });
-          });
-        });
+      //     describe("WHEN address is invalid", function () {
+      //       it("THEN it should fail", async () => {
+      //         await expect(
+      //           usersVaultContract
+      //             .connect(owner)
+      //             .setUnderlyingTokenAddress(ZERO_ADDRESS)
+      //         )
+      //           .to.be.revertedWithCustomError(
+      //             usersVaultContract,
+      //             "ZeroAddress"
+      //           )
+      //           .withArgs("_underlyingTokenAddress");
+      //       });
+      //     });
+      //   });
 
-        describe("WHEN calling with correct caller and address", function () {
-          before(async () => {
-            txResult = await usersVaultContract
-              .connect(owner)
-              .setUnderlyingTokenAddress(otherAddress);
-          });
-          after(async () => {
-            await snapshot.restore();
-          });
-          it("THEN new address should be stored", async () => {
-            expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
-              otherAddress
-            );
-          });
-          it("THEN it should emit an Event", async () => {
-            await expect(txResult)
-              .to.emit(usersVaultContract, "UnderlyingTokenAddressSet")
-              .withArgs(otherAddress);
-          });
-        });
-      });
+      //   describe("WHEN calling with correct caller and address", function () {
+      //     before(async () => {
+      //       txResult = await usersVaultContract
+      //         .connect(owner)
+      //         .setUnderlyingTokenAddress(otherAddress);
+      //     });
+      //     after(async () => {
+      //       await snapshot.restore();
+      //     });
+      //     it("THEN new address should be stored", async () => {
+      //       expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
+      //         otherAddress
+      //       );
+      //     });
+      //     it("THEN it should emit an Event", async () => {
+      //       await expect(txResult)
+      //         .to.emit(usersVaultContract, "UnderlyingTokenAddressSet")
+      //         .withArgs(otherAddress);
+      //     });
+      //   });
+      // });
 
       describe("WHEN trying to set the traderWalletAddress", async () => {
         describe("WHEN calling with invalid caller or parameters", function () {
