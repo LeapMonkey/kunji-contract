@@ -14,6 +14,7 @@ import {IAdapter} from "./interfaces/IAdapter.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 import "hardhat/console.sol";
+
 // import its own interface as well
 
 contract UsersVault is
@@ -157,6 +158,9 @@ contract UsersVault is
         traderWalletAddress = _traderWalletAddress;
         currentRound = 0;
         vaultProfit = 0;
+        processedWithdrawAssets = 0;
+        pendingDepositAssets = 0;
+        pendingWithdrawShares = 0;
     }
 
     receive() external payable {}
@@ -285,7 +289,7 @@ contract UsersVault is
             underlyingTokenAddress,
             _sharesAmount
         );
-        _burn(_msgSender(), _sharesAmount);
+        // _burn(_msgSender(), _sharesAmount);
 
         // Convert previous round pending shares into unclaimed assets
         if (
@@ -310,6 +314,8 @@ contract UsersVault is
             _sharesAmount;
 
         pendingWithdrawShares = pendingWithdrawShares + _sharesAmount;
+
+        transferFrom(_msgSender(), address(this), _sharesAmount);
     }
 
     function rolloverFromTrader() external returns (bool) {
@@ -328,7 +334,7 @@ contract UsersVault is
                 : 0;
 
             sharesToMint = (pendingDepositAssets * assetsPerShare) / 1e18;
-            
+
             console.log("totalSupply           : ", totalSupply());
             console.log("afterRoundVaultBalance: ", afterRoundVaultBalance);
             console.log("assetsPerShare:         ", assetsPerShare);
@@ -344,18 +350,21 @@ contract UsersVault is
         }
 
         // mint the shares for the contract so users can claim their shares
-        _mint(address(this), sharesToMint);
+        if (sharesToMint > 0) _mint(address(this), sharesToMint);
         assetsPerShareXRound[currentRound] = assetsPerShare;
 
         // Accept all pending deposits
         pendingDepositAssets = 0;
 
-        // Process all withdrawals
-        processedWithdrawAssets =
-            (assetsPerShare * pendingWithdrawShares) /
-            1e18;
+        if (pendingWithdrawShares > 0) {
+            // burn shares for whitdrawal
+            _burn(address(this), pendingWithdrawShares);
 
-        console.log("processedWithdrawAsset: ", processedWithdrawAssets);
+            // Process all withdrawals
+            processedWithdrawAssets =
+                (assetsPerShare * pendingWithdrawShares) /
+                1e18;
+        }
 
         // Revert if the assets required for withdrawals < asset balance present in the vault
         if (processedWithdrawAssets > 0) {
@@ -464,6 +473,23 @@ contract UsersVault is
         return userDeposits[_receiver].unclaimedShares;
     }
 
+    function previewAssets(address _receiver) external view returns (uint256) {
+        _checkZeroRound();
+
+        if (
+            userWithdrawals[_receiver].round < currentRound &&
+            userWithdrawals[_receiver].pendingShares > 0
+        ) {
+            uint256 newUnclaimedAssets = _pendSharesToUnclaimedAssets(
+                _msgSender()
+            );
+            return
+                userWithdrawals[_receiver].unclaimedAssets + newUnclaimedAssets;
+        }
+
+        return userWithdrawals[_receiver].unclaimedAssets;
+    }
+
     function claimShares(uint256 _sharesAmount, address _receiver) public {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());
@@ -475,13 +501,10 @@ contract UsersVault is
             userDeposits[_msgSender()].round < currentRound &&
             userDeposits[_msgSender()].pendingAssets > 0
         ) {
-            uint256 newUnclaimedShares = _pendAssetsToUnclaimedShares(
+            uint256 unclaimedShares = _pendAssetsToUnclaimedShares(
                 _msgSender()
             );
-            userDeposits[_msgSender()].unclaimedShares =
-                userDeposits[_msgSender()].unclaimedShares +
-                newUnclaimedShares;
-
+            userDeposits[_msgSender()].unclaimedShares = unclaimedShares; 
             userDeposits[_msgSender()].pendingAssets = 0;
         }
 
@@ -504,23 +527,6 @@ contract UsersVault is
         _transfer(address(this), _receiver, _sharesAmount);
     }
 
-    function previewAssets(address _receiver) external view returns (uint256) {
-        _checkZeroRound();
-
-        if (
-            userWithdrawals[_receiver].round < currentRound &&
-            userWithdrawals[_receiver].pendingShares > 0
-        ) {
-            uint256 newUnclaimedAssets = _pendSharesToUnclaimedAssets(
-                _msgSender()
-            );
-            return
-                userWithdrawals[_receiver].unclaimedAssets + newUnclaimedAssets;
-        }
-
-        return userWithdrawals[_receiver].unclaimedAssets;
-    }
-
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());
@@ -531,14 +537,10 @@ contract UsersVault is
             userWithdrawals[_msgSender()].round < currentRound &&
             userWithdrawals[_msgSender()].pendingShares > 0
         ) {
-            uint256 newUnclaimedAssets = _pendSharesToUnclaimedAssets(
+            uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(
                 _msgSender()
             );
-
-            userWithdrawals[_msgSender()].unclaimedAssets =
-                userWithdrawals[_msgSender()].unclaimedAssets +
-                newUnclaimedAssets;
-
+            userWithdrawals[_msgSender()].unclaimedAssets = unclaimedAssets; 
             userWithdrawals[_msgSender()].pendingShares = 0;
         }
 
@@ -570,7 +572,8 @@ contract UsersVault is
 
     //
     function getUnderlyingLiquidity() public view returns (uint256) {
-        uint256 contrBalance = IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this));
+        uint256 contrBalance = IERC20Upgradeable(underlyingTokenAddress)
+            .balanceOf(address(this));
 
         console.log("contrBalance          : ", contrBalance);
         console.log("pendingDepositAssets  : ", pendingDepositAssets);
