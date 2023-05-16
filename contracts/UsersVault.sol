@@ -289,7 +289,6 @@ contract UsersVault is
             underlyingTokenAddress,
             _sharesAmount
         );
-        // _burn(_msgSender(), _sharesAmount);
 
         // Convert previous round pending shares into unclaimed assets
         if (
@@ -334,11 +333,6 @@ contract UsersVault is
                 : 0;
 
             sharesToMint = (pendingDepositAssets * assetsPerShare) / 1e18;
-
-            console.log("totalSupply           : ", totalSupply());
-            console.log("afterRoundVaultBalance: ", afterRoundVaultBalance);
-            console.log("assetsPerShare:         ", assetsPerShare);
-            console.log("sharesToMint:           ", sharesToMint);
         } else {
             // first round dont consider pendings
             afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
@@ -464,10 +458,10 @@ contract UsersVault is
             userDeposits[_receiver].round < currentRound &&
             userDeposits[_receiver].pendingAssets > 0
         ) {
-            uint256 newUnclaimedShares = _pendAssetsToUnclaimedShares(
+            uint256 unclaimedShares = _pendAssetsToUnclaimedShares(
                 _receiver
             );
-            return userDeposits[_receiver].unclaimedShares + newUnclaimedShares;
+            return unclaimedShares;
         }
 
         return userDeposits[_receiver].unclaimedShares;
@@ -480,11 +474,11 @@ contract UsersVault is
             userWithdrawals[_receiver].round < currentRound &&
             userWithdrawals[_receiver].pendingShares > 0
         ) {
-            uint256 newUnclaimedAssets = _pendSharesToUnclaimedAssets(
+            uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(
                 _msgSender()
             );
             return
-                userWithdrawals[_receiver].unclaimedAssets + newUnclaimedAssets;
+                unclaimedAssets;
         }
 
         return userWithdrawals[_receiver].unclaimedAssets;
@@ -572,13 +566,6 @@ contract UsersVault is
 
     //
     function getUnderlyingLiquidity() public view returns (uint256) {
-        uint256 contrBalance = IERC20Upgradeable(underlyingTokenAddress)
-            .balanceOf(address(this));
-
-        console.log("contrBalance          : ", contrBalance);
-        console.log("pendingDepositAssets  : ", pendingDepositAssets);
-        console.log("processedWithdrawAsset: ", processedWithdrawAssets);
-
         return
             IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -

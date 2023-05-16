@@ -8,8 +8,6 @@ import {
 import {
   SnapshotRestorer,
   takeSnapshot,
-  impersonateAccount,
-  stopImpersonatingAccount,
 } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import {
@@ -77,9 +75,9 @@ let adapterContract: AdapterMock;
 
 let usdcTokenContract: ERC20Mock;
 let userBalanceBefore: BigNumber;
-let userBalanceAfter: BigNumber;
 let vaultBalanceBefore: BigNumber;
-let vaultBalanceAfter: BigNumber;
+let userSharesBalanceBefore: BigNumber;
+let vaultSharesBalanceBefore: BigNumber;
 
 let signers: Array<Signer>;
 let userAddresses: Array<string>;
@@ -186,7 +184,7 @@ describe("User Vault Contract Tests", function () {
         []
       )) as AdaptersRegistryMock;
       await adaptersRegistryContract.deployed();
-            
+
       // deploy mocked adapter
       AdapterFactory = await ethers.getContractFactory("AdapterMock");
       adapterContract = (await AdapterFactory.deploy()) as AdapterMock;
@@ -998,14 +996,16 @@ describe("User Vault Contract Tests", function () {
           });
 
           it("THEN contract balance should increase", async () => {
-            vaultBalanceAfter = await usdcTokenContract.balanceOf(
+            const vaultBalanceAfter = await usdcTokenContract.balanceOf(
               usersVaultContract.address
             );
             expect(vaultBalanceAfter).to.equal(vaultBalanceBefore.add(AMOUNT));
           });
 
           it("THEN user balance should decrease", async () => {
-            userBalanceAfter = await usdcTokenContract.balanceOf(user1Address);
+            const userBalanceAfter = await usdcTokenContract.balanceOf(
+              user1Address
+            );
             expect(userBalanceAfter).to.equal(userBalanceBefore.sub(AMOUNT));
           });
 
@@ -1040,20 +1040,261 @@ describe("User Vault Contract Tests", function () {
         });
       });
 
+      describe("WHEN trying to make a claimShares", async () => {
+        after(async () => {
+          await snapshot.restore();
+        });
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN calling on round ZERO", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(user1)
+                  .claimShares(AMOUNT_1E18, user1Address)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "InvalidRound"
+              );
+            });
+          });
+
+          describe("WHEN rollover was executed so round is > 0", function () {
+            before(async () => {
+              // deposit so rollover can happen
+              await usersVaultContract.connect(user1).userDeposit(AMOUNT_1E18);
+
+              // rollover so minting can happen
+              await usersVaultContract
+                .connect(traderWallet)
+                .rolloverFromTrader();
+            });
+            after(async () => {
+              await snapshot.restore();
+            });
+            describe("WHEN caller is not allowed", function () {
+              before(async () => {
+                // change returnValue to return false on function call
+                await contractsFactoryContract.setReturnValue(false);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(nonAuthorized)
+                    .claimShares(AMOUNT_1E18, otherAddress)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "UserNotAllowed"
+                );
+              });
+            });
+            describe("WHEN amount is ZERO", function () {
+              before(async () => {
+                // change returnValue to return true on function call
+                await contractsFactoryContract.setReturnValue(true);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(user1)
+                    .claimShares(ZERO_AMOUNT, user1Address)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAmount"
+                );
+              });
+            });
+            describe("WHEN amount is higher than user shares", function () {
+              before(async () => {
+                // change returnValue to return true on function call
+                await contractsFactoryContract.setReturnValue(true);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(user1)
+                    .claimShares(
+                      BigNumber.from(AMOUNT_1E18.mul(2)),
+                      user1Address
+                    )
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "InsufficientShares"
+                );
+              });
+            });
+          });
+
+          describe("WHEN calling claimShares with right parameters", function () {
+            const AMOUNT = AMOUNT_1E18.mul(30);
+            let userPendingAssets: BigNumber;
+            let userUnclaimedShares: BigNumber;
+
+            before(async () => {
+              // user deposits for starting on round 0
+              // user1 = 100
+              // user2 = 200
+              // user3 = 300
+              // user4 = 400
+              // user5 = 500
+              await usersDeposit(
+                usersVaultContract,
+                signers,
+                AMOUNT_1E18.mul(100),
+                5
+              );
+
+              vaultSharesBalanceBefore = await usersVaultContract.balanceOf(
+                usersVaultContract.address
+              );
+              userSharesBalanceBefore = await usersVaultContract.balanceOf(
+                user3Address
+              );
+
+              // rollover so minting can happen
+              await usersVaultContract
+                .connect(traderWallet)
+                .rolloverFromTrader();
+
+              // preview and claim shares
+              const sharesPreview = await usersVaultContract.previewShares(
+                user3Address
+              );
+              expect(sharesPreview).to.equal(AMOUNT_1E18.mul(300));
+
+              // get user previous mapping data
+              const userDeposits = await usersVaultContract.userDeposits(
+                user3Address
+              );
+              userPendingAssets = userDeposits.pendingAssets;
+              userUnclaimedShares = userDeposits.unclaimedShares;
+              expect(userPendingAssets).to.equal(AMOUNT_1E18.mul(300));
+              expect(userUnclaimedShares).to.equal(ZERO_AMOUNT);
+
+              txResult = await usersVaultContract
+                .connect(user3)
+                .claimShares(AMOUNT, user3Address);
+            });
+
+            it("THEN user shares should increase", async () => {
+              const userSharesBalanceAfter = await usersVaultContract.balanceOf(
+                user3Address
+              );
+              expect(userSharesBalanceAfter).to.equal(AMOUNT);
+              expect(userSharesBalanceAfter).to.equal(
+                userSharesBalanceBefore.add(AMOUNT)
+              );
+            });
+            it("THEN contract shares should decrease", async () => {
+              const vaultSharesBalance = await usersVaultContract.balanceOf(
+                usersVaultContract.address
+              );
+              const sharesAmountOnContract = AMOUNT_1E18.mul(1500).sub(AMOUNT);
+              expect(vaultSharesBalance).to.equal(sharesAmountOnContract);
+              expect(vaultSharesBalance).to.equal(
+                await usersVaultContract.getSharesContractBalance()
+              );
+            });
+            it("THEN it should emit an Event", async () => {
+              await expect(txResult)
+                .to.emit(usersVaultContract, "SharesClaimed")
+                .withArgs(
+                  BigNumber.from(1),
+                  AMOUNT,
+                  user3Address,
+                  user3Address
+                );
+            });
+            it("THEN user3 deposit mapping should return correct values", async () => {
+              const userDeposits = await usersVaultContract.userDeposits(
+                user3Address
+              );
+              expect(await usersVaultContract.currentRound()).to.equal(
+                BigNumber.from(1)
+              );
+              expect(userDeposits.round).to.equal(BigNumber.from(0));
+              expect(userDeposits.pendingAssets).to.equal(BigNumber.from(0));
+              expect(userDeposits.unclaimedShares).to.equal(
+                userPendingAssets.sub(AMOUNT)
+              );
+            });
+          });
+        });
+      });
+
       describe("WHEN trying to make a withdrawRequest", async () => {
-        describe("WHEN calling on round ZERO", function () {
-          it("THEN it should fail", async () => {
-            await expect(
-              usersVaultContract.connect(user1).withdrawRequest(AMOUNT_1E18)
-            ).to.be.revertedWithCustomError(usersVaultContract, "InvalidRound");
+        after(async () => {
+          await snapshot.restore();
+        });
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN calling on round ZERO", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract.connect(user1).withdrawRequest(AMOUNT_1E18)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "InvalidRound"
+              );
+            });
+          });
+          describe("WHEN rollover was executed so round is > 0", function () {
+            before(async () => {
+              // deposit so rollover can happen
+              await usersVaultContract.connect(user1).userDeposit(AMOUNT_1E18);
+
+              // rollover so minting can happen
+              await usersVaultContract
+                .connect(traderWallet)
+                .rolloverFromTrader();
+            });
+            after(async () => {
+              await snapshot.restore();
+            });
+            describe("WHEN caller is not allowed", function () {
+              before(async () => {
+                // change returnValue to return false on function call
+                await contractsFactoryContract.setReturnValue(false);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(nonAuthorized)
+                    .withdrawRequest(AMOUNT_1E18)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "UserNotAllowed"
+                );
+              });
+            });
+            describe("WHEN amount is ZERO", function () {
+              before(async () => {
+                // change returnValue to return true on function call
+                await contractsFactoryContract.setReturnValue(true);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract.connect(user1).withdrawRequest(ZERO_AMOUNT)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAmount"
+                );
+              });
+            });
           });
         });
 
-        describe("WHEN making the first rollover (for withdraw test)", function () {
-          let vaultSharesBalance: BigNumber;
+        describe("WHEN calling withdrawRequest with right parameters", function () {
+          const AMOUNT = AMOUNT_1E18.mul(30);
+          let userPendingShares: BigNumber;
+          let userUnclaimedAssets: BigNumber;
+          let contractPendingWithdrawShares: BigNumber;
 
           before(async () => {
             // user deposits for starting on round 0
+            // user1 = 100
+            // user2 = 200
+            // user3 = 300
+            // user4 = 400
+            // user5 = 500
             await usersDeposit(
               usersVaultContract,
               signers,
@@ -1061,452 +1302,288 @@ describe("User Vault Contract Tests", function () {
               5
             );
 
+            // rollover so minting can happen
             await usersVaultContract.connect(traderWallet).rolloverFromTrader();
-          });
-          after(async () => {
-            await snapshot.restore();
-          });
 
-          it("THEN round should be 1 and assetsPerShareXRound should be 1", async () => {
-            expect(await usersVaultContract.currentRound()).to.equal(
-              BigNumber.from(1)
-            );
-            expect(await usersVaultContract.assetsPerShareXRound(0)).to.equal(
-              AMOUNT_1E18
-            );
-          });
+            // claim shares so withdraw can happen
+            await usersVaultContract
+              .connect(user3)
+              .claimShares(AMOUNT, user3Address);
 
-          it("THEN shares should be 100+200+300+400+500 = 1500e18", async () => {
-            vaultSharesBalance = await usersVaultContract.balanceOf(
+            vaultSharesBalanceBefore = await usersVaultContract.balanceOf(
               usersVaultContract.address
             );
-
-            const sharesAmountOnContract = AMOUNT_1E18.mul(1500);
-            expect(vaultSharesBalance).to.equal(sharesAmountOnContract);
-          });
-
-          it("THEN getSharesContractBalance() should return 1500e18", async () => {
-            vaultSharesBalance = await usersVaultContract.balanceOf(
-              usersVaultContract.address
+            userSharesBalanceBefore = await usersVaultContract.balanceOf(
+              user3Address
             );
 
+            // get user previous mapping data
+            const userWithdrawals = await usersVaultContract.userWithdrawals(
+              user3Address
+            );
+            userPendingShares = userWithdrawals.pendingShares;
+            userUnclaimedAssets = userWithdrawals.unclaimedAssets;
+            contractPendingWithdrawShares =
+              await usersVaultContract.pendingWithdrawShares();
+            expect(userPendingShares).to.equal(ZERO_AMOUNT);
+            expect(userUnclaimedAssets).to.equal(ZERO_AMOUNT);
+            expect(contractPendingWithdrawShares).to.equal(ZERO_AMOUNT);
+
+            // approve so does not fail on allowance
+            await usersVaultContract
+              .connect(user3)
+              .approve(user3Address, AMOUNT);
+            txResult = await usersVaultContract
+              .connect(user3)
+              .withdrawRequest(AMOUNT);
+          });
+
+          it("THEN user shares should decrease", async () => {
+            const userSharesBalanceAfter = await usersVaultContract.balanceOf(
+              user3Address
+            );
+            expect(userSharesBalanceAfter).to.equal(ZERO_AMOUNT);
+            expect(userSharesBalanceAfter).to.equal(
+              userSharesBalanceBefore.sub(AMOUNT)
+            );
+          });
+          it("THEN contract shares should increase", async () => {
+            const vaultSharesBalance = await usersVaultContract.balanceOf(
+              usersVaultContract.address
+            );
             const sharesAmountOnContract = AMOUNT_1E18.mul(1500);
             expect(vaultSharesBalance).to.equal(sharesAmountOnContract);
             expect(vaultSharesBalance).to.equal(
               await usersVaultContract.getSharesContractBalance()
             );
           });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "WithdrawRequest")
+              .withArgs(user3Address, usdcTokenContract.address, AMOUNT);
+          });
+          it("THEN user3 withdraw mapping should return correct values", async () => {
+            const userWithdrawals = await usersVaultContract.userWithdrawals(
+              user3Address
+            );
+            expect(await usersVaultContract.currentRound()).to.equal(
+              BigNumber.from(1)
+            );
 
-          /// FOLLOWING TESTS ARE LINKED ONE WITH EACH OTHER
-          /// FOLLOWING TESTS ARE LINKED ONE WITH EACH OTHER
-          /// DISABLING ONE, MAY MAKE THE OTHERS TO FAIL
-          /// DISABLING ONE, MAY MAKE THE OTHERS TO FAIL
-          describe("WHEN making a withdrawRequest", function () {
-            describe("WHEN calling with invalid caller or parameters", function () {
-              describe("WHEN caller is not allowed", function () {
-                before(async () => {
-                  // change returnValue to return false on function call
-                  await contractsFactoryContract.setReturnValue(false);
-                });
-                it("THEN it should fail", async () => {
-                  await expect(
-                    usersVaultContract
-                      .connect(nonAuthorized)
-                      .withdrawRequest(AMOUNT_1E18)
-                  ).to.be.revertedWithCustomError(
-                    usersVaultContract,
-                    "UserNotAllowed"
-                  );
-                });
-              });
-              describe("WHEN amount is ZERO", function () {
-                before(async () => {
-                  // change returnValue to return true on function call
-                  await contractsFactoryContract.setReturnValue(true);
-                });
-                it("THEN it should fail", async () => {
-                  await expect(
-                    usersVaultContract
-                      .connect(user1)
-                      .withdrawRequest(ZERO_AMOUNT)
-                  ).to.be.revertedWithCustomError(
-                    usersVaultContract,
-                    "ZeroAmount"
-                  );
-                });
-              });
-              describe("WHEN amount is higher than user shares", function () {
-                before(async () => {
-                  // change returnValue to return true on function call
-                  await contractsFactoryContract.setReturnValue(true);
+            expect(userWithdrawals.round).to.equal(BigNumber.from(1));
+            expect(userWithdrawals.pendingShares).to.equal(AMOUNT);
+            expect(userWithdrawals.unclaimedAssets).to.equal(ZERO_AMOUNT);
 
-                  // approve so does not fail on allowance
-                  await usersVaultContract.connect(user1).approve(user1Address, AMOUNT_1E18.mul(10000));
-                });
-                it("THEN it should fail", async () => {
-                  await expect(
-                    usersVaultContract
-                      .connect(user1)
-                      .withdrawRequest(AMOUNT_1E18.mul(10000))
-                  ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
-                });
-              });
+            const contractPendingWithdrawSharesNow =
+              await usersVaultContract.pendingWithdrawShares();
+            expect(contractPendingWithdrawSharesNow).to.equal(
+              contractPendingWithdrawShares.add(AMOUNT)
+            );
+          });
+        });
+      });
+
+      describe("WHEN trying to make a claimAssets", async () => {
+        after(async () => {
+          await snapshot.restore();
+        });
+        describe("WHEN calling with invalid caller or parameters", function () {
+          describe("WHEN calling on round ZERO", function () {
+            it("THEN it should fail", async () => {
+              await expect(
+                usersVaultContract
+                  .connect(user1)
+                  .claimAssets(AMOUNT_1E18, user1Address)
+              ).to.be.revertedWithCustomError(
+                usersVaultContract,
+                "InvalidRound"
+              );
             });
-            describe("WHEN calling claimShares (for withdraw test)", function () {
-              describe("WHEN calling with invalid caller or parameters", function () {
-                describe("WHEN caller is not allowed", function () {
-                  before(async () => {
-                    // change returnValue to return false on function call
-                    await contractsFactoryContract.setReturnValue(false);
-                  });
-                  it("THEN it should fail", async () => {
-                    await expect(
-                      usersVaultContract
-                        .connect(nonAuthorized)
-                        .claimShares(AMOUNT_1E18, otherAddress)
-                    ).to.be.revertedWithCustomError(
-                      usersVaultContract,
-                      "UserNotAllowed"
-                    );
-                  });
-                });
-                describe("WHEN amount is ZERO", function () {
-                  before(async () => {
-                    // change returnValue to return true on function call
-                    await contractsFactoryContract.setReturnValue(true);
-                  });
-                  it("THEN it should fail", async () => {
-                    await expect(
-                      usersVaultContract
-                        .connect(user1)
-                        .claimShares(ZERO_AMOUNT, user1Address)
-                    ).to.be.revertedWithCustomError(
-                      usersVaultContract,
-                      "ZeroAmount"
-                    );
-                  });
-                });
-                describe("WHEN amount is higher than user shares", function () {
-                  before(async () => {
-                    // change returnValue to return true on function call
-                    await contractsFactoryContract.setReturnValue(true);
-                  });
-                  it("THEN it should fail", async () => {
-                    await expect(
-                      usersVaultContract
-                        .connect(user1)
-                        .claimShares(AMOUNT_1E18.mul(10000), user1Address)
-                    ).to.be.revertedWithCustomError(
-                      usersVaultContract,
-                      "InsufficientShares"
-                    );
-                  });
-                });
+          });
+          describe("WHEN rollover was executed so round is > 0", function () {
+            const AMOUNT = AMOUNT_1E18.mul(30);
+            before(async () => {
+              // deposit so rollover can happen
+              await usersVaultContract.connect(user3).userDeposit(AMOUNT);
 
-                // ===================================================================================================
-                // ===================================================================================================
-                // FALTARIA HACER FALLAR EL TRANSFER DE LAS SHARES
-                // ===================================================================================================
-                // ===================================================================================================
-              });
+              // rollover so minting can happen
+              await usersVaultContract
+                .connect(traderWallet)
+                .rolloverFromTrader();
 
-              describe("WHEN calling claimShares with right parameters (for withdraw test)", function () {
-                before(async () => {
-                  // users need to claim before requesting withdraw
-                  await claimShares(
-                    usersVaultContract,
-                    signers,
-                    AMOUNT_1E18.mul(10), // 10 shares per user
-                    userAddresses,
-                    3
-                  );
-                });
+              // claim shares so withdraw can happen
+              await usersVaultContract
+                .connect(user3)
+                .claimShares(AMOUNT, user3Address);
 
-                it("THEN users shares should increase", async () => {
-                  expect(
-                    await usersVaultContract.balanceOf(user1Address)
-                  ).to.equal(AMOUNT_1E18.mul(10));
-                  expect(
-                    await usersVaultContract.balanceOf(user2Address)
-                  ).to.equal(AMOUNT_1E18.mul(10));
-                  expect(
-                    await usersVaultContract.balanceOf(user3Address)
-                  ).to.equal(AMOUNT_1E18.mul(10));
-                });
+              // approve so does not fail on allowance
+              await usersVaultContract
+                .connect(user3)
+                .approve(user3Address, AMOUNT);
 
-                it("THEN contract shares should decrease", async () => {
-                  vaultSharesBalance = await usersVaultContract.balanceOf(
-                    usersVaultContract.address
-                  );
-                  const sharesAmountOnContract = AMOUNT_1E18.mul(1500).sub(
-                    AMOUNT_1E18.mul(30)
-                  );
-                  expect(vaultSharesBalance).to.equal(sharesAmountOnContract);
-                  expect(vaultSharesBalance).to.equal(
-                    await usersVaultContract.getSharesContractBalance()
-                  );
-                });
-              });
+              // withdraw request so claim assets can happen after rollover
+              await usersVaultContract
+                .connect(user3)
+                .withdrawRequest(AMOUNT_1E18);
             });
-            describe("WHEN calling withdrawRequest with right parameters", function () {
+            after(async () => {
+              await snapshot.restore();
+            });
+            describe("WHEN caller is not allowed", function () {
               before(async () => {
-                // provide allowance so the contract can transfer tokens back
-                await usersVaultContract.connect(user3).approve(user3Address, AMOUNT_1E18.mul(10));
-
-                txResult = await usersVaultContract
-                  .connect(user3)
-                  .withdrawRequest(AMOUNT_1E18.mul(10));
+                // change returnValue to return false on function call
+                await contractsFactoryContract.setReturnValue(false);
               });
-              it("THEN contract should return correct vaules", async () => {
-                const userWithdrawals =
-                  await usersVaultContract.userWithdrawals(user3Address);
-                expect(userWithdrawals.round).to.equal(1);
-                expect(userWithdrawals.pendingShares).to.equal(
-                  AMOUNT_1E18.mul(10)
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(nonAuthorized)
+                    .withdrawRequest(AMOUNT_1E18)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "UserNotAllowed"
                 );
-                expect(
-                  await usersVaultContract.pendingWithdrawShares()
-                ).to.equal(AMOUNT_1E18.mul(10));
-              });
-              it("THEN it should emit an Event", async () => {
-                await expect(txResult)
-                  .to.emit(usersVaultContract, "WithdrawRequest")
-                  .withArgs(
-                    user3Address,
-                    underlyingTokenAddress,
-                    AMOUNT_1E18.mul(10)
-                  );
-              });
-              describe("WHEN calling AGAIN with correct parameters", function () {
-                let contractBalanceBefore: BigNumber;
-                let userBalanceBefore: BigNumber;
-                before(async () => {
-
-                  contractBalanceBefore =  await usersVaultContract.balanceOf(usersVaultContract.address);
-                  userBalanceBefore = await usersVaultContract.balanceOf(user2Address);
-
-                  // provide allowance so the contract can transfer tokens back
-                  await usersVaultContract.connect(user2).approve(user2Address, AMOUNT_1E18.mul(10));
-
-                  txResult = await usersVaultContract
-                    .connect(user2)
-                    .withdrawRequest(AMOUNT_1E18.mul(10));
-                });
-
-                it("THEN contract should return correct vaules", async () => {
-                  const userWithdrawals =
-                    await usersVaultContract.userWithdrawals(user2Address);
-                  expect(userWithdrawals.round).to.equal(1);
-                  expect(userWithdrawals.pendingShares).to.equal(
-                    AMOUNT_1E18.mul(10)
-                  );
-                  expect(
-                    await usersVaultContract.pendingWithdrawShares()
-                  ).to.equal(AMOUNT_1E18.mul(20));
-                });
-
-                it("THEN contract shares balance should increase", async () => {
-                  const contractBalanceAfter =  await usersVaultContract.balanceOf(usersVaultContract.address);
-                  expect(contractBalanceAfter).to.equal(contractBalanceBefore.add(AMOUNT_1E18.mul(10)));
-                  
-                });
-                it("THEN user shares balance should decrease", async () => {
-                  const userBalanceAfter = await usersVaultContract.balanceOf(user2Address);
-                  expect(userBalanceAfter).to.equal(userBalanceBefore.sub(AMOUNT_1E18.mul(10)));
-                  
-                });
-
-                it("THEN it should emit an Event", async () => {
-                  await expect(txResult)
-                    .to.emit(usersVaultContract, "WithdrawRequest")
-                    .withArgs(
-                      user2Address,
-                      underlyingTokenAddress,
-                      AMOUNT_1E18.mul(10)
-                    );
-                });
               });
             });
-
-            describe("WHEN trying to call claimAssets", function () {
-              describe("WHEN calling with invalid caller or parameters", function () {
-                describe("WHEN caller is not allowed", function () {
-                  before(async () => {
-                    // change returnValue to return false on function call
-                    await contractsFactoryContract.setReturnValue(false);
-                  });
-                  it("THEN it should fail", async () => {
-                    await expect(
-                      usersVaultContract
-                        .connect(nonAuthorized)
-                        .claimAssets(AMOUNT_1E18, otherAddress)
-                    ).to.be.revertedWithCustomError(
-                      usersVaultContract,
-                      "UserNotAllowed"
-                    );
-                  });
-                });
-                describe("WHEN amount is ZERO", function () {
-                  before(async () => {
-                    // change returnValue to return true on function call
-                    await contractsFactoryContract.setReturnValue(true);
-                  });
-                  it("THEN it should fail", async () => {
-                    await expect(
-                      usersVaultContract
-                        .connect(user1)
-                        .claimAssets(ZERO_AMOUNT, otherAddress)
-                    ).to.be.revertedWithCustomError(
-                      usersVaultContract,
-                      "ZeroAmount"
-                    );
-                  });
-                });
-                describe("WHEN amount is higher than user assets", function () {
-                  before(async () => {
-                    // change returnValue to return true on function call
-                    await contractsFactoryContract.setReturnValue(true);
-                  });
-                  it("THEN it should fail", async () => {
-                    await expect(
-                      usersVaultContract
-                        .connect(user3)
-                        .claimAssets(AMOUNT_1E18.mul(100000), user3Address)
-                    ).to.be.revertedWithCustomError(
-                      usersVaultContract,
-                      "InsufficientAssets"
-                    );
-                  });
-                });
-                // ===================================================================================================
-                // ===================================================================================================
-                // FALTARIA HACER FALLAR EL TRANSFER DE LOS ASSETS
-                // ===================================================================================================
-                // ===================================================================================================
+            describe("WHEN amount is ZERO", function () {
+              before(async () => {
+                // change returnValue to return true on function call
+                await contractsFactoryContract.setReturnValue(true);
               });
-              describe("WHEN calling rollover again (to test claimAssets)", function () {
-                before(async () => {
-                  await usersVaultContract
-                    .connect(traderWallet)
-                    .rolloverFromTrader();
-                });
-
-                it("THEN round should be 1 and assetsPerShareXRound should be 1", async () => {
-                  expect(await usersVaultContract.currentRound()).to.equal(
-                    BigNumber.from(2)
-                  );
-                  expect(
-                    await usersVaultContract.assetsPerShareXRound(0)
-                  ).to.equal(AMOUNT_1E18);
-                });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(user1)
+                    .claimAssets(ZERO_AMOUNT, user1Address)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "ZeroAmount"
+                );
               });
-
-              describe("WHEN calling claimAssets with right parameters", function () {
-                let contractSharesBalanceBefore: BigNumber;
-                let userSharesBalanceBefore: BigNumber;
-                before(async () => {
-
-                  // ===
-                  // two users want to withdraw 20 shares in total
-                  // contract has 1500 en asset
-                  // contract has 1470 en shares                  
-                  // assetPerShare 1500 / 1470 = 1,0204081632653061224489795918 asset per 1 share
-                  
-                  // processedWithdrawAssets is 20 * 1,0135135135135135135135135135 = 20,27027027027027027027027027
-                  // user 3 asked to withdraw 10 shares
-                  // so pendingShares for user 3 is 10
-                  // user 3 asked to claim 10 assets
-                  // contracts converts user 3 pendingShares to unclaimedAssets (doing pendingShares * assetPerShare)
-                  // 10 * 1,0135135135135135135135135135 = 10,135135135135135135135135135 = unclaimed assets
-                  // contracts substract from unclaimedAssets, what user requested
-                  // 10,135135135135135135135135135 - 10 = 0,135135135135135135135135135
-                  // leaves the result in unclaimedAssets for that user
-
-                  userBalanceBefore = await usdcTokenContract.balanceOf(
-                    user3Address
-                  );
-                  vaultBalanceBefore = await usdcTokenContract.balanceOf(
-                    usersVaultContract.address
-                  );
-
-                  contractSharesBalanceBefore = await usersVaultContract.balanceOf(usersVaultContract.address);
-                  userSharesBalanceBefore = await usersVaultContract.balanceOf(user3Address);
-
-                  console.log('vaultBalanceBefore          :>> ', vaultBalanceBefore);
-                  console.log('contractSharesBalanceBefore :>> ', contractSharesBalanceBefore);
-                  
-                  console.log('userBalanceBefore           :>> ', userBalanceBefore);
-                  console.log('userSharesBalanceBefore     :>> ', userSharesBalanceBefore);
-                  
-                  txResult = await usersVaultContract
+            });
+            describe("WHEN amount requested is larger than available for user", function () {
+              before(async () => {
+                // change returnValue to return true on function call
+                await contractsFactoryContract.setReturnValue(true);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
                     .connect(user3)
-                    .claimAssets(AMOUNT_1E18.mul(10), user3Address);
-                  
-                  console.log('totalSupply                 :>> ', await usersVaultContract.totalSupply());
-                  console.log('pendingWithdrawShares       :>> ', await usersVaultContract.pendingWithdrawShares());
-
-                });
-
-                it("THEN contract should return correct vaules", async () => {
-                  const user3withdrawal =
-                    await usersVaultContract.userWithdrawals(user3Address);
-                  // (1500/1480 * 10) - (claimedAmount)
-                  const assetPerShare = AMOUNT_1E18.mul(1500)
-                    .mul(AMOUNT_1E18)
-                    .div(AMOUNT_1E18.mul(1470));
-                  
-                  const assetPerShareMulAmountClaimed = assetPerShare
-                    .mul(AMOUNT_1E18.mul(10))
-                    .div(AMOUNT_1E18);
-                  
-                    const userUnclaimedAssets = assetPerShareMulAmountClaimed.sub(
-                    AMOUNT_1E18.mul(10)
-                  );
-                  
-                  expect(user3withdrawal.round).to.equal(1);
-
-                  expect(user3withdrawal.unclaimedAssets).to.equal(
-                    userUnclaimedAssets
-                  );
-                  
-                  // // assetPerShare * sum of withdrawals (20)
-                  const processedWithdrawAssets = assetPerShare
-                    .mul(AMOUNT_1E18.mul(20))
-                    .div(AMOUNT_1E18);
-
-                  // expect(processedWithdrawAssets).to.equal(
-                  //   await usersVaultContract.processedWithdrawAssets()
-                  // );
-                });
-
-                it("THEN contract underlying balance should be decreased", async () => {
-                  vaultBalanceAfter = await usdcTokenContract.balanceOf(
-                    usersVaultContract.address
-                  );
-                  expect(vaultBalanceBefore.sub(AMOUNT_1E18.mul(10))).to.equal(
-                    vaultBalanceAfter
-                  );
-                });
-                it("THEN user 3 balance should be increased", async () => {
-                  userBalanceAfter = await usdcTokenContract.balanceOf(
-                    user3Address
-                  );
-                  expect(userBalanceBefore.add(AMOUNT_1E18.mul(10))).to.equal(
-                    userBalanceAfter
-                  );
-                });
-                it("THEN it should emit an Event", async () => {
-                  await expect(txResult)
-                    .to.emit(usersVaultContract, "AssetsClaimed")
-                    .withArgs(
-                      BigNumber.from(2),
-                      AMOUNT_1E18.mul(10),
-                      user3Address,
-                      user3Address
-                    );
-                });
+                    .claimAssets(AMOUNT_1E18.mul(3000), user3Address)
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "InsufficientAssets"
+                );
               });
             });
+          });
+        });
+
+        describe("WHEN calling claimAssets with right parameters", function () {
+          const AMOUNT = AMOUNT_1E18.mul(30);
+          let userPendingShares: BigNumber;
+          let userUnclaimedAssets: BigNumber;
+          let contractPendingWithdrawShares: BigNumber;
+
+          before(async () => {
+            // user deposits for starting on round 0
+            // user1 = 100
+            // user2 = 200
+            // user3 = 300
+            // user4 = 400
+            // user5 = 500
+            await usersDeposit(
+              usersVaultContract,
+              signers,
+              AMOUNT_1E18.mul(100),
+              5
+            );
+
+            // rollover so minting can happen
+            await usersVaultContract.connect(traderWallet).rolloverFromTrader();
+
+            // claim shares so withdraw can happen
+            await usersVaultContract
+              .connect(user3)
+              .claimShares(AMOUNT, user3Address);
+
+            // approve so does not fail on allowance
+            await usersVaultContract
+              .connect(user3)
+              .approve(user3Address, AMOUNT);
+
+            // withdraw request so claim assets can happen after rollover
+            await usersVaultContract.connect(user3).withdrawRequest(AMOUNT);
+
+            // rollover so shares can be burned
+            await usersVaultContract.connect(traderWallet).rolloverFromTrader();
+
+            vaultBalanceBefore = await usdcTokenContract.balanceOf(
+              usersVaultContract.address
+            );
+            userBalanceBefore = await usdcTokenContract.balanceOf(user3Address);
+
+            // get user previous mapping data
+            const userWithdrawals = await usersVaultContract.userWithdrawals(
+              user3Address
+            );
+            userPendingShares = userWithdrawals.pendingShares;
+            userUnclaimedAssets = userWithdrawals.unclaimedAssets;
+            contractPendingWithdrawShares =
+              await usersVaultContract.pendingWithdrawShares();
+            expect(userPendingShares).to.equal(AMOUNT);
+            expect(userUnclaimedAssets).to.equal(ZERO_AMOUNT);
+            expect(contractPendingWithdrawShares).to.equal(ZERO_AMOUNT);
+
+            txResult = await usersVaultContract
+              .connect(user3)
+              .claimAssets(AMOUNT.div(2), user3Address);
+          });
+
+          it("THEN user usdc balance should increase", async () => {
+            const userBalanceAfter = await usdcTokenContract.balanceOf(
+              user3Address
+            );
+            expect(userBalanceAfter).to.equal(
+              AMOUNT_1E18.mul(700).add(AMOUNT.div(2))
+            );
+            expect(userBalanceAfter).to.equal(
+              userBalanceBefore.add(AMOUNT.div(2))
+            );
+          });
+          it("THEN contract usdc balance should decrease", async () => {
+            const vaultBalance = await usdcTokenContract.balanceOf(
+              usersVaultContract.address
+            );
+            expect(vaultBalance).to.equal(
+              AMOUNT_1E18.mul(1500).sub(AMOUNT_1E18.mul(15))
+            );
+            expect(vaultBalance).to.equal(
+              vaultBalanceBefore.sub(AMOUNT.div(2))
+            );
+          });
+          it("THEN it should emit an Event", async () => {
+            await expect(txResult)
+              .to.emit(usersVaultContract, "AssetsClaimed")
+              .withArgs(
+                BigNumber.from(2),
+                AMOUNT.div(2),
+                user3Address,
+                user3Address
+              );
+          });
+          it("THEN user3 withdraw mapping should return correct values", async () => {
+            const userWithdrawals = await usersVaultContract.userWithdrawals(
+              user3Address
+            );
+            expect(await usersVaultContract.currentRound()).to.equal(
+              BigNumber.from(2)
+            );
+
+            expect(userWithdrawals.round).to.equal(BigNumber.from(1));
+            expect(userWithdrawals.pendingShares).to.equal(ZERO_AMOUNT);
+            expect(userWithdrawals.unclaimedAssets).to.equal(AMOUNT.div(2));
           });
         });
       });
@@ -1662,6 +1739,9 @@ describe("User Vault Contract Tests", function () {
       });
 
       describe("WHEN trying to make a rollover", async () => {
+        after(async () => {
+          await snapshot.restore();
+        });
         describe("WHEN calling with invalid caller or parameters", function () {
           describe("WHEN caller is not trader", function () {
             it("THEN it should fail", async () => {
@@ -1685,21 +1765,55 @@ describe("User Vault Contract Tests", function () {
           });
         });
 
-        describe("WHEN calling with correct parameters on round ZERO", function () {
+        describe("WHEN trying to execute first rollover on round 0", function () {
+          const AMOUNT = AMOUNT_1E18.mul(30);
+          let userPendingShares: BigNumber;
+          let userUnclaimedAssets: BigNumber;
+          let contractPendingWithdrawShares: BigNumber;
+
           before(async () => {
-            // contractBalanceBefore = await usdcTokenContract.balanceOf(
-            //   usersVaultContract.address
-            // );
+            // user deposits for starting on round 0
+            // user1 = 100
+            // user2 = 200
+            // user3 = 300
+            // user4 = 400
+            // user5 = 500
+            await usersDeposit(
+              usersVaultContract,
+              signers,
+              AMOUNT_1E18.mul(100),
+              5
+            );
+
+            /*
+            // rollover so minting can happen
+            await usersVaultContract.connect(traderWallet).rolloverFromTrader();
+
+            // claim shares so withdraw can happen
+            await usersVaultContract
+              .connect(user3)
+              .claimShares(AMOUNT, user3Address);
+
+            // approve so does not fail on allowance
+            await usersVaultContract
+              .connect(user3)
+              .approve(user3Address, AMOUNT);
+
+            // withdraw request so claim assets can happen after rollover
+            await usersVaultContract.connect(user3).withdrawRequest(AMOUNT);
+            */
+
             vaultBalanceBefore = await usdcTokenContract.balanceOf(
               usersVaultContract.address
             );
-            // traderBalanceBefore = await usdcTokenContract.balanceOf(
-            //   traderAddress
-            // );
+            userBalanceBefore = await usdcTokenContract.balanceOf(user3Address);
 
-            await usersVaultContract
-              .connect(user1)
-              .userDeposit(AMOUNT_1E18.mul(100).mul(8));
+            vaultSharesBalanceBefore = await usersVaultContract.balanceOf(
+              usersVaultContract.address
+            );
+            userSharesBalanceBefore = await usersVaultContract.balanceOf(
+              user3Address
+            );
           });
 
           it("THEN before rollover all round balance variables should be ZERO", async () => {
@@ -1712,55 +1826,111 @@ describe("User Vault Contract Tests", function () {
             );
           });
 
-          describe("WHEN rollover on users vault succeed", function () {
+          describe("WHEN rollover is executed on round 0", function () {
             before(async () => {
               txResult = await usersVaultContract
                 .connect(traderWallet)
                 .rolloverFromTrader();
-            });
-
-            it("THEN after rollover afterRoundVaultBalance should be plain underlying balances", async () => {
-              expect(
-                await usersVaultContract.afterRoundVaultBalance()
-              ).to.equal(AMOUNT_1E18.mul(100).mul(8));
-            });
-            it("THEN after deposit initialVaultBalance should be plain underlying balances", async () => {
-              expect(await usersVaultContract.initialVaultBalance()).to.equal(
-                AMOUNT_1E18.mul(100).mul(8)
-              );
             });
             it("THEN it should emit an Event", async () => {
               await expect(txResult).to.emit(
                 usersVaultContract,
                 "RolloverExecuted"
               );
-              // .withArgs(BLOCK TIME STAMP, 0);
             });
             it("THEN currentRound should be increased", async () => {
-              expect(await usersVaultContract.currentRound()).to.equal(1);
+              expect(await usersVaultContract.currentRound()).to.equal(
+                BigNumber.from(1)
+              );
             });
-
-            it("THEN cumulativePendingDeposits/traderProfit/vaultProfit should be ZERO", async () => {
+            it("THEN pendingWithdrawShares/pendingDepositAssets should be ZERO", async () => {
               expect(await usersVaultContract.pendingWithdrawShares()).to.equal(
                 ZERO_AMOUNT
               );
               expect(await usersVaultContract.pendingDepositAssets()).to.equal(
                 ZERO_AMOUNT
               );
-              expect(await usersVaultContract.vaultProfit()).to.equal(
-                ZERO_AMOUNT
+            });
+            it("THEN after rollover afterRoundVaultBalance should be plain underlying balances", async () => {              
+              expect(
+                await usersVaultContract.afterRoundVaultBalance()
+              ).to.equal(AMOUNT_1E18.mul(1500));
+            });
+            it("THEN after rollover initialVaultBalance should be plain underlying balances", async () => {
+              expect(await usersVaultContract.initialVaultBalance()).to.equal(
+                AMOUNT_1E18.mul(1500)
               );
+            });
+            it("THEN contract shares balance should increase", async () => {
+              const vaultBalance = await usersVaultContract.balanceOf(
+                usersVaultContract.address
+              );
+              expect(vaultBalance).to.equal(AMOUNT_1E18.mul(1500));
+              expect(vaultBalance).to.equal(
+                vaultSharesBalanceBefore.add(AMOUNT_1E18.mul(1500))
+              );
+            });
+
+            describe("WHEN trying to execute rollover on round 1", function () {
+              before(async () => {
+                // claim shares so withdraw can happen
+                await usersVaultContract
+                  .connect(user3)
+                  .claimShares(AMOUNT, user3Address);
+
+                // approve so does not fail on allowance
+                await usersVaultContract
+                  .connect(user3)
+                  .approve(user3Address, AMOUNT);
+
+                // withdraw request so claim assets can happen after rollover
+                await usersVaultContract.connect(user3).withdrawRequest(AMOUNT);
+
+                vaultSharesBalanceBefore = await usersVaultContract.balanceOf(
+                  usersVaultContract.address
+                );
+
+                txResult = await usersVaultContract
+                  .connect(traderWallet)
+                  .rolloverFromTrader();
+              });
+              it("THEN it should emit an Event", async () => {
+                await expect(txResult).to.emit(
+                  usersVaultContract,
+                  "RolloverExecuted"
+                );
+              });
+              it("THEN currentRound should be increased", async () => {
+                expect(await usersVaultContract.currentRound()).to.equal(
+                  BigNumber.from(2)
+                );
+              });
+              it("THEN pendingWithdrawShares/pendingDepositAssets should be ZERO", async () => {
+                expect(
+                  await usersVaultContract.pendingWithdrawShares()
+                ).to.equal(ZERO_AMOUNT);
+                expect(
+                  await usersVaultContract.pendingDepositAssets()
+                ).to.equal(ZERO_AMOUNT);
+              });
+              it("THEN after rollover initialVaultBalance should be plain underlying balances", async () => {
+                expect(await usersVaultContract.initialVaultBalance()).to.equal(
+                  AMOUNT_1E18.mul(1500)
+                );
+              });
+              it("THEN contract shares balance should decrease", async () => {
+                const vaultBalance = await usersVaultContract.balanceOf(
+                  usersVaultContract.address
+                );
+                expect(vaultBalance).to.equal((AMOUNT_1E18.mul(1500)).sub(AMOUNT));
+                expect(vaultBalance).to.equal(
+                  vaultSharesBalanceBefore.sub(AMOUNT)
+                );
+              });
             });
           });
         });
       });
-
-      // it("THEN ==> User 1 Claim ALL Shares", async () => {
-
-      //   console.log('Balance user 1 Before claim: ', await usersVaultContract.balanceOf(user1Address));
-      //   await usersVaultContract.connect(user1).claimAllShares(user1Address);
-      //   console.log('Balance user 1 After claim: ', await usersVaultContract.balanceOf(user1Address));
-      // });
 
       /// UPGRADABILITY TESTS
       /// UPGRADABILITY TESTS
