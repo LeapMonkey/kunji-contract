@@ -78,7 +78,6 @@ contract UsersVault is
 
     event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
-    // event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
 
     event TraderWalletAddressSet(address indexed traderWalletAddress);
     event UserDeposited(
@@ -183,15 +182,6 @@ contract UsersVault is
         emit TraderWalletAddressSet(_traderWalletAddress);
         traderWalletAddress = _traderWalletAddress;
     }
-
-    // function setUnderlyingTokenAddress(
-    //     address _underlyingTokenAddress
-    // ) external {
-    //     _checkOwner();
-    //     _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
-    //     emit UnderlyingTokenAddressSet(_underlyingTokenAddress);
-    //     underlyingTokenAddress = _underlyingTokenAddress;
-    // }
 
     function setAdapterAllowanceOnToken(
         uint256 _protocolId,

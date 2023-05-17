@@ -30,7 +30,6 @@ import {
   usersDeposit,
   mintForUsers,
   approveForUsers,
-  claimShares,
 } from "./../_helpers/functions";
 
 let snapshot: SnapshotRestorer;
@@ -38,7 +37,6 @@ let snapshot: SnapshotRestorer;
 let deployer: Signer;
 let traderWallet: Signer;
 let adaptersRegistry: Signer;
-// let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
@@ -52,7 +50,6 @@ let deployerAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let traderWalletAddress: string;
-// let dynamicValueAddress: string;
 let otherAddress: string;
 let ownerAddress: string;
 let user1Address: string;
@@ -103,7 +100,6 @@ describe("User Vault Contract Tests", function () {
       deployer,
       traderWallet,
       adaptersRegistry,
-      // dynamicValue,
       nonAuthorized,
       otherSigner,
       owner,
@@ -118,7 +114,6 @@ describe("User Vault Contract Tests", function () {
       deployerAddress,
       traderWalletAddress,
       adaptersRegistryAddress,
-      // dynamicValueAddress,
       otherAddress,
       ownerAddress,
       user1Address,
@@ -130,7 +125,6 @@ describe("User Vault Contract Tests", function () {
       deployer.getAddress(),
       traderWallet.getAddress(),
       adaptersRegistry.getAddress(),
-      // dynamicValue.getAddress(),
       otherSigner.getAddress(),
       owner.getAddress(),
       user1.getAddress(),
@@ -158,9 +152,6 @@ describe("User Vault Contract Tests", function () {
       await gmxAdapterContract.deployed();
 
       UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
-        // libraries: {
-        //   GMXAdapter: gmxAdapterContract.address,
-        // },
       });
       ContractsFactoryFactory = await ethers.getContractFactory(
         "ContractsFactoryMock"
@@ -204,12 +195,10 @@ describe("User Vault Contract Tests", function () {
               adaptersRegistryAddress,
               contractsFactoryContract.address,
               traderWalletAddress,
-              // dynamicValueAddress,
               ownerAddress,
               SHARES_NAME,
               SHARES_SYMBOL,
             ]
-            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -225,12 +214,10 @@ describe("User Vault Contract Tests", function () {
               ZERO_ADDRESS,
               contractsFactoryContract.address,
               traderWalletAddress,
-              // dynamicValueAddress,
               ownerAddress,
               SHARES_NAME,
               SHARES_SYMBOL,
             ]
-            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -246,12 +233,10 @@ describe("User Vault Contract Tests", function () {
               adaptersRegistryAddress,
               ZERO_ADDRESS,
               traderWalletAddress,
-              // dynamicValueAddress,
               ownerAddress,
               SHARES_NAME,
               SHARES_SYMBOL,
             ]
-            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -267,12 +252,10 @@ describe("User Vault Contract Tests", function () {
               adaptersRegistryAddress,
               contractsFactoryContract.address,
               ZERO_ADDRESS,
-              // dynamicValueAddress,
               ownerAddress,
               SHARES_NAME,
               SHARES_SYMBOL,
             ]
-            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -288,12 +271,10 @@ describe("User Vault Contract Tests", function () {
               adaptersRegistryAddress,
               contractsFactoryContract.address,
               traderWalletAddress,
-              // ZERO_ADDRESS,
               ownerAddress,
               SHARES_NAME,
               SHARES_SYMBOL,
             ]
-            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -309,12 +290,10 @@ describe("User Vault Contract Tests", function () {
               adaptersRegistryAddress,
               contractsFactoryContract.address,
               traderWalletAddress,
-              // dynamicValueAddress,
               ZERO_ADDRESS,
               SHARES_NAME,
               SHARES_SYMBOL,
             ]
-            // { unsafeAllowLinkedLibraries: true }
           )
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
@@ -331,12 +310,10 @@ describe("User Vault Contract Tests", function () {
             adaptersRegistryContract.address,
             contractsFactoryContract.address,
             traderWalletAddress,
-            // dynamicValueAddress,
             ownerAddress,
             SHARES_NAME,
             SHARES_SYMBOL,
           ]
-          // { unsafeAllowLinkedLibraries: true }
         )) as UsersVault;
         await usersVaultContract.deployed();
 
@@ -373,9 +350,6 @@ describe("User Vault Contract Tests", function () {
         expect(await usersVaultContract.traderWalletAddress()).to.equal(
           traderWalletAddress
         );
-        // expect(await usersVaultContract.dynamicValueAddress()).to.equal(
-        //   dynamicValueAddress
-        // );
         expect(await usersVaultContract.owner()).to.equal(ownerAddress);
       });
 
@@ -479,106 +453,6 @@ describe("User Vault Contract Tests", function () {
         });
       });
 
-      // describe("WHEN trying to set the dynamicValueAddress", async () => {
-      //   describe("WHEN calling with invalid caller or parameters", function () {
-      //     describe("WHEN caller is not owner", function () {
-      //       it("THEN it should fail", async () => {
-      //         await expect(
-      //           usersVaultContract
-      //             .connect(nonAuthorized)
-      //             .setDynamicValueAddress(otherAddress)
-      //         ).to.be.revertedWith("Ownable: caller is not the owner");
-      //       });
-      //     });
-
-      //     describe("WHEN address is invalid", function () {
-      //       it("THEN it should fail", async () => {
-      //         await expect(
-      //           usersVaultContract
-      //             .connect(owner)
-      //             .setDynamicValueAddress(ZERO_ADDRESS)
-      //         )
-      //           .to.be.revertedWithCustomError(
-      //             usersVaultContract,
-      //             "ZeroAddress"
-      //           )
-      //           .withArgs("_dynamicValueAddress");
-      //       });
-      //     });
-      //   });
-
-      //   describe("WHEN calling with correct caller and address", function () {
-      //     before(async () => {
-      //       txResult = await usersVaultContract
-      //         .connect(owner)
-      //         .setDynamicValueAddress(otherAddress);
-      //     });
-      //     after(async () => {
-      //       await snapshot.restore();
-      //     });
-      //     it("THEN new address should be stored", async () => {
-      //       expect(await usersVaultContract.dynamicValueAddress()).to.equal(
-      //         otherAddress
-      //       );
-      //     });
-      //     it("THEN it should emit an Event", async () => {
-      //       await expect(txResult)
-      //         .to.emit(usersVaultContract, "DynamicValueAddressSet")
-      //         .withArgs(otherAddress);
-      //     });
-      //   });
-      // });
-
-      // describe("WHEN trying to set the underlyingTokenAddress", async () => {
-      //   describe("WHEN calling with invalid caller or parameters", function () {
-      //     describe("WHEN caller is not owner", function () {
-      //       it("THEN it should fail", async () => {
-      //         await expect(
-      //           usersVaultContract
-      //             .connect(nonAuthorized)
-      //             .setUnderlyingTokenAddress(otherAddress)
-      //         ).to.be.revertedWith("Ownable: caller is not the owner");
-      //       });
-      //     });
-
-      //     describe("WHEN address is invalid", function () {
-      //       it("THEN it should fail", async () => {
-      //         await expect(
-      //           usersVaultContract
-      //             .connect(owner)
-      //             .setUnderlyingTokenAddress(ZERO_ADDRESS)
-      //         )
-      //           .to.be.revertedWithCustomError(
-      //             usersVaultContract,
-      //             "ZeroAddress"
-      //           )
-      //           .withArgs("_underlyingTokenAddress");
-      //       });
-      //     });
-      //   });
-
-      //   describe("WHEN calling with correct caller and address", function () {
-      //     before(async () => {
-      //       txResult = await usersVaultContract
-      //         .connect(owner)
-      //         .setUnderlyingTokenAddress(otherAddress);
-      //     });
-      //     after(async () => {
-      //       await snapshot.restore();
-      //     });
-      //     it("THEN new address should be stored", async () => {
-      //       expect(await usersVaultContract.underlyingTokenAddress()).to.equal(
-      //         otherAddress
-      //       );
-      //     });
-      //     it("THEN it should emit an Event", async () => {
-      //       await expect(txResult)
-      //         .to.emit(usersVaultContract, "UnderlyingTokenAddressSet")
-      //         .withArgs(otherAddress);
-      //     });
-      //   });
-      // });
-
       describe("WHEN trying to set the traderWalletAddress", async () => {
         describe("WHEN calling with invalid caller or parameters", function () {
           describe("WHEN caller is not owner", function () {
@@ -649,254 +523,6 @@ describe("User Vault Contract Tests", function () {
           });
         });
       });
-
-      // describe("WHEN trying to add/remove adapter to be used by trader", async () => {
-      //   let AdaptersRegistryFactory: ContractFactory;
-      //   let adaptersRegistryContract: AdaptersRegistryMock;
-
-      //   before(async () => {
-      //     // deploy mocked adaptersRegistry
-      //     AdaptersRegistryFactory = await ethers.getContractFactory(
-      //       "AdaptersRegistryMock"
-      //     );
-      //     adaptersRegistryContract =
-      //       (await AdaptersRegistryFactory.deploy()) as AdaptersRegistryMock;
-      //     await adaptersRegistryContract.deployed();
-
-      //     // change address to mocked adaptersRegistry
-      //     await usersVaultContract
-      //       .connect(owner)
-      //       .setAdaptersRegistryAddress(adaptersRegistryContract.address);
-      //   });
-      //   after(async () => {
-      //     await snapshot.restore();
-      //   });
-
-      //   describe("WHEN trying to add an adapter to use (addAdapterToUse)", async () => {
-      //     describe("WHEN calling with invalid caller or parameters", function () {
-      //       describe("WHEN caller is not owner", function () {
-      //         it("THEN it should fail", async () => {
-      //           await expect(
-      //             usersVaultContract.connect(nonAuthorized).addAdapterToUse(1)
-      //           ).to.be.revertedWith("Ownable: caller is not the owner");
-      //         });
-      //       });
-      //       describe("WHEN protocol does not exist in registry", function () {
-      //         before(async () => {
-      //           // change returnValue to adapter registry to fail on function call
-      //           await adaptersRegistryContract.setReturnValue(false);
-      //           await adaptersRegistryContract.setReturnAddress(otherAddress);
-      //         });
-      //         it("THEN it should fail", async () => {
-      //           await expect(
-      //             usersVaultContract.connect(owner).addAdapterToUse(1)
-      //           ).to.be.revertedWithCustomError(
-      //             usersVaultContract,
-      //             "InvalidProtocol"
-      //           );
-      //         });
-      //       });
-      //     });
-
-      //     describe("WHEN calling with correct caller and protocol", function () {
-      //       let adapter1Address: string;
-
-      //       before(async () => {
-      //         // change returnValue to return true on function call
-      //         adapter1Address = otherAddress;
-      //         await adaptersRegistryContract.setReturnValue(true);
-      //         await adaptersRegistryContract.setReturnAddress(adapter1Address);
-
-      //         txResult = await usersVaultContract
-      //           .connect(owner)
-      //           .addAdapterToUse(1);
-      //       });
-
-      //       it("THEN new adapter should be added to the trader array", async () => {
-      //         expect(
-      //           await usersVaultContract.traderSelectedAdaptersArray(0)
-      //         ).to.equal(adapter1Address);
-      //       });
-
-      //       it("THEN it should emit an Event", async () => {
-      //         await expect(txResult)
-      //           .to.emit(usersVaultContract, "AdapterToUseAdded")
-      //           .withArgs(1, adapter1Address, ownerAddress);
-      //       });
-
-      //       it("THEN it should be added to the adaptersPerProtocol mapping", async () => {
-      //         expect(await usersVaultContract.adaptersPerProtocol(1)).to.equal(
-      //           adapter1Address
-      //         );
-      //       });
-
-      //       describe("WHEN adapter already exists in traderArray ", function () {
-      //         it("THEN adding the same one should fail", async () => {
-      //           await expect(
-      //             usersVaultContract.connect(owner).addAdapterToUse(1)
-      //           ).to.be.revertedWithCustomError(
-      //             usersVaultContract,
-      //             "AdapterPresent"
-      //           );
-      //         });
-      //       });
-      //     });
-      //   });
-
-      //   // describe("WHEN trying to remove an adapter (removeAdapterToUse)", async () => {
-      //   //   // otherAddress is already added from previous flow (addAdapterToUse)
-      //   //   // to add now deployerAddress, contractsFactoryAddress, dynamicValueAddress
-      //   //   // just to store something and test the function
-      //   //   let adapter1Address: string;
-      //   //   let adapter2Address: string;
-      //   //   let adapter3Address: string;
-      //   //   let adapter4Address: string;
-      //   //   let adapter10Address: string;
-
-      //   //   before(async () => {
-      //   //     adapter1Address = otherAddress;
-      //   //     adapter2Address = deployerAddress;
-      //   //     adapter3Address = contractsFactoryContract.address;
-      //   //     adapter4Address = dynamicValueAddress;
-      //   //     adapter10Address = traderWalletAddress;
-
-      //   //     await adaptersRegistryContract.setReturnValue(true);
-      //   //     await adaptersRegistryContract.setReturnAddress(adapter2Address);
-      //   //     await usersVaultContract.connect(owner).addAdapterToUse(2);
-
-      //   //     await adaptersRegistryContract.setReturnAddress(adapter3Address);
-      //   //     await usersVaultContract.connect(owner).addAdapterToUse(3);
-
-      //   //     await adaptersRegistryContract.setReturnAddress(adapter4Address);
-      //   //     await usersVaultContract.connect(owner).addAdapterToUse(4);
-      //   //   });
-
-      //   //   describe("WHEN checking adapters", function () {
-      //   //     it("THEN it should return correct values", async () => {
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(0)
-      //   //       ).to.equal(adapter1Address);
-
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(1)
-      //   //       ).to.equal(adapter2Address);
-
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(2)
-      //   //       ).to.equal(adapter3Address);
-
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(3)
-      //   //       ).to.equal(adapter4Address);
-      //   //     });
-      //   //     it("THEN it should return correct array length", async () => {
-      //   //       expect(
-      //   //         await usersVaultContract.getTraderSelectedAdaptersLength()
-      //   //       ).to.equal(BigNumber.from(4));
-      //   //     });
-      //   //     it("THEN it should be added to the adaptersPerProtocol mapping", async () => {
-      //   //       expect(await usersVaultContract.adaptersPerProtocol(1)).to.equal(
-      //   //         adapter1Address
-      //   //       );
-
-      //   //       expect(await usersVaultContract.adaptersPerProtocol(2)).to.equal(
-      //   //         adapter2Address
-      //   //       );
-
-      //   //       expect(await usersVaultContract.adaptersPerProtocol(3)).to.equal(
-      //   //         adapter3Address
-      //   //       );
-
-      //   //       expect(await usersVaultContract.adaptersPerProtocol(4)).to.equal(
-      //   //         adapter4Address
-      //   //       );
-      //   //     });
-      //   //   });
-
-      //   //   describe("WHEN calling with invalid caller or parameters", function () {
-      //   //     describe("WHEN caller is not owner", function () {
-      //   //       it("THEN it should fail", async () => {
-      //   //         await expect(
-      //   //           usersVaultContract
-      //   //             .connect(nonAuthorized)
-      //   //             .removeAdapterToUse(1)
-      //   //         ).to.be.revertedWith("Ownable: caller is not the owner");
-      //   //       });
-      //   //     });
-      //   //     describe("WHEN protocol does not exist in registry", function () {
-      //   //       before(async () => {
-      //   //         // change returnValue to adapter registry to fail on function call
-      //   //         await adaptersRegistryContract.setReturnValue(false);
-      //   //         await adaptersRegistryContract.setReturnAddress(otherAddress);
-      //   //       });
-      //   //       it("THEN it should fail", async () => {
-      //   //         await expect(
-      //   //           usersVaultContract.connect(owner).removeAdapterToUse(10)
-      //   //         ).to.be.revertedWithCustomError(
-      //   //           usersVaultContract,
-      //   //           "InvalidProtocol"
-      //   //         );
-      //   //       });
-      //   //     });
-
-      //   //     describe("WHEN adapter does not exist in array", function () {
-      //   //       before(async () => {
-      //   //         await adaptersRegistryContract.setReturnValue(true);
-      //   //         await adaptersRegistryContract.setReturnAddress(
-      //   //           adapter10Address
-      //   //         );
-      //   //       });
-      //   //       it("THEN it should fail", async () => {
-      //   //         await expect(
-      //   //           usersVaultContract.connect(owner).removeAdapterToUse(10)
-      //   //         ).to.be.revertedWithCustomError(
-      //   //           usersVaultContract,
-      //   //           "AdapterNotPresent"
-      //   //         );
-      //   //       });
-      //   //     });
-      //   //   });
-
-      //   //   describe("WHEN calling with correct caller and address", function () {
-      //   //     before(async () => {
-      //   //       await adaptersRegistryContract.setReturnValue(true);
-      //   //       await adaptersRegistryContract.setReturnAddress(adapter3Address);
-      //   //       txResult = await usersVaultContract
-      //   //         .connect(owner)
-      //   //         .removeAdapterToUse(3);
-      //   //     });
-
-      //   //     it("THEN adapter should be removed from array", async () => {
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(0)
-      //   //       ).to.equal(adapter1Address);
-
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(1)
-      //   //       ).to.equal(adapter2Address);
-
-      //   //       expect(
-      //   //         await usersVaultContract.traderSelectedAdaptersArray(2)
-      //   //       ).to.equal(adapter4Address);
-      //   //     });
-      //   //     it("THEN it should return correct array length", async () => {
-      //   //       expect(
-      //   //         await usersVaultContract.getTraderSelectedAdaptersLength()
-      //   //       ).to.equal(BigNumber.from(3));
-      //   //     });
-      //   //     it("THEN it should emit an Event", async () => {
-      //   //       await expect(txResult)
-      //   //         .to.emit(usersVaultContract, "AdapterToUseRemoved")
-      //   //         .withArgs(adapter3Address, ownerAddress);
-      //   //     });
-      //   //     it("THEN it should be removed from adaptersPerProtocol mapping", async () => {
-      //   //       expect(await usersVaultContract.adaptersPerProtocol(3)).to.equal(
-      //   //         ZERO_ADDRESS
-      //   //       );
-      //   //     });
-      //   //   });
-      //   // });
-      // });
 
       describe("WHEN trying to make a userDeposit", async () => {
         describe("WHEN calling with invalid caller or parameters", function () {
@@ -1660,18 +1286,6 @@ describe("User Vault Contract Tests", function () {
 
             describe("WHEN Adapter exists but execution fails", function () {
               before(async () => {
-                // : deprecated
-                // change returnValue to return true on function call
-                // await adaptersRegistryContract.setReturnValue(true);
-                // await adaptersRegistryContract.setReturnAddress(
-                //   adapterContract.address
-                // );
-
-                // : deprecated
-                // add the adapter into the array and mapping
-                // so the call to the executeOnProtocol returns the adapter address
-                // await usersVaultContract.connect(owner).addAdapterToUse(2);
-
                 // set the adapter address to return
                 await traderWalletMockContract.setAddressToReturn(
                   adapterContract.address
@@ -1725,11 +1339,6 @@ describe("User Vault Contract Tests", function () {
               await adaptersRegistryContract.setReturnAddress(
                 adapterContract.address
               );
-
-              // : deprecated
-              // add the adapter into the array and mapping
-              // so the call to the executeOnProtocol returns the adapter address
-              // await usersVaultContract.connect(owner).addAdapterToUse(2);
 
               // set the adapter address to return
               await traderWalletMockContract.setAddressToReturn(
@@ -1946,16 +1555,10 @@ describe("User Vault Contract Tests", function () {
         before(async () => {
           UsersVaultV2Factory = await ethers.getContractFactory(
             "UsersVaultV2"
-            // {
-            //   libraries: {
-            //     GMXAdapter: gmxAdapterContract.address,
-            //   },
-            // }
           );
           usersVaultV2Contract = (await upgrades.upgradeProxy(
             usersVaultContract.address,
             UsersVaultV2Factory
-            // { unsafeAllowLinkedLibraries: true }
           )) as UsersVaultV2;
           await usersVaultV2Contract.deployed();
         });
@@ -1972,9 +1575,6 @@ describe("User Vault Contract Tests", function () {
           expect(await usersVaultV2Contract.traderWalletAddress()).to.equal(
             traderWalletAddress
           );
-          // expect(await usersVaultV2Contract.dynamicValueAddress()).to.equal(
-          //   dynamicValueAddress
-          // );
           expect(await usersVaultV2Contract.owner()).to.equal(ownerAddress);
         });
 

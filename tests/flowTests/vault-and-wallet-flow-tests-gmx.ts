@@ -20,7 +20,7 @@ import {
   ContractsFactoryMock,
   AdaptersRegistryMock,
   AdapterMock,
-  ERC20,
+  ERC20Mock,
   IGmxPositionRouter,
   Lens,
   GmxVaultPriceFeedMock,
@@ -95,8 +95,8 @@ let gmxVaultPriceFeedMockContract: GmxVaultPriceFeedMock;
 let gmxVaultPriceFeedMock: GmxVaultPriceFeedMock;
 let gmxVault: IGmxVault;
 
-let usdcTokenContract: ERC20;
-let wbtcTokenContract: ERC20;
+let usdcTokenContract: ERC20Mock;
+let wbtcTokenContract: ERC20Mock;
 
 let userBalanceBefore: BigNumber;
 let userBalanceAfter: BigNumber;
