@@ -59,16 +59,10 @@ let userBalanceAfter: BigNumber;
 let vaultBalanceBefore: BigNumber;
 let vaultBalanceAfter: BigNumber;
 
-const showStructs = async () => {
+const showStructsAndVariables = async () => {
     console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
     console.log("processedWithdrawAssets: ", await usersVaultContract.processedWithdrawAssets());
     console.log("pendingWithdrawShares  : ", await usersVaultContract.pendingWithdrawShares());
-    console.log("\n");
-    console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
-    console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
-    console.log("\n");
-    console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
-    console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
     console.log("\n");
     console.log("assetsPerShareXRound(0): ", await usersVaultContract.assetsPerShareXRound(0));
     console.log("assetsPerShareXRound(1): ", await usersVaultContract.assetsPerShareXRound(1));
@@ -78,19 +72,28 @@ const showStructs = async () => {
     console.log("contract USDC Balance  : ", await usdcTokenContract.balanceOf(usersVaultContract.address));
     console.log("Vault Shares Balance   : ", await usersVaultContract.getSharesContractBalance());
     console.log("Total Supply           : ", await usersVaultContract.totalSupply());
+    console.log("initialVaultBalance    : ", await usersVaultContract.initialVaultBalance());
+    console.log("afterRoundVaultBalance : ", await usersVaultContract.afterRoundVaultBalance());
+    console.log("\n");
+    console.log("userDeposits 1         : ", await usersVaultContract.userDeposits(user1Address));
+    console.log("userWithdrawals 1      : ", await usersVaultContract.userWithdrawals(user1Address));
+    console.log("\n");
+    console.log("userDeposits 2         : ", await usersVaultContract.userDeposits(user2Address));
+    console.log("userWithdrawals 2      : ", await usersVaultContract.userWithdrawals(user2Address));
+    console.log("\n");
   };
 
 const showPreview = async () => {
     console.log("User 1 Shares PRV    :>> ", await usersVaultContract.previewShares(user1Address));
-    console.log("User 2 Shares PRV    :>> ", await usersVaultContract.previewShares(user2Address));
     console.log("User 1 Assets PRV    :>> ", await usersVaultContract.previewAssets(user1Address));
+    console.log("User 2 Shares PRV    :>> ", await usersVaultContract.previewShares(user2Address));
     console.log("User 2 Assets PRV    :>> ", await usersVaultContract.previewAssets(user2Address));
   }
 
 const showBalances = async () => {
     console.log("User 1 Shares BAL    :>> ", await usersVaultContract.balanceOf(user1Address));
-    console.log("User 2 Shares BAL    :>> ", await usersVaultContract.balanceOf(user2Address));
     console.log("User 1 Assets BAL    :>> ", await usdcTokenContract.balanceOf(user1Address));
+    console.log("User 2 Shares BAL    :>> ", await usersVaultContract.balanceOf(user2Address));
     console.log("User 2 Assets BAL    :>> ", await usdcTokenContract.balanceOf(user2Address));
   }
 
@@ -235,7 +238,7 @@ describe("User Vault Contract Tests", function () {
           await usersVaultContract
             .connect(user2)
             .userDeposit(BigNumber.from(AMOUNT_1E18.mul(40)));
-          await showStructs();
+          await showStructsAndVariables();
         //   await showPreview();
           await showBalances();
         });
@@ -244,7 +247,7 @@ describe("User Vault Contract Tests", function () {
           console.log("--------------------------------------------------------------------------");
           await usersVaultContract.connect(traderWallet).rolloverFromTrader();
           console.log("--------------------------------------------------------------------------");
-          await showStructs();
+          await showStructsAndVariables();
         //   await showPreview();
           await showBalances();
         });
@@ -253,7 +256,7 @@ describe("User Vault Contract Tests", function () {
             console.log("\n===============================================================================");
             await usersVaultContract.connect(user1).claimShares(AMOUNT_1E18.mul(10), user1Address);
             await usersVaultContract.connect(user2).claimShares(AMOUNT_1E18.mul(20), user2Address);
-            await showStructs();
+            await showStructsAndVariables();
             // await showPreview();
             await showBalances();
             console.log("\n===============================================================================");
@@ -262,11 +265,9 @@ describe("User Vault Contract Tests", function () {
         it("THEN ==> WHITDRAW REQUEST 4", async () => {
             console.log("\n===============================================================================");
 
-            await usersVaultContract.connect(user1).approve(user1Address, AMOUNT_1E18.mul(5));
             await usersVaultContract.connect(user1).withdrawRequest(AMOUNT_1E18.mul(5));
-            await usersVaultContract.connect(user2).approve(user2Address, AMOUNT_1E18.mul(10));
             await usersVaultContract.connect(user2).withdrawRequest(AMOUNT_1E18.mul(10));
-            await showStructs();
+            await showStructsAndVariables();
             // await showPreview();
             await showBalances();
             console.log("\n===============================================================================");
@@ -276,223 +277,67 @@ describe("User Vault Contract Tests", function () {
             console.log("--------------------------------------------------------------------------");
             await usdcTokenContract.mint(usersVaultContract.address, AMOUNT_1E18.mul(50));
             await usersVaultContract.connect(traderWallet).rolloverFromTrader();
-            await showStructs();
-            // await showPreview();
+            await showStructsAndVariables();
             await showBalances();
+            await showPreview();
             console.log("--------------------------------------------------------------------------");
         });
 
-        xit("THEN ==> CLAIM ASSETS 6", async () => {
+        it("THEN ==> CLAIM ASSETS 6", async () => {
             console.log("\n===============================================================================");
             await usersVaultContract.connect(user1).claimAssets(AMOUNT_1E18.mul(2), user1Address);
             await usersVaultContract.connect(user2).claimAssets(AMOUNT_1E18.mul(5), user2Address);
-            await showStructs();
+            await showStructsAndVariables();
             await showBalances();
+            await showPreview();
             console.log("\n===============================================================================");
         });
         
-        xit("THEN ==> DEPOSIT 7", async () => {
+        it("THEN ==> DEPOSIT 7", async () => {
             await usersVaultContract
                 .connect(user1)
                 .userDeposit(BigNumber.from(AMOUNT_1E18.mul(10)));
             await usersVaultContract
                 .connect(user2)
                 .userDeposit(BigNumber.from(AMOUNT_1E18.mul(20)));
-            await showStructs();
+            await showStructsAndVariables();
             await showPreview();
             await showBalances();
         });
 
-        xit("THEN ==> CLAIMING SHARES 8", async () => {
+        it("THEN ==> CLAIMING SHARES 8", async () => {
             console.log("\n===============================================================================");
             await usersVaultContract.connect(user1).claimShares(AMOUNT_1E18.mul(20), user1Address);
             await usersVaultContract.connect(user2).claimShares(AMOUNT_1E18.mul(40), user2Address);
-            await showStructs();
+            await showStructsAndVariables();
             await showPreview();
             await showBalances();
             console.log("\n===============================================================================");
         });
 
-        xit("THEN ==> WHITDRAW REQUEST 9", async () => {
+        it("THEN ==> WHITDRAW REQUEST 9", async () => {
             console.log("\n===============================================================================");
-            await usersVaultContract.connect(user1).approve(user1Address, AMOUNT_1E18.mul(20));
             await usersVaultContract.connect(user1).withdrawRequest(AMOUNT_1E18.mul(20));
-            await usersVaultContract.connect(user2).approve(user2Address, AMOUNT_1E18.mul(50));
             await usersVaultContract.connect(user2).withdrawRequest(AMOUNT_1E18.mul(50));
-            await showStructs();
+            await showStructsAndVariables();
             await showPreview();
             await showBalances();
           console.log("\n===============================================================================");
         });
 
 
-        xit("THEN ==> THIRD rollover LOSS 50 -->> 10", async () => {
-            await showStructs();
+        it("THEN ==> THIRD rollover LOSS 50 -->> 10", async () => {
             console.log("--------------------------------------------------------------------------");
             console.log("--------------------------------------------------------------------------");
-            // await usdcTokenContract.mockBalanceOf(usersVaultContract.address,AMOUNT_1E18.mul(123));
-            await usdcTokenContract.mint(usersVaultContract.address, AMOUNT_1E18.mul(50));
-            await usersVaultContract.connect(traderWallet).rolloverFromTrader();
+            await usdcTokenContract.transfer(deployerAddress, AMOUNT_1E18.mul(50));
+            await expect(usersVaultContract.connect(traderWallet).rolloverFromTrader()).to.be.revertedWith("ERC20: transfer amount exceeds balance");
             console.log("--------------------------------------------------------------------------");
             console.log("--------------------------------------------------------------------------");
-            await showStructs();
+            await showStructsAndVariables();
             await showPreview();
             await showBalances();
           });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        xit("THEN ==> CLAIMING SHARES 2", async () => {
-            console.log("\n===============================================================================");
-
-            let sharesQty;
-            sharesQty = await usersVaultContract.previewShares(user1Address);
-            await usersVaultContract.connect(user1).claimShares(sharesQty, user1Address);
-
-            sharesQty = await usersVaultContract.previewShares(user2Address);
-            await usersVaultContract.connect(user2).claimShares(sharesQty, user2Address);
-
-            await showStructs();
-            await showPreview();
-            console.log("\n===============================================================================");
-        });
-
-        xit("THEN ==> WHITDRAW REQUEST 2", async () => {
-            console.log("\n===============================================================================");
-            await usersVaultContract.connect(user1).withdrawRequest(AMOUNT_1E18.mul(20));
-            await usersVaultContract.connect(user2).withdrawRequest(AMOUNT_1E18.mul(50));
-            await showStructs();
-            await showPreview();
-            await showBalances();
-          console.log("\n===============================================================================");
-        });
-
-        /*
-        it("THEN ==> DEPOSIT ON ROUND 1 ==> VALID FOR ROUND 2", async () => {
-          await usersVaultContract
-            .connect(user1)
-            .userDeposit(BigNumber.from(AMOUNT_1E18.mul(1)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user1)
-            .userDeposit(BigNumber.from(AMOUNT_1E18.mul(2)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user2)
-            .userDeposit(BigNumber.from(AMOUNT_1E18.mul(3)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user2)
-            .userDeposit(BigNumber.from(AMOUNT_1E18.mul(4)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-          await usersVaultContract
-            .connect(user3)
-            .userDeposit(BigNumber.from(AMOUNT_1E18.mul(5)));
-          console.log("pendingDepositAssets   : ", await usersVaultContract.pendingDepositAssets());
-
-          console.log("\n\nUser 1 Shares PRV      :>> ", await usersVaultContract.previewShares(user1Address));
-          console.log("--------------------------------------------------------------------------");
-        });
-
-        it("THEN ==> User 1 Claim 1 Share", async () => {
-          console.log("Balance user 1 Before claim: ", await usersVaultContract.balanceOf(user1Address));
-          await usersVaultContract.connect(user1).claimShares(AMOUNT_1E18.mul(1), user1Address);
-          console.log("Balance user 1 After claim: ", await usersVaultContract.balanceOf(user1Address));
-        });
-
-        it("THEN ==> User 2 FAILS to claim 5 Asset", async () => {
-          await expect(
-            usersVaultContract.connect(user2).claimAssets(AMOUNT_1E18.mul(5), user2Address)
-          ).to.be.revertedWithCustomError(usersVaultContract, "InsufficientAssets");
-        });
-
-        it("THEN ==> User 2 Claim 2 shares", async () => {
-          const balanceBefore = await usersVaultContract.balanceOf(user2Address);
-          console.log("Balance user 2 Before claim: ", balanceBefore);
-          await usersVaultContract.connect(user2).claimShares(AMOUNT_1E18.mul(2), user2Address);
-          const balanceAfter = await usersVaultContract.balanceOf(user2Address);
-          expect(balanceBefore.add(AMOUNT_1E18.mul(2))).to.equal(balanceAfter);
-        });
-
-        it("THEN ==> User 3 Claim 3 shares", async () => {
-          const balanceBefore = await usersVaultContract.balanceOf(user3Address);
-          console.log("Balance user 3 Before claim: ", balanceBefore);
-          await usersVaultContract.connect(user3).claimShares(AMOUNT_1E18.mul(3), user3Address);
-          const balanceAfter = await usersVaultContract.balanceOf(user3Address);
-          expect(balanceBefore.add(AMOUNT_1E18.mul(3))).to.equal(balanceAfter);
-        });
-
-        it("THEN ==> User 3 Makes WithdrawRequest of 3 Asset", async () => {
-          const balanceBefore = await usdcTokenContract.balanceOf(user3Address);
-          console.log("Balance user 3 Before claim: ", await usdcTokenContract.balanceOf(user3Address));
-          await usersVaultContract.connect(user3).withdrawRequest(AMOUNT_1E18.mul(3));
-          const balanceAfter = await usdcTokenContract.balanceOf(user3Address);
-          expect(balanceBefore).to.equal(balanceAfter);
-        });
-
-        it("THEN ==> Balanaces before and after SECOND rollover PROFIT OF 35", async () => {
-          console.log("\n\nUser 1 Shares PRV      :>> ", await usersVaultContract.previewShares(user1Address));
-          await showStructs();
-
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-
-
-          await usdcTokenContract.mint(usersVaultContract.address, AMOUNT_1E18.mul(35));
-          await usersVaultContract.connect(traderWallet).rolloverFromTrader();
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-          console.log("--------------------------------------------------------------------------");
-
-          await showStructs();
-        });
-
-        it("THEN ==> User 3 Claim 3 Assets", async () => {
-          console.log("\n\nUser 1 Shares PRV      :>> ", await usersVaultContract.previewShares(user1Address));
-          
-          const balanceBefore = await usdcTokenContract.balanceOf(user3Address);
-          console.log("Balance user 3 Before claim: ", await usdcTokenContract.balanceOf(user3Address));
-          await usersVaultContract.connect(user3).claimAssets(AMOUNT_1E18.mul(3), user3Address);
-          const balanceAfter = await usdcTokenContract.balanceOf(user3Address);
-          expect(balanceBefore.add(AMOUNT_1E18.mul(3))).to.equal(balanceAfter);
-        });
-        */
       });
     });
   });
 });
-
-
-/*
-
-USER 1
-3 pending assets
-29 unclaimed shares
-round 1
-
-asset per share round 1 = 1258503401360544217
-
-1.258503401360544217 asset per 1 share
-1 asset = 0,7945945945945945950284002922 shares
-3 asset = 2,3837837837837837850852008766 shares + 29 shares = 31,3837837837837837850852008766
-
-*/

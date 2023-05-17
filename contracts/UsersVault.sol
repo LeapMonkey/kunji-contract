@@ -429,31 +429,26 @@ contract UsersVault is
             userDeposits[_receiver].round < currentRound &&
             userDeposits[_receiver].pendingAssets > 0
         ) {
-            uint256 unclaimedShares = _pendAssetsToUnclaimedShares(
-                _receiver
-            );
+            uint256 unclaimedShares = _pendAssetsToUnclaimedShares(_receiver);
             return unclaimedShares;
         }
 
         return userDeposits[_receiver].unclaimedShares;
     }
 
-    // function previewAssets(address _receiver) external view returns (uint256) {
-    //     _checkZeroRound();
+    function previewAssets(address _receiver) external view returns (uint256) {
+        _checkZeroRound();
 
-    //     if (
-    //         userWithdrawals[_receiver].round < currentRound &&
-    //         userWithdrawals[_receiver].pendingShares > 0
-    //     ) {
-    //         uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(
-    //             _msgSender()
-    //         );
-    //         return
-    //             unclaimedAssets;
-    //     }
+        if (
+            userWithdrawals[_receiver].round < currentRound &&
+            userWithdrawals[_receiver].pendingShares > 0
+        ) {
+            uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(_receiver);
+            return unclaimedAssets;
+        }
 
-    //     return userWithdrawals[_receiver].unclaimedAssets;
-    // }
+        return userWithdrawals[_receiver].unclaimedAssets;
+    }
 
     function claimShares(uint256 _sharesAmount, address _receiver) public {
         _checkZeroRound();
@@ -469,7 +464,7 @@ contract UsersVault is
             uint256 unclaimedShares = _pendAssetsToUnclaimedShares(
                 _msgSender()
             );
-            userDeposits[_msgSender()].unclaimedShares = unclaimedShares; 
+            userDeposits[_msgSender()].unclaimedShares = unclaimedShares;
             userDeposits[_msgSender()].pendingAssets = 0;
         }
 
@@ -489,7 +484,7 @@ contract UsersVault is
             _receiver
         );
 
-        _transfer(address(this), _receiver, _sharesAmount);
+        super._transfer(address(this), _receiver, _sharesAmount);
     }
 
     function claimAssets(uint256 _assetsAmount, address _receiver) public {
@@ -505,7 +500,7 @@ contract UsersVault is
             uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(
                 _msgSender()
             );
-            userWithdrawals[_msgSender()].unclaimedAssets = unclaimedAssets; 
+            userWithdrawals[_msgSender()].unclaimedAssets = unclaimedAssets;
             userWithdrawals[_msgSender()].pendingShares = 0;
         }
 
