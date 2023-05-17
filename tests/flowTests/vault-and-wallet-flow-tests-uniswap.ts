@@ -248,12 +248,18 @@ describe("Vault and Wallet Flow Tests", function () {
     let user1InputAmount: BigNumber;
     let user2InputAmount: BigNumber;
 
+    let traderInitialBalance: BigNumber;
+    let user1InitialBalance: BigNumber;
+
     before(async() => {
       traderInputAmount = utils.parseUnits("1000", 6);
       user1InputAmount = utils.parseUnits("5000", 6);
 
       await usdcTokenContract.mint(traderAddress, traderInputAmount)
       await usdcTokenContract.mint(user1Address, user1InputAmount)
+
+      traderInitialBalance = await usdcTokenContract.balanceOf(traderAddress);
+      user1InitialBalance = await usdcTokenContract.balanceOf(user1Address);
 
       await usdcTokenContract.connect(trader)
         .approve(traderWalletContract.address, traderInputAmount);
@@ -319,19 +325,15 @@ describe("Vault and Wallet Flow Tests", function () {
 
         describe("User creates withdraw request", function () {
           before(async() => {
-            console.log("UserWithdrawal0:", await usersVaultContract.userWithdrawals(user1Address));
-
-
             const shares = await usersVaultContract.balanceOf(user1Address);
-            console.log("user's shares:", shares);
-            await usersVaultContract.connect(user1).withdrawRequest(shares);
-            console.log("user's shares:", await usersVaultContract.balanceOf(user1Address));
 
-            console.log("UserWithdrawal1:", await usersVaultContract.userWithdrawals(user1Address));
+            await usersVaultContract.connect(user1).withdrawRequest(shares);
+            // console.log("user's shares:", await usersVaultContract.balanceOf(user1Address));
+            // console.log("UserWithdrawal1:", await usersVaultContract.userWithdrawals(user1Address));
 
           });
 
-          it("Should burn users shares", async() => {
+          it("Should transfer users shares from user to vault contract", async() => {
             expect(await usersVaultContract.balanceOf(user1Address)).to.equal(ZERO_AMOUNT);
           })
         });
@@ -483,32 +485,19 @@ describe("Vault and Wallet Flow Tests", function () {
 
               before(async() => {
                 roundCounter = roundCounter.add(1);
-                console.log("Before: ")
-                console.log("wallet balance:", await usdcTokenContract.balanceOf(traderWalletContract.address))
-                console.log("vault  balance:", await usdcTokenContract.balanceOf(usersVaultContract.address))
-                console.log("trader balance:", await usdcTokenContract.balanceOf(traderAddress))
-                console.log("user1  balance:", await usdcTokenContract.balanceOf(user1Address))
 
                 traderBalanceBefore = await usdcTokenContract.balanceOf(traderAddress);
                 walletBalance = await usdcTokenContract.balanceOf(traderWalletContract.address);
                 await traderWalletContract.connect(trader).withdrawRequest(walletBalance);
 
                 const shares = await usersVaultContract.balanceOf(user1Address);
-                // console.log("user's shares:", await usersVaultContract.balanceOf(user1Address));
-                // await usersVaultContract.connect(user1).withdrawRequest(shares);
-                // console.log("user's shares:", await usersVaultContract.balanceOf(user1Address));
 
                 // Rollover after trade
                 await traderWalletContract.connect(trader).rollover();
-                // await usersVaultContract.connect(user1).withdrawRequest(1);
-                // console.log("user's shares:", await usersVaultContract.balanceOf(user1Address));
-                // await usersVaultContract.connect(user1).withdrawRequest(shares);
 
-                console.log("After: ")
-                console.log("wallet balance:", await usdcTokenContract.balanceOf(traderWalletContract.address))
-                console.log("vault  balance:", await usdcTokenContract.balanceOf(usersVaultContract.address))
-                console.log("trader balance:", await usdcTokenContract.balanceOf(traderAddress))
-                console.log("user1  balance:", await usdcTokenContract.balanceOf(user1Address))
+                // console.log("vault  balance:", await usdcTokenContract.balanceOf(usersVaultContract.address))
+                // console.log("trader balance:", await usdcTokenContract.balanceOf(traderAddress))
+                // console.log("user1  balance:", await usdcTokenContract.balanceOf(user1Address))
               });
 
               it("Should increase current round counter after first trade", async () => {
@@ -525,30 +514,41 @@ describe("Vault and Wallet Flow Tests", function () {
                   .to.equal(ZERO_AMOUNT);
                 expect(await usdcTokenContract.balanceOf(traderAddress))
                   .to.equal(traderBalanceBefore.add(walletBalance));
-                // console.log("wallet balance:", await usdcTokenContract.balanceOf(traderWalletContract.address))
-                // console.log("vault balance:", await usdcTokenContract.balanceOf(usersVaultContract.address))
+
+                expect(await usdcTokenContract.balanceOf(traderAddress))
+                  .to.be.gt(traderInitialBalance);
               });
 
-              it("Should pay to user1 trader (increase user1 balance)", async () => {
-                // await traderWalletContract.connect(trader).rollover();
-                console.log("UserWithdrawal:", await usersVaultContract.userWithdrawals(user1Address));
-                // @todo need view function "preview assets" to know how many assets can be claimed 
-                await usersVaultContract.connect(user1).claimAssets(1, user1Address); // unclaimedAssets
-              });
+              describe("User withdraws profit after trading", function() {
+                let user1BalanceBefore: BigNumber;
+                let vaultBalanceBefore: BigNumber;
 
-
-
-
-
-              xdescribe("User withdraws profit after trading", function() {
                 before(async() => {
-                  // @todo issue ZeroAmount();
-                  await usersVaultContract.connect(user1).claimAllAssets(user1Address)
+                  user1BalanceBefore = await usdcTokenContract.balanceOf(user1Address);
+                  vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
+
+                  // @todo fix contract issue with previewAssets() function and then refactor following
+                  const claimableAssets = await usersVaultContract.previewAssets(user1Address)
+                  console.log("claimableAssets:", claimableAssets);
+                  // await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
+
+                  // mocked until 'todo' not fixed
+                  const claimableAssetsMock = await usdcTokenContract.balanceOf(usersVaultContract.address);
+                  await usersVaultContract.connect(user1).claimAssets(claimableAssetsMock, user1Address);
                 });
-                
-                xit("Should increase users balance", async () => {
-                  console.log("User balance after ", await usdcTokenContract.balanceOf(user1Address));
+
+                it("Should withdraw all tokens from Vault contract", async () => {
+                  expect(await usdcTokenContract.balanceOf(usersVaultContract.address))
+                    .to.equal(ZERO_AMOUNT);
                 });
+
+                it("Should return profitable user1 balance after trading", async () => {
+                  const userBalance = await usdcTokenContract.balanceOf(user1Address)
+
+                  expect(userBalance).to.equal(user1BalanceBefore.add(vaultBalanceBefore));
+                  expect(userBalance).to.be.gt(user1InitialBalance);
+                });
+
               });
 
             });
