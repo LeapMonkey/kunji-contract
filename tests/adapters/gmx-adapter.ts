@@ -13,14 +13,15 @@ import {
   GMXAdapter,
   TraderWallet,
   Lens,
-  ERC20,
+  ERC20Mock,
   IGmxReader,
   IGmxRouter,
   IGmxVault,
   IGmxPositionRouter,
-  IGmxOrderBook,
   GmxVaultPriceFeedMock,
   IGmxPositionManager,
+  UsersVaultMock,
+  ContractsFactoryMock,
 } from "../../typechain-types";
 import Reverter from "../_helpers/reverter";
 import { ReverterLocal } from "../_helpers/reverter";
@@ -31,45 +32,35 @@ const reverterLocal = new ReverterLocal();
 
 const abiCoder = new utils.AbiCoder();
 
-let deployer: Signer;
-let vault: Signer;
 let trader: Signer;
 let adaptersRegistry: Signer;
 let contractsFactory: Signer;
 let dynamicValue: Signer;
-let nonAuthorized: Signer;
-let otherSigner: Signer;
 let owner: Signer;
 let usdcHolder0: Signer;
+let usersVaultContract: UsersVaultMock;
 
-let deployerAddress: string;
-let vaultAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
 let traderAddress: string;
 let dynamicValueAddress: string;
-let nonAuthorizedAddress: string;
-let otherAddress: string;
 let ownerAddress: string;
 
 let txResult: ContractTransaction;
 let TraderWalletFactory: ContractFactory;
 let traderWalletContract: TraderWallet;
-let usdcTokenContract: ERC20;
-let wbtcTokenContract: ERC20;
-let contractBalanceBefore: BigNumber;
-let contractBalanceAfter: BigNumber;
-let traderBalanceBefore: BigNumber;
-let traderBalanceAfter: BigNumber;
+let usdcTokenContract: ERC20Mock;
+let wbtcTokenContract: ERC20Mock;
 
+let contractsFactoryContract: ContractsFactoryMock;
 let GMXAdapterFactory: ContractFactory;
 let gmxAdapterLibrary: GMXAdapter;
 let gmxRouter: IGmxRouter;
 let gmxPositionRouter: IGmxPositionRouter;
 let gmxReader: IGmxReader;
 let gmxVault: IGmxVault;
-let gmxOrderBook: IGmxOrderBook;
+// let gmxOrderBook: IGmxOrderBook;
 let gmxVaultPriceFeedMockContract: GmxVaultPriceFeedMock;
 let gmxVaultPriceFeedMock: GmxVaultPriceFeedMock;
 let gmxPositionManager: IGmxPositionManager;
@@ -77,6 +68,29 @@ let LensFactory: ContractFactory;
 let lensContract: Lens;
 
 const protocolId = 1; // GMX
+
+const increaseRound = async (
+  _traderWalletContract: TraderWallet,
+  _usersVaultContract: UsersVaultMock
+) => {
+  await usdcTokenContract
+          .connect(trader)
+          .approve(traderWalletContract.address, utils.parseUnits("1", 6));
+
+  // deposit so rollover can be executed
+  await _traderWalletContract
+    .connect(trader)
+    .traderDeposit(utils.parseUnits("1", 6));
+
+  // for rollover return ok
+  await _usersVaultContract.setReturnValue(true);
+
+  // increase users vault round
+  await _usersVaultContract.setRound(1);
+
+  // so the round is increased
+  await _traderWalletContract.connect(trader).rollover();
+};
 
 const createIncreasePositionEvent = utils.keccak256(
   utils.toUtf8Bytes("CreateIncreasePosition(address,bytes32)")
@@ -100,57 +114,49 @@ describe("GMXAdapter", function () {
     );
     gmxReader = await ethers.getContractAt("IGmxReader", gmx.readerAddress);
     gmxVault = await ethers.getContractAt("IGmxVault", gmx.vaultAddress);
-    gmxOrderBook = await ethers.getContractAt(
-      "IGmxOrderBook",
-      gmx.orderBookAddress
-    );
+    await ethers.getContractAt(
+        "IGmxOrderBook",
+        gmx.orderBookAddress
+      );
+    // gmxOrderBook = await ethers.getContractAt(
+    //   "IGmxOrderBook",
+    //   gmx.orderBookAddress
+    // );
     gmxPositionManager = await ethers.getContractAt(
       "IGmxPositionManager",
       gmx.positionManagerAddress
     );
 
     [
-      deployer,
-      vault,
       trader,
       adaptersRegistry,
       contractsFactory,
       dynamicValue,
-      nonAuthorized,
-      otherSigner,
       owner,
     ] = await ethers.getSigners();
 
     [
-      deployerAddress,
-      vaultAddress,
       traderAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
       dynamicValueAddress,
-      nonAuthorizedAddress,
-      otherAddress,
       ownerAddress,
     ] = await Promise.all([
-      deployer.getAddress(),
-      vault.getAddress(),
       trader.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
       dynamicValue.getAddress(),
-      nonAuthorized.getAddress(),
-      otherSigner.getAddress(),
       owner.getAddress(),
     ]);
 
-    wbtcTokenContract = await ethers.getContractAt("ERC20", tokens.wbtc);
-    usdcTokenContract = await ethers.getContractAt("ERC20", tokens.usdc);
+    wbtcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.wbtc);
+    usdcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.usdc);
     underlyingTokenAddress = usdcTokenContract.address;
 
     usdcHolder0 = await ethers.getImpersonatedSigner(tokenHolders.usdc[0]);
     await usdcTokenContract
       .connect(usdcHolder0)
-      .transfer(traderAddress, utils.parseUnits("1000", 6));
+      .transfer(traderAddress, utils.parseUnits("1001", 6));
 
     LensFactory = await ethers.getContractFactory("Lens");
     lensContract = (await LensFactory.deploy()) as Lens;
@@ -179,7 +185,6 @@ describe("GMXAdapter", function () {
         initializer: "initialize",
       }
     )) as TraderWallet;
-
     await traderWalletContract.deployed();
 
     // mock interaction
@@ -191,6 +196,32 @@ describe("GMXAdapter", function () {
     gmxVaultPriceFeedMockContract = await GmxPriceFeedFactory.deploy();
     await gmxVaultPriceFeedMockContract.deployed();
 
+
+    /////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////
+
+    // deploy mocked ContractsFactory
+    const ContractsFactoryFactory = await ethers.getContractFactory(
+      "ContractsFactoryMock"
+    );
+    contractsFactoryContract = (await upgrades.deployProxy(
+      ContractsFactoryFactory,
+      []
+    )) as ContractsFactoryMock;
+    await contractsFactoryContract.deployed();
+    await traderWalletContract.connect(owner).setContractsFactoryAddress(contractsFactoryContract.address);
+    // set TRUE for response
+    await contractsFactoryContract.setReturnValue(true);
+
+    // deploy mocked Vault
+    const UsersVaultFactory = await ethers.getContractFactory("UsersVaultMock");
+    usersVaultContract =
+      (await UsersVaultFactory.deploy()) as UsersVaultMock;
+    await usersVaultContract.deployed();
+    await traderWalletContract.connect(owner).setVaultAddress(usersVaultContract.address);
+
+    // so no round ZERO check fail
+    await increaseRound(traderWalletContract, usersVaultContract);
     await reverter.snapshot();
   });
 

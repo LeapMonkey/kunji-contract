@@ -12,6 +12,7 @@ import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 // import "hardhat/console.sol";
+
 // import its own interface as well
 
 contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
@@ -50,7 +51,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     error InvalidRollover();
     error RolloverFailed();
     error SendToTraderFailed();
-    error AmountToScaleNotFound();
+    error InvalidRound();
 
     event VaultAddressSet(address indexed vaultAddress);
     event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
@@ -259,7 +260,9 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // REMOVE ALLOWANCE OF UNDERLYING ????
     }
 
-    function getAdapterAddressPerProtocol(uint256 _protocolId) external view returns(address) {
+    function getAdapterAddressPerProtocol(
+        uint256 _protocolId
+    ) external view returns (address) {
         return _getAdapterAddress(_protocolId);
     }
 
@@ -283,6 +286,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     function withdrawRequest(uint256 _amount) external onlyTrader {
+        _checkZeroRound();
         if (_amount == 0) revert ZeroAmount();
 
         emit WithdrawRequest(_msgSender(), underlyingTokenAddress, _amount);
@@ -359,7 +363,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
-
         currentRound = IUsersVault(vaultAddress).currentRound();
         emit RolloverExecuted(
             block.timestamp,
@@ -367,7 +370,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             traderProfit,
             vaultProfit
         );
-
         traderProfit = 0;
         vaultProfit = 0;
         ratioProportions = calculateRatio();
@@ -379,6 +381,8 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
     ) external onlyTrader nonReentrant returns (bool) {
+        _checkZeroRound();
+
         address adapterAddress;
 
         uint256 walletRatio = 1e18;
@@ -452,10 +456,17 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     function getBalances() public view returns (uint256, uint256) {
+        uint256 pendingsFunds = cumulativePendingDeposits +
+            cumulativePendingWithdrawals;
+        uint256 underlyingBalance = IERC20Upgradeable(underlyingTokenAddress)
+            .balanceOf(address(this));
+        uint256 vaultUnderlying = IUsersVault(vaultAddress)
+            .getUnderlyingLiquidity();
+
+        if (pendingsFunds > underlyingBalance) return (0, vaultUnderlying);
+
         return (
-            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
-                cumulativePendingDeposits -
-                cumulativePendingWithdrawals,
+            underlyingBalance - pendingsFunds,
             IUsersVault(vaultAddress).getUnderlyingLiquidity()
         );
     }
@@ -515,5 +526,9 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         IAdapter.AdapterOperation memory _traderOperation
     ) internal returns (bool) {
         return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
+    }
+
+    function _checkZeroRound() internal view {
+        if (currentRound == 0) revert InvalidRound();
     }
 }

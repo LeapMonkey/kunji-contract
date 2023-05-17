@@ -1329,10 +1329,6 @@ describe("User Vault Contract Tests", function () {
             expect(userUnclaimedAssets).to.equal(ZERO_AMOUNT);
             expect(contractPendingWithdrawShares).to.equal(ZERO_AMOUNT);
 
-            // approve so does not fail on allowance
-            await usersVaultContract
-              .connect(user3)
-              .approve(user3Address, AMOUNT);
             txResult = await usersVaultContract
               .connect(user3)
               .withdrawRequest(AMOUNT);
@@ -1415,11 +1411,6 @@ describe("User Vault Contract Tests", function () {
               await usersVaultContract
                 .connect(user3)
                 .claimShares(AMOUNT, user3Address);
-
-              // approve so does not fail on allowance
-              await usersVaultContract
-                .connect(user3)
-                .approve(user3Address, AMOUNT);
 
               // withdraw request so claim assets can happen after rollover
               await usersVaultContract
@@ -1507,11 +1498,6 @@ describe("User Vault Contract Tests", function () {
             await usersVaultContract
               .connect(user3)
               .claimShares(AMOUNT, user3Address);
-
-            // approve so does not fail on allowance
-            await usersVaultContract
-              .connect(user3)
-              .approve(user3Address, AMOUNT);
 
             // withdraw request so claim assets can happen after rollover
             await usersVaultContract.connect(user3).withdrawRequest(AMOUNT);
@@ -1619,69 +1605,95 @@ describe("User Vault Contract Tests", function () {
         });
 
         describe("WHEN calling with invalid caller or parameters", function () {
-          describe("WHEN caller is not trader", function () {
+          describe("WHEN round is ZERO", function () {
             it("THEN it should fail", async () => {
               await expect(
                 usersVaultContract
-                  .connect(nonAuthorized)
+                  .connect(traderWallet)
                   .executeOnProtocol(1, traderOperation, BigNumber.from(1))
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
-                "UserNotAllowed"
+                "InvalidRound"
               );
             });
           });
 
-          describe("WHEN Adapter does not exist in registry", function () {
-            it("THEN it should fail", async () => {
-              await expect(
-                traderWalletMockContract.callExecuteOnProtocolFromVault(
-                  11,
-                  traderOperation,
-                  BigNumber.from(1)
-                )
-              ).to.be.revertedWithCustomError(
-                usersVaultContract,
-                "InvalidAdapter"
-              );
-            });
-          });
-
-          describe("WHEN Adapter exists but execution fails", function () {
+          describe("WHEN round is NOT ZERO", function () {
             before(async () => {
-              // : deprecated
-              // change returnValue to return true on function call
-              // await adaptersRegistryContract.setReturnValue(true);
-              // await adaptersRegistryContract.setReturnAddress(
-              //   adapterContract.address
-              // );
+              // deposit so rollover can happen
+              await usersVaultContract.connect(user1).userDeposit(AMOUNT_1E18);
 
-              // : deprecated
-              // add the adapter into the array and mapping
-              // so the call to the executeOnProtocol returns the adapter address
-              // await usersVaultContract.connect(owner).addAdapterToUse(2);
-
-              // set the adapter address to return
-              await traderWalletMockContract.setAddressToReturn(
-                adapterContract.address
-              );
-
-              // change returnValue to return true on function call on allowed operation
-              await adapterContract.setExecuteOperationReturn(false);
+              // rollover so round get increased
+              await traderWalletMockContract.callRolloverInVault();
             });
-            it("THEN it should fail", async () => {
-              await expect(
-                traderWalletMockContract.callExecuteOnProtocolFromVault(
-                  2,
-                  traderOperation,
-                  BigNumber.from(1)
-                )
-              )
-                .to.be.revertedWithCustomError(
+            after(async () => {
+              await snapshot.restore();
+            });
+
+            describe("WHEN caller is not trader", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  usersVaultContract
+                    .connect(nonAuthorized)
+                    .executeOnProtocol(1, traderOperation, BigNumber.from(1))
+                ).to.be.revertedWithCustomError(
                   usersVaultContract,
-                  "AdapterOperationFailed"
+                  "UserNotAllowed"
+                );
+              });
+            });
+
+            describe("WHEN Adapter does not exist in registry", function () {
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletMockContract.callExecuteOnProtocolInVault(
+                    11,
+                    traderOperation,
+                    BigNumber.from(1)
+                  )
+                ).to.be.revertedWithCustomError(
+                  usersVaultContract,
+                  "InvalidAdapter"
+                );
+              });
+            });
+
+            describe("WHEN Adapter exists but execution fails", function () {
+              before(async () => {
+                // : deprecated
+                // change returnValue to return true on function call
+                // await adaptersRegistryContract.setReturnValue(true);
+                // await adaptersRegistryContract.setReturnAddress(
+                //   adapterContract.address
+                // );
+
+                // : deprecated
+                // add the adapter into the array and mapping
+                // so the call to the executeOnProtocol returns the adapter address
+                // await usersVaultContract.connect(owner).addAdapterToUse(2);
+
+                // set the adapter address to return
+                await traderWalletMockContract.setAddressToReturn(
+                  adapterContract.address
+                );
+
+                // change returnValue to return true on function call on allowed operation
+                await adapterContract.setExecuteOperationReturn(false);
+              });
+              it("THEN it should fail", async () => {
+                await expect(
+                  traderWalletMockContract.callExecuteOnProtocolInVault(
+                    2,
+                    traderOperation,
+                    BigNumber.from(1)
+                  )
                 )
-                .withArgs("vault");
+                  .to.be.revertedWithCustomError(
+                    usersVaultContract,
+                    "AdapterOperationFailed"
+                  )
+                  .withArgs("vault");
+              });
             });
           });
         });
@@ -1689,6 +1701,25 @@ describe("User Vault Contract Tests", function () {
         describe("WHEN calling with correct parameters", function () {
           describe("WHEN executed correctly no replication needed", function () {
             before(async () => {
+              TraderWalletMockFactory = await ethers.getContractFactory(
+                "TraderWalletMock"
+              );
+    
+              // deploy trader wallet mock to return a valid adapter address
+              traderWalletMockContract =
+                (await TraderWalletMockFactory.deploy()) as TraderWalletMock;
+              await traderWalletMockContract.deployed();
+    
+              // set the wallet in the vault
+              await usersVaultContract.setTraderWalletAddress(
+                traderWalletMockContract.address
+              );
+    
+              // set the vault in the mock contract
+              await traderWalletMockContract.setUsersVault(
+                usersVaultContract.address
+              )
+
               // change returnValue to return true on function call
               await adaptersRegistryContract.setReturnValue(true);
               await adaptersRegistryContract.setReturnAddress(
@@ -1708,8 +1739,14 @@ describe("User Vault Contract Tests", function () {
               // change returnValue to return true on function call on allowed operation
               await adapterContract.setExecuteOperationReturn(true);
 
+              // deposit so rollover can happen
+              await usersVaultContract.connect(user1).userDeposit(AMOUNT_1E18);
+
+              // rollover so round get increased
+              await traderWalletMockContract.callRolloverInVault();
+
               txResult =
-                await traderWalletMockContract.callExecuteOnProtocolFromVault(
+                await traderWalletMockContract.callExecuteOnProtocolInVault(
                   2,
                   traderOperation,
                   BigNumber.from(1)
@@ -1718,20 +1755,10 @@ describe("User Vault Contract Tests", function () {
             after(async () => {
               await snapshot.restore();
             });
-            it("THEN it should emit an Event", async () => {
-              // await expect(txResult)
-              //   .to.emit(usersVaultContract, "OperationExecuted")
-              //   .withArgs(
-              //     adapterContract.address,
-              //     { _timestamp: undefined } as any,
-              //     "trader wallet",
-              //     false,
-              //     { _initialBalance: undefined } as any,
-              //     BigNumber.from("1000000000000000000")
-              //   );
+            it("THEN it should emit an event", async () => {
               await expect(txResult).to.emit(
-                usersVaultContract,
-                "OperationExecuted"
+                traderWalletMockContract,
+                "RolloverExecuted"
               );
             });
           });
@@ -1767,9 +1794,6 @@ describe("User Vault Contract Tests", function () {
 
         describe("WHEN trying to execute first rollover on round 0", function () {
           const AMOUNT = AMOUNT_1E18.mul(30);
-          let userPendingShares: BigNumber;
-          let userUnclaimedAssets: BigNumber;
-          let contractPendingWithdrawShares: BigNumber;
 
           before(async () => {
             // user deposits for starting on round 0
@@ -1784,24 +1808,6 @@ describe("User Vault Contract Tests", function () {
               AMOUNT_1E18.mul(100),
               5
             );
-
-            /*
-            // rollover so minting can happen
-            await usersVaultContract.connect(traderWallet).rolloverFromTrader();
-
-            // claim shares so withdraw can happen
-            await usersVaultContract
-              .connect(user3)
-              .claimShares(AMOUNT, user3Address);
-
-            // approve so does not fail on allowance
-            await usersVaultContract
-              .connect(user3)
-              .approve(user3Address, AMOUNT);
-
-            // withdraw request so claim assets can happen after rollover
-            await usersVaultContract.connect(user3).withdrawRequest(AMOUNT);
-            */
 
             vaultBalanceBefore = await usdcTokenContract.balanceOf(
               usersVaultContract.address
@@ -1851,7 +1857,7 @@ describe("User Vault Contract Tests", function () {
                 ZERO_AMOUNT
               );
             });
-            it("THEN after rollover afterRoundVaultBalance should be plain underlying balances", async () => {              
+            it("THEN after rollover afterRoundVaultBalance should be plain underlying balances", async () => {
               expect(
                 await usersVaultContract.afterRoundVaultBalance()
               ).to.equal(AMOUNT_1E18.mul(1500));
@@ -1877,11 +1883,6 @@ describe("User Vault Contract Tests", function () {
                 await usersVaultContract
                   .connect(user3)
                   .claimShares(AMOUNT, user3Address);
-
-                // approve so does not fail on allowance
-                await usersVaultContract
-                  .connect(user3)
-                  .approve(user3Address, AMOUNT);
 
                 // withdraw request so claim assets can happen after rollover
                 await usersVaultContract.connect(user3).withdrawRequest(AMOUNT);
@@ -1922,7 +1923,9 @@ describe("User Vault Contract Tests", function () {
                 const vaultBalance = await usersVaultContract.balanceOf(
                   usersVaultContract.address
                 );
-                expect(vaultBalance).to.equal((AMOUNT_1E18.mul(1500)).sub(AMOUNT));
+                expect(vaultBalance).to.equal(
+                  AMOUNT_1E18.mul(1500).sub(AMOUNT)
+                );
                 expect(vaultBalance).to.equal(
                   vaultSharesBalanceBefore.sub(AMOUNT)
                 );

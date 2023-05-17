@@ -65,6 +65,25 @@ let contractBalanceAfter: BigNumber;
 let traderBalanceBefore: BigNumber;
 let traderBalanceAfter: BigNumber;
 
+const increaseRound = async (
+  _traderWalletContract: TraderWallet,
+  _usersVaultContract: UsersVaultMock
+) => {
+  // deposit so rollover can be executed
+  await _traderWalletContract
+    .connect(trader)
+    .traderDeposit(AMOUNT_1E18.mul(100));
+
+  // for rollover return ok
+  await _usersVaultContract.setReturnValue(true);
+
+  // increase users vault round
+  await _usersVaultContract.setRound(1);
+
+  // so the round is increased
+  await _traderWalletContract.connect(trader).rollover();
+};
+
 describe("Trader Wallet Contract Tests", function () {
   this.timeout(TEST_TIMEOUT);
 
@@ -286,7 +305,7 @@ describe("Trader Wallet Contract Tests", function () {
           // change address to mocked adaptersRegistry
           await traderWalletContract
             .connect(owner)
-            .setAdaptersRegistryAddress(adaptersRegistryContract.address);          
+            .setAdaptersRegistryAddress(adaptersRegistryContract.address);
 
           // set the vault in the trader wallet contract
           await traderWalletContract
@@ -732,8 +751,12 @@ describe("Trader Wallet Contract Tests", function () {
               describe("WHEN protocol does not exist in registry", function () {
                 before(async () => {
                   // change returnValue to adapter registry to fail on function call
-                  await adaptersRegistryContract.connect(deployer).setReturnValue(false);
-                  await adaptersRegistryContract.connect(deployer).setReturnAddress(otherAddress);
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnValue(false);
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnAddress(otherAddress);
                 });
                 it("THEN it should fail", async () => {
                   await expect(
@@ -752,10 +775,12 @@ describe("Trader Wallet Contract Tests", function () {
               before(async () => {
                 // change returnValue to return true on function call
                 adapter1Address = otherAddress;
-                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-                await adaptersRegistryContract.connect(deployer).setReturnAddress(
-                  adapter1Address
-                );
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnValue(true);
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnAddress(adapter1Address);
 
                 txResult = await traderWalletContract
                   .connect(trader)
@@ -810,14 +835,22 @@ describe("Trader Wallet Contract Tests", function () {
               adapter4Address = dynamicValueAddress;
               adapter10Address = vaultAddress;
 
-              await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-              await adaptersRegistryContract.connect(deployer).setReturnAddress(adapter2Address);
+              await adaptersRegistryContract
+                .connect(deployer)
+                .setReturnValue(true);
+              await adaptersRegistryContract
+                .connect(deployer)
+                .setReturnAddress(adapter2Address);
               await traderWalletContract.connect(trader).addAdapterToUse(2);
 
-              await adaptersRegistryContract.connect(deployer).setReturnAddress(adapter3Address);
+              await adaptersRegistryContract
+                .connect(deployer)
+                .setReturnAddress(adapter3Address);
               await traderWalletContract.connect(trader).addAdapterToUse(3);
 
-              await adaptersRegistryContract.connect(deployer).setReturnAddress(adapter4Address);
+              await adaptersRegistryContract
+                .connect(deployer)
+                .setReturnAddress(adapter4Address);
               await traderWalletContract.connect(trader).addAdapterToUse(4);
             });
             describe("WHEN checking adapters", function () {
@@ -878,8 +911,12 @@ describe("Trader Wallet Contract Tests", function () {
               describe("WHEN protocol does not exist in registry", function () {
                 before(async () => {
                   // change returnValue to adapter registry to fail on function call
-                  await adaptersRegistryContract.connect(deployer).setReturnValue(false);
-                  await adaptersRegistryContract.connect(deployer).setReturnAddress(otherAddress);
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnValue(false);
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnAddress(otherAddress);
                 });
                 it("THEN it should fail", async () => {
                   await expect(
@@ -893,10 +930,12 @@ describe("Trader Wallet Contract Tests", function () {
 
               describe("WHEN adapter does not exist in array", function () {
                 before(async () => {
-                  await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-                  await adaptersRegistryContract.connect(deployer).setReturnAddress(
-                    adapter10Address
-                  );
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnValue(true);
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnAddress(adapter10Address);
                 });
                 it("THEN it should fail", async () => {
                   await expect(
@@ -911,10 +950,12 @@ describe("Trader Wallet Contract Tests", function () {
 
             describe("WHEN calling with correct caller and address", function () {
               before(async () => {
-                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-                await adaptersRegistryContract.connect(deployer).setReturnAddress(
-                  adapter3Address
-                );
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnValue(true);
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnAddress(adapter3Address);
                 txResult = await traderWalletContract
                   .connect(trader)
                   .removeAdapterToUse(3);
@@ -1094,28 +1135,48 @@ describe("Trader Wallet Contract Tests", function () {
 
         describe("WHEN trying to make a withdrawRequest", async () => {
           describe("WHEN calling with invalid caller or parameters", function () {
-            describe("WHEN caller is not trader", function () {
-              it("THEN it should fail", async () => {
-                await expect(
-                  traderWalletContract
-                    .connect(nonAuthorized)
-                    .withdrawRequest(AMOUNT_1E18.mul(100))
-                ).to.be.revertedWithCustomError(
-                  traderWalletContract,
-                  "CallerNotAllowed"
-                );
-              });
+            after(async () => {
+              await snapshot.restore();
             });
-            describe("WHEN amount is ZERO", function () {
+            describe("WHEN round is ZERO", function () {
               it("THEN it should fail", async () => {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .withdrawRequest(ZERO_AMOUNT)
+                    .withdrawRequest(AMOUNT_1E18.mul(100))
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
-                  "ZeroAmount"
+                  "InvalidRound"
                 );
+              });
+            });
+            describe("WHEN round is not ZERO", function () {
+              before(async () => {
+                await increaseRound(traderWalletContract, usersVaultContract);
+              });
+              describe("WHEN caller is not trader", function () {
+                it("THEN it should fail", async () => {
+                  await expect(
+                    traderWalletContract
+                      .connect(nonAuthorized)
+                      .withdrawRequest(AMOUNT_1E18.mul(100))
+                  ).to.be.revertedWithCustomError(
+                    traderWalletContract,
+                    "CallerNotAllowed"
+                  );
+                });
+              });
+              describe("WHEN amount is ZERO", function () {
+                it("THEN it should fail", async () => {
+                  await expect(
+                    traderWalletContract
+                      .connect(trader)
+                      .withdrawRequest(ZERO_AMOUNT)
+                  ).to.be.revertedWithCustomError(
+                    traderWalletContract,
+                    "ZeroAmount"
+                  );
+                });
               });
             });
           });
@@ -1124,6 +1185,8 @@ describe("Trader Wallet Contract Tests", function () {
             const AMOUNT = AMOUNT_1E18.mul(100).div(2);
 
             before(async () => {
+              await increaseRound(traderWalletContract, usersVaultContract);
+
               txResult = await traderWalletContract
                 .connect(trader)
                 .withdrawRequest(AMOUNT);
@@ -1193,45 +1256,65 @@ describe("Trader Wallet Contract Tests", function () {
               });
             });
 
-            describe("WHEN Adapter does not exist in registry", function () {
+            describe("WHEN round is ZERO", function () {
               it("THEN it should fail", async () => {
                 await expect(
                   traderWalletContract
                     .connect(trader)
-                    .executeOnProtocol(11, traderOperation, false)
+                    .executeOnProtocol(1, traderOperation, false)
                 ).to.be.revertedWithCustomError(
                   traderWalletContract,
-                  "InvalidAdapter"
+                  "InvalidRound"
                 );
               });
             });
 
-            describe("WHEN Adapter exists but execution fails", function () {
+            describe("WHEN round is not ZERO", function () {
               before(async () => {
-                // change returnValue to return true on function call
-                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-                await adaptersRegistryContract.connect(deployer).setReturnAddress(
-                  adapterContract.address
-                );
-
-                // add the adapter into the array and mapping
-                // so the call to the executeOnProtocol returns the adapter address
-                await traderWalletContract.connect(trader).addAdapterToUse(2);
-
-                // change returnValue to return true on function call on allowed operation
-                await adapterContract.setExecuteOperationReturn(false);
+                await increaseRound(traderWalletContract, usersVaultContract);
               });
-              it("THEN it should fail", async () => {
-                await expect(
-                  traderWalletContract
-                    .connect(trader)
-                    .executeOnProtocol(2, traderOperation, false)
-                )
-                  .to.be.revertedWithCustomError(
+              describe("WHEN Adapter does not exist in registry", function () {
+                it("THEN it should fail", async () => {
+                  await expect(
+                    traderWalletContract
+                      .connect(trader)
+                      .executeOnProtocol(11, traderOperation, false)
+                  ).to.be.revertedWithCustomError(
                     traderWalletContract,
-                    "AdapterOperationFailed"
+                    "InvalidAdapter"
+                  );
+                });
+              });
+
+              describe("WHEN Adapter exists but execution fails", function () {
+                before(async () => {
+                  // change returnValue to return true on function call
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnValue(true);
+                  await adaptersRegistryContract
+                    .connect(deployer)
+                    .setReturnAddress(adapterContract.address);
+
+                  // add the adapter into the array and mapping
+                  // so the call to the executeOnProtocol returns the adapter address
+                  await traderWalletContract.connect(trader).addAdapterToUse(2);
+
+                  // change returnValue to return true on function call on allowed operation
+                  await adapterContract.setExecuteOperationReturn(false);
+                });
+                it("THEN it should fail", async () => {
+                  await expect(
+                    traderWalletContract
+                      .connect(trader)
+                      .executeOnProtocol(2, traderOperation, false)
                   )
-                  .withArgs("trader");
+                    .to.be.revertedWithCustomError(
+                      traderWalletContract,
+                      "AdapterOperationFailed"
+                    )
+                    .withArgs("trader");
+                });
               });
             });
           });
@@ -1239,11 +1322,16 @@ describe("Trader Wallet Contract Tests", function () {
           describe("WHEN calling with correct parameters", function () {
             describe("WHEN executed correctly no replication needed", function () {
               before(async () => {
+                // increase round so not be zero
+                await increaseRound(traderWalletContract, usersVaultContract);
+
                 // change returnValue to return true on function call
-                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-                await adaptersRegistryContract.connect(deployer).setReturnAddress(
-                  adapterContract.address
-                );
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnValue(true);
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnAddress(adapterContract.address);
 
                 // add the adapter into the array and mapping
                 // so the call to the executeOnProtocol returns the adapter address
@@ -1279,11 +1367,16 @@ describe("Trader Wallet Contract Tests", function () {
 
             describe("WHEN replication is issued", function () {
               before(async () => {
+                // increase round so not be zero
+                await increaseRound(traderWalletContract, usersVaultContract);
+
                 // change returnValue to return true on function call
-                await adaptersRegistryContract.connect(deployer).setReturnValue(true);
-                await adaptersRegistryContract.connect(deployer).setReturnAddress(
-                  adapterContract.address
-                );
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnValue(true);
+                await adaptersRegistryContract
+                  .connect(deployer)
+                  .setReturnAddress(adapterContract.address);
 
                 // add the adapter into the array and mapping
                 // so the call to the executeOnProtocol returns the adapter address
@@ -1337,6 +1430,13 @@ describe("Trader Wallet Contract Tests", function () {
 
         describe("WHEN trying to make a rollover", async () => {
           describe("WHEN calling with invalid caller or parameters", function () {
+            before(async () => {
+              await increaseRound(traderWalletContract, usersVaultContract);
+            });
+            after(async () => {
+              await snapshot.restore();
+            });
+
             describe("WHEN caller is not trader", function () {
               it("THEN it should fail", async () => {
                 await expect(
@@ -1347,6 +1447,7 @@ describe("Trader Wallet Contract Tests", function () {
                 );
               });
             });
+
             describe("WHEN no cumulatives pending", async () => {
               it("THEN it should fail", async () => {
                 await expect(
@@ -1410,9 +1511,9 @@ describe("Trader Wallet Contract Tests", function () {
                     .connect(trader)
                     .withdrawRequest(AMOUNT_1E18.mul(100));
                 });
-                // after(async () => {
-                //   await snapshot.restore();
-                // });
+                after(async () => {
+                  await snapshot.restore();
+                });
                 it("THEN rollover should fail", async () => {
                   await expect(
                     traderWalletContract.connect(trader).rollover()
@@ -1428,6 +1529,9 @@ describe("Trader Wallet Contract Tests", function () {
                   await usersVaultContract.setReturnValue(true);
                   // for transfer return ok
                   await usdcTokenContract.setReturnBoolValue(true);
+
+                  // so no round zero check on withdraw
+                  await increaseRound(traderWalletContract, usersVaultContract);
 
                   // request withdraw so the transfer can take place
                   await traderWalletContract

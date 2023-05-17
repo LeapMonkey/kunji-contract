@@ -13,7 +13,7 @@ import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 // import its own interface as well
 
@@ -78,14 +78,8 @@ contract UsersVault is
 
     event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
     event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
-    event TraderAddressSet(address indexed traderAddress);
     // event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
-    event AdapterToUseAdded(
-        uint256 protocolId,
-        address indexed adapter,
-        address indexed trader
-    );
-    event AdapterToUseRemoved(address indexed adapter, address indexed caller);
+
     event TraderWalletAddressSet(address indexed traderWalletAddress);
     event UserDeposited(
         address indexed caller,
@@ -113,13 +107,6 @@ contract UsersVault is
         uint256 round,
         uint256 newDeposit,
         uint256 newWithdrawal
-    );
-    event OperationExecuted(
-        uint256 protocolId,
-        uint256 timestamp,
-        string target,
-        uint256 initialBalance,
-        uint256 walletRatio
     );
 
     function initialize(
@@ -314,7 +301,7 @@ contract UsersVault is
 
         pendingWithdrawShares = pendingWithdrawShares + _sharesAmount;
 
-        transferFrom(_msgSender(), address(this), _sharesAmount);
+        super._transfer(_msgSender(), address(this), _sharesAmount);
     }
 
     function rolloverFromTrader() external returns (bool) {
@@ -344,7 +331,7 @@ contract UsersVault is
         }
 
         // mint the shares for the contract so users can claim their shares
-        if (sharesToMint > 0) _mint(address(this), sharesToMint);
+        if (sharesToMint > 0) super._mint(address(this), sharesToMint);
         assetsPerShareXRound[currentRound] = assetsPerShare;
 
         // Accept all pending deposits
@@ -352,7 +339,7 @@ contract UsersVault is
 
         if (pendingWithdrawShares > 0) {
             // burn shares for whitdrawal
-            _burn(address(this), pendingWithdrawShares);
+            super._burn(address(this), pendingWithdrawShares);
 
             // Process all withdrawals
             processedWithdrawAssets =
@@ -410,6 +397,7 @@ contract UsersVault is
         IAdapter.AdapterOperation memory _traderOperation,
         uint256 _walletRatio
     ) external returns (bool) {
+        _checkZeroRound();
         _onlyTraderWallet(_msgSender());
         address adapterAddress;
 
@@ -433,13 +421,6 @@ contract UsersVault is
 
         // contract should receive tokens HERE
 
-        emit OperationExecuted(
-            _protocolId,
-            block.timestamp,
-            "trader wallet",
-            initialVaultBalance,
-            _walletRatio
-        );
         return true;
     }
 
@@ -467,22 +448,22 @@ contract UsersVault is
         return userDeposits[_receiver].unclaimedShares;
     }
 
-    function previewAssets(address _receiver) external view returns (uint256) {
-        _checkZeroRound();
+    // function previewAssets(address _receiver) external view returns (uint256) {
+    //     _checkZeroRound();
 
-        if (
-            userWithdrawals[_receiver].round < currentRound &&
-            userWithdrawals[_receiver].pendingShares > 0
-        ) {
-            uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(
-                _msgSender()
-            );
-            return
-                unclaimedAssets;
-        }
+    //     if (
+    //         userWithdrawals[_receiver].round < currentRound &&
+    //         userWithdrawals[_receiver].pendingShares > 0
+    //     ) {
+    //         uint256 unclaimedAssets = _pendSharesToUnclaimedAssets(
+    //             _msgSender()
+    //         );
+    //         return
+    //             unclaimedAssets;
+    //     }
 
-        return userWithdrawals[_receiver].unclaimedAssets;
-    }
+    //     return userWithdrawals[_receiver].unclaimedAssets;
+    // }
 
     function claimShares(uint256 _sharesAmount, address _receiver) public {
         _checkZeroRound();
