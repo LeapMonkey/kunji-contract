@@ -601,8 +601,8 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
                       vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
     
                       // @todo fix contract issue with previewAssets() function and then refactor following
-                      const claimableAssets = await usersVaultContract.previewAssets(user1Address)
-                      console.log("claimableAssets:", claimableAssets);
+                      // const claimableAssets = await usersVaultContract.previewAssets(user1Address)
+                      // console.log("claimableAssets:", claimableAssets);
                       // await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
     
                       // mocked until 'todo' not fixed
