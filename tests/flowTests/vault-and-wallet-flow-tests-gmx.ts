@@ -376,8 +376,10 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
       
           const events = txReceipt.events?.filter((event: any) => event.topics[0] === createIncreasePositionEvent)
 
-          walletRequestKey = requestKeyFromEvent(events[0]);
-          vaultRequestKey = requestKeyFromEvent(events[1]);
+          if (events) {
+            walletRequestKey = requestKeyFromEvent(events[0]);
+            vaultRequestKey = requestKeyFromEvent(events[1]);
+          }
         });
 
         it("Should sell all USDC tokens", async () => {
