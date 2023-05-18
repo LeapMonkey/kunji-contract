@@ -6,6 +6,11 @@ import { HardhatUserConfig } from "hardhat/config";
 import * as dotenv from "dotenv";
 dotenv.config();
 
+const arbitrum_rpc = process.env.ARBITRUM_NODE || "";
+if (arbitrum_rpc === "") {
+  throw new Error("Invalid ARBITRUM_NODE");
+}
+
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   paths: {
@@ -13,7 +18,7 @@ const config: HardhatUserConfig = {
     tests: "./tests",
   },
   solidity: {
-    version: "0.8.9",
+    version: "0.8.19",
     settings: {
       optimizer: {
         enabled: true,
@@ -24,13 +29,13 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       forking: {
-        url: process.env.ARBITRUM_NODE || "",
-        blockNumber: 77400001,
+        url: arbitrum_rpc,
+        blockNumber: 77400000,
         enabled: true,
       },
     },
     arbitrum: {
-      url: process.env.ARBITRUM_NODE || "",
+      url: arbitrum_rpc,
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
