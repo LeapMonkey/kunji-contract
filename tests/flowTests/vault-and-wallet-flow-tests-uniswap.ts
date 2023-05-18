@@ -98,7 +98,7 @@ let uniswapPositionManager: INonfungiblePositionManager;
 let roundCounter: BigNumber;
 
 
-describe("Vault and Wallet Flow Tests", function () {
+describe("Vault and Wallet Flow Tests on Uniswap", function () {
 
   before(async () => {
     // get signers
@@ -527,14 +527,9 @@ describe("Vault and Wallet Flow Tests", function () {
                   user1BalanceBefore = await usdcTokenContract.balanceOf(user1Address);
                   vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
 
-                  // @todo fix contract issue with previewAssets() function and then refactor following
-                  // const claimableAssets = await usersVaultContract.previewAssets(user1Address)
+                  const claimableAssets = await usersVaultContract.previewAssets(user1Address)
                   // console.log("claimableAssets:", claimableAssets);
-                  // await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
-
-                  // mocked until 'todo' not fixed
-                  const claimableAssetsMock = await usdcTokenContract.balanceOf(usersVaultContract.address);
-                  await usersVaultContract.connect(user1).claimAssets(claimableAssetsMock, user1Address);
+                  await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
                 });
 
                 it("Should withdraw all tokens from Vault contract", async () => {

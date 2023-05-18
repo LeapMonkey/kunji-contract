@@ -602,14 +602,10 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
                       user1BalanceBefore = await usdcTokenContract.balanceOf(user1Address);
                       vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
     
-                      // @todo fix contract issue with previewAssets() function and then refactor following
-                      // const claimableAssets = await usersVaultContract.previewAssets(user1Address)
+                      const claimableAssets = await usersVaultContract.previewAssets(user1Address)
                       // console.log("claimableAssets:", claimableAssets);
-                      // await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
+                      await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
     
-                      // mocked until 'todo' not fixed
-                      const claimableAssetsMock = await usdcTokenContract.balanceOf(usersVaultContract.address);
-                      await usersVaultContract.connect(user1).claimAssets(claimableAssetsMock, user1Address);
                     });
     
                     it("Should withdraw all tokens from Vault contract", async () => {
