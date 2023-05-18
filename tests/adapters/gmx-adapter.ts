@@ -13,14 +13,15 @@ import {
   GMXAdapter,
   TraderWallet,
   Lens,
-  ERC20,
+  ERC20Mock,
   IGmxReader,
   IGmxRouter,
   IGmxVault,
   IGmxPositionRouter,
-  IGmxOrderBook,
   GmxVaultPriceFeedMock,
   IGmxPositionManager,
+  UsersVaultMock,
+  ContractsFactoryMock,
 } from "../../typechain-types";
 import Reverter from "../_helpers/reverter";
 import { ReverterLocal } from "../_helpers/reverter";
@@ -31,45 +32,34 @@ const reverterLocal = new ReverterLocal();
 
 const abiCoder = new utils.AbiCoder();
 
-let deployer: Signer;
-let vault: Signer;
 let trader: Signer;
 let adaptersRegistry: Signer;
 let contractsFactory: Signer;
 let dynamicValue: Signer;
-let nonAuthorized: Signer;
-let otherSigner: Signer;
 let owner: Signer;
 let usdcHolder0: Signer;
+let usersVaultContract: UsersVaultMock;
 
-let deployerAddress: string;
-let vaultAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
 let traderAddress: string;
 let dynamicValueAddress: string;
-let nonAuthorizedAddress: string;
-let otherAddress: string;
 let ownerAddress: string;
 
 let txResult: ContractTransaction;
 let TraderWalletFactory: ContractFactory;
 let traderWalletContract: TraderWallet;
-let usdcTokenContract: ERC20;
-let wbtcTokenContract: ERC20;
-let contractBalanceBefore: BigNumber;
-let contractBalanceAfter: BigNumber;
-let traderBalanceBefore: BigNumber;
-let traderBalanceAfter: BigNumber;
+let usdcTokenContract: ERC20Mock;
+let wbtcTokenContract: ERC20Mock;
 
+let contractsFactoryContract: ContractsFactoryMock;
 let GMXAdapterFactory: ContractFactory;
 let gmxAdapterLibrary: GMXAdapter;
 let gmxRouter: IGmxRouter;
 let gmxPositionRouter: IGmxPositionRouter;
 let gmxReader: IGmxReader;
 let gmxVault: IGmxVault;
-let gmxOrderBook: IGmxOrderBook;
 let gmxVaultPriceFeedMockContract: GmxVaultPriceFeedMock;
 let gmxVaultPriceFeedMock: GmxVaultPriceFeedMock;
 let gmxPositionManager: IGmxPositionManager;
@@ -77,6 +67,29 @@ let LensFactory: ContractFactory;
 let lensContract: Lens;
 
 const protocolId = 1; // GMX
+
+const increaseRound = async (
+  _traderWalletContract: TraderWallet,
+  _usersVaultContract: UsersVaultMock
+) => {
+  await usdcTokenContract
+    .connect(trader)
+    .approve(traderWalletContract.address, utils.parseUnits("1", 6));
+
+  // deposit so rollover can be executed
+  await _traderWalletContract
+    .connect(trader)
+    .traderDeposit(utils.parseUnits("1", 6));
+
+  // for rollover return ok
+  await _usersVaultContract.setReturnValue(true);
+
+  // increase users vault round
+  await _usersVaultContract.setRound(1);
+
+  // so the round is increased
+  await _traderWalletContract.connect(trader).rollover();
+};
 
 const createIncreasePositionEvent = utils.keccak256(
   utils.toUtf8Bytes("CreateIncreasePosition(address,bytes32)")
@@ -100,57 +113,38 @@ describe("GMXAdapter", function () {
     );
     gmxReader = await ethers.getContractAt("IGmxReader", gmx.readerAddress);
     gmxVault = await ethers.getContractAt("IGmxVault", gmx.vaultAddress);
-    gmxOrderBook = await ethers.getContractAt(
-      "IGmxOrderBook",
-      gmx.orderBookAddress
-    );
+    await ethers.getContractAt("IGmxOrderBook", gmx.orderBookAddress);
+
     gmxPositionManager = await ethers.getContractAt(
       "IGmxPositionManager",
       gmx.positionManagerAddress
     );
 
-    [
-      deployer,
-      vault,
-      trader,
-      adaptersRegistry,
-      contractsFactory,
-      dynamicValue,
-      nonAuthorized,
-      otherSigner,
-      owner,
-    ] = await ethers.getSigners();
+    [trader, adaptersRegistry, contractsFactory, dynamicValue, owner] =
+      await ethers.getSigners();
 
     [
-      deployerAddress,
-      vaultAddress,
       traderAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
       dynamicValueAddress,
-      nonAuthorizedAddress,
-      otherAddress,
       ownerAddress,
     ] = await Promise.all([
-      deployer.getAddress(),
-      vault.getAddress(),
       trader.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
       dynamicValue.getAddress(),
-      nonAuthorized.getAddress(),
-      otherSigner.getAddress(),
       owner.getAddress(),
     ]);
 
-    wbtcTokenContract = await ethers.getContractAt("ERC20", tokens.wbtc);
-    usdcTokenContract = await ethers.getContractAt("ERC20", tokens.usdc);
+    wbtcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.wbtc);
+    usdcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.usdc);
     underlyingTokenAddress = usdcTokenContract.address;
 
     usdcHolder0 = await ethers.getImpersonatedSigner(tokenHolders.usdc[0]);
     await usdcTokenContract
       .connect(usdcHolder0)
-      .transfer(traderAddress, utils.parseUnits("1000", 6));
+      .transfer(traderAddress, utils.parseUnits("1001", 6));
 
     LensFactory = await ethers.getContractFactory("Lens");
     lensContract = (await LensFactory.deploy()) as Lens;
@@ -160,11 +154,7 @@ describe("GMXAdapter", function () {
     gmxAdapterLibrary = (await GMXAdapterFactory.deploy()) as GMXAdapter;
     await gmxAdapterLibrary.deployed();
 
-    TraderWalletFactory = await ethers.getContractFactory("TraderWallet", {
-      // libraries: {
-      //   GMXAdapter: gmxAdapterLibrary.address,
-      // },
-    });
+    TraderWalletFactory = await ethers.getContractFactory("TraderWallet");
     traderWalletContract = (await upgrades.deployProxy(
       TraderWalletFactory,
       [
@@ -179,11 +169,7 @@ describe("GMXAdapter", function () {
         initializer: "initialize",
       }
     )) as TraderWallet;
-
     await traderWalletContract.deployed();
-
-    // mock interaction
-    // await traderWalletContract.connect(trader).addAdapterToUse(protocolId, gmx.routerAddress);
 
     const GmxPriceFeedFactory = await ethers.getContractFactory(
       "GmxVaultPriceFeedMock"
@@ -191,6 +177,34 @@ describe("GMXAdapter", function () {
     gmxVaultPriceFeedMockContract = await GmxPriceFeedFactory.deploy();
     await gmxVaultPriceFeedMockContract.deployed();
 
+    /////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////
+
+    // deploy mocked ContractsFactory
+    const ContractsFactoryFactory = await ethers.getContractFactory(
+      "ContractsFactoryMock"
+    );
+    contractsFactoryContract = (await upgrades.deployProxy(
+      ContractsFactoryFactory,
+      []
+    )) as ContractsFactoryMock;
+    await contractsFactoryContract.deployed();
+    await traderWalletContract
+      .connect(owner)
+      .setContractsFactoryAddress(contractsFactoryContract.address);
+    // set TRUE for response
+    await contractsFactoryContract.setReturnValue(true);
+
+    // deploy mocked Vault
+    const UsersVaultFactory = await ethers.getContractFactory("UsersVaultMock");
+    usersVaultContract = (await UsersVaultFactory.deploy()) as UsersVaultMock;
+    await usersVaultContract.deployed();
+    await traderWalletContract
+      .connect(owner)
+      .setVaultAddress(usersVaultContract.address);
+
+    // so no round ZERO check fail
+    await increaseRound(traderWalletContract, usersVaultContract);
     await reverter.snapshot();
   });
 
@@ -226,7 +240,7 @@ describe("GMXAdapter", function () {
         await usdcTokenContract
           .connect(trader)
           .approve(traderWalletContract.address, amount);
-        await traderWalletContract.connect(trader).traderDeposit(amount);
+        // await traderWalletContract.connect(trader).traderDeposit(amount);
         const isLong = true;
         const tokenIn = tokens.usdc;
         collateralToken = tokens.wbtc;
@@ -410,12 +424,10 @@ describe("GMXAdapter", function () {
           const operationId = 1; // decrease position
           const tradeOperation = { operationId, data: tradeData };
           // const msgValue = await gmxPositionRouter.minExecutionFee();
-          
-          txResult = await traderWalletContract.connect(trader).executeOnProtocol(
-            protocolId,
-            tradeOperation,
-            replicate
-          );
+
+          txResult = await traderWalletContract
+            .connect(trader)
+            .executeOnProtocol(protocolId, tradeOperation, replicate);
           const txReceipt = await txResult.wait();
 
           const events = txReceipt.events?.filter(
@@ -745,14 +757,18 @@ describe("GMXAdapter", function () {
         });
 
         it("Should create increase order index for trader wallet account", async () => {
-          expect(await lensContract.increaseOrdersIndex(traderWalletContract.address))
-            .to.equal(1); // first increase order
+          expect(
+            await lensContract.increaseOrdersIndex(traderWalletContract.address)
+          ).to.equal(1); // first increase order
         });
 
         it("Should return correct data of created limit order", async () => {
           const index = 0;
-          
-          const order = await lensContract.increaseOrders(traderWalletContract.address, index);
+
+          const order = await lensContract.increaseOrders(
+            traderWalletContract.address,
+            index
+          );
           expect(order.account).to.equal(traderWalletContract.address);
           expect(order.purchaseToken).to.equal(collateralToken);
           expect(order.collateralToken).to.equal(collateralToken);
@@ -784,8 +800,11 @@ describe("GMXAdapter", function () {
 
           it("Should return empty data at zero limit order index", async () => {
             const index = 0;
-            
-            const order = await lensContract.increaseOrders(traderWalletContract.address, index);
+
+            const order = await lensContract.increaseOrders(
+              traderWalletContract.address,
+              index
+            );
             expect(order.account).to.equal(constants.AddressZero);
             expect(order.purchaseToken).to.equal(constants.AddressZero);
             expect(order.collateralToken).to.equal(constants.AddressZero);
@@ -828,8 +847,11 @@ describe("GMXAdapter", function () {
 
           it("Should return updated data at zero increase limit order index", async () => {
             const index = 0;
-            
-            const order = await lensContract.increaseOrders(traderWalletContract.address, index);
+
+            const order = await lensContract.increaseOrders(
+              traderWalletContract.address,
+              index
+            );
             expect(order.account).to.equal(traderWalletContract.address);
             expect(order.purchaseToken).to.equal(collateralToken);
             expect(order.collateralToken).to.equal(collateralToken);
@@ -888,8 +910,11 @@ describe("GMXAdapter", function () {
 
           it("Should execute created increase order", async () => {
             // check opened position
-            expect(await lensContract.increaseOrdersIndex(traderWalletContract.address))
-              .to.equal(1); // first increase order
+            expect(
+              await lensContract.increaseOrdersIndex(
+                traderWalletContract.address
+              )
+            ).to.equal(1); // first increase order
 
             const position = await lensContract.getPositions(
               traderWalletContract.address,
@@ -1018,14 +1043,20 @@ describe("GMXAdapter", function () {
           });
 
           it("Should create decrease order index for trader wallet account", async () => {
-            expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
-              .to.equal(1); // first decrease order
+            expect(
+              await lensContract.decreaseOrdersIndex(
+                traderWalletContract.address
+              )
+            ).to.equal(1); // first decrease order
           });
 
           it("Should return correct data of created decrease limit order", async () => {
             const index = 0;
-            
-            const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
+
+            const order = await lensContract.decreaseOrders(
+              traderWalletContract.address,
+              index
+            );
             expect(order.account).to.equal(traderWalletContract.address);
             expect(order.collateralToken).to.equal(collateralToken);
             expect(order.collateralDelta).to.equal(collateralDelta);
@@ -1058,8 +1089,11 @@ describe("GMXAdapter", function () {
 
             it("Should return empty data at zero limit order index", async () => {
               const index = 0;
-              
-              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
+
+              const order = await lensContract.decreaseOrders(
+                traderWalletContract.address,
+                index
+              );
               expect(order.account).to.equal(constants.AddressZero);
               expect(order.collateralToken).to.equal(constants.AddressZero);
               expect(order.collateralDelta).to.equal(0);
@@ -1104,7 +1138,10 @@ describe("GMXAdapter", function () {
             it("Should return updated data at zero decrease limit order index", async () => {
               const index = 0;
 
-              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
+              const order = await lensContract.decreaseOrders(
+                traderWalletContract.address,
+                index
+              );
               expect(order.account).to.equal(traderWalletContract.address);
               expect(order.collateralToken).to.equal(collateralToken);
               expect(order.indexToken).to.equal(indexToken);
@@ -1162,8 +1199,11 @@ describe("GMXAdapter", function () {
             it("Should execute created decrease order", async () => {
               // check opened position
               const amountIn = utils.parseUnits("1000", 30);
-              expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
-                .to.equal(1); // first decrease order
+              expect(
+                await lensContract.decreaseOrdersIndex(
+                  traderWalletContract.address
+                )
+              ).to.equal(1); // first decrease order
 
               const position = await lensContract.getPositions(
                 traderWalletContract.address,
@@ -1297,14 +1337,20 @@ describe("GMXAdapter", function () {
           });
 
           it("Should create decrease order index for trader wallet account", async () => {
-            expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
-              .to.equal(1); // first decrease order
+            expect(
+              await lensContract.decreaseOrdersIndex(
+                traderWalletContract.address
+              )
+            ).to.equal(1); // first decrease order
           });
 
           it("Should return correct data of created decrease limit order", async () => {
             const index = 0;
-            
-            const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
+
+            const order = await lensContract.decreaseOrders(
+              traderWalletContract.address,
+              index
+            );
             expect(order.account).to.equal(traderWalletContract.address);
             expect(order.collateralToken).to.equal(collateralToken);
             expect(order.collateralDelta).to.equal(collateralDelta);
@@ -1337,8 +1383,11 @@ describe("GMXAdapter", function () {
 
             it("Should return empty data at zero limit order index", async () => {
               const index = 0;
-              
-              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
+
+              const order = await lensContract.decreaseOrders(
+                traderWalletContract.address,
+                index
+              );
               expect(order.account).to.equal(constants.AddressZero);
               expect(order.collateralToken).to.equal(constants.AddressZero);
               expect(order.collateralDelta).to.equal(0);
@@ -1382,8 +1431,11 @@ describe("GMXAdapter", function () {
 
             it("Should return updated data at zero decrease limit order index", async () => {
               const index = 0;
-              
-              const order = await lensContract.decreaseOrders(traderWalletContract.address, index);
+
+              const order = await lensContract.decreaseOrders(
+                traderWalletContract.address,
+                index
+              );
               expect(order.account).to.equal(traderWalletContract.address);
               expect(order.collateralToken).to.equal(collateralToken);
               expect(order.indexToken).to.equal(indexToken);
@@ -1438,9 +1490,12 @@ describe("GMXAdapter", function () {
             it("Should execute created decrease order", async () => {
               // check opened position
               const amountIn = utils.parseUnits("1000", 30);
-              expect(await lensContract.decreaseOrdersIndex(traderWalletContract.address))
-                .to.equal(1); // first decrease order
-  
+              expect(
+                await lensContract.decreaseOrdersIndex(
+                  traderWalletContract.address
+                )
+              ).to.equal(1); // first decrease order
+
               const position = await lensContract.getPositions(
                 traderWalletContract.address,
                 [collateralToken],

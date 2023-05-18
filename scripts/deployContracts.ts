@@ -324,6 +324,9 @@ async function main(): Promise<void> {
   const [deployer] = await ethers.getSigners();
   const deployerAddress = await deployer.getAddress();
 
+  console.log('deployerAddress :>> ', deployerAddress);
+  console.log('\n\n');
+  
   let lensContract: Lens;
   let traderWalletDeployerContract: TraderWalletDeployer;
   let usersVaultDeployerContract: UsersVaultDeployer;

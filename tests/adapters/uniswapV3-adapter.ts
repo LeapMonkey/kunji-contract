@@ -4,7 +4,6 @@ import { ethers, upgrades } from "hardhat";
 import {
   Signer,
   ContractTransaction,
-  ContractFactory,
   BigNumber,
   utils,
   constants,
@@ -17,7 +16,7 @@ import {
   IAdapter,
   IUniswapV3Router,
   IUniswapV3Factory,
-  INonfungiblePositionManager
+  INonfungiblePositionManager,
 } from "../../typechain-types";
 import { tokens, uniswap } from "./../_helpers/arbitrumAddresses";
 import Reverter from "../_helpers/reverter";
@@ -34,30 +33,15 @@ const abiCoder = new utils.AbiCoder();
 let deployer: Signer;
 let vault: Signer;
 let trader: Signer;
-let adaptersRegistry: Signer;
-let contractsFactory: Signer;
-let dynamicValue: Signer;
 let nonAuthorized: Signer;
-let otherSigner: Signer;
-let owner: Signer;
 
 let deployerAddress: string;
 let vaultAddress: string;
-let adaptersRegistryAddress: string;
-let contractsFactoryAddress: string;
 let traderAddress: string;
-let ownerAddress: string;
 
 let txResult: ContractTransaction;
-let TraderWalletFactory: ContractFactory;
-// let traderWalletContract: TraderWallet;
-let usdcTokenContract: ERC20Mock;
-let contractBalanceBefore: BigNumber;
-let contractBalanceAfter: BigNumber;
-let traderBalanceBefore: BigNumber;
-let traderBalanceAfter: BigNumber;
 
-let uniswapAdapterContract: UniswapV3Adapter
+let uniswapAdapterContract: UniswapV3Adapter;
 let uniswapRouter: IUniswapV3Router;
 let uniswapQuoter: IQuoterV2;
 let uniswapFactory: IUniswapV3Factory;
@@ -99,32 +83,12 @@ describe("UniswapAdapter", function () {
       uniswap.positionManagerAddress
     );
 
-    [
-      deployer,
-      vault,
-      trader,
-      adaptersRegistry,
-      contractsFactory,
-      dynamicValue,
-      nonAuthorized,
-      otherSigner,
-      owner,
-    ] = await ethers.getSigners();
+    [deployer, vault, trader, nonAuthorized] = await ethers.getSigners();
 
-    [
-      deployerAddress,
-      vaultAddress,
-      traderAddress,
-      adaptersRegistryAddress,
-      contractsFactoryAddress,
-      ownerAddress,
-    ] = await Promise.all([
+    [deployerAddress, vaultAddress, traderAddress] = await Promise.all([
       deployer.getAddress(),
       vault.getAddress(),
       trader.getAddress(),
-      adaptersRegistry.getAddress(),
-      contractsFactory.getAddress(),
-      owner.getAddress(),
     ]);
   });
 

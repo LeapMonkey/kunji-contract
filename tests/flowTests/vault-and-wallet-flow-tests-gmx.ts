@@ -20,7 +20,7 @@ import {
   ContractsFactoryMock,
   AdaptersRegistryMock,
   AdapterMock,
-  ERC20,
+  ERC20Mock,
   IGmxPositionRouter,
   Lens,
   GmxVaultPriceFeedMock,
@@ -95,8 +95,8 @@ let gmxVaultPriceFeedMockContract: GmxVaultPriceFeedMock;
 let gmxVaultPriceFeedMock: GmxVaultPriceFeedMock;
 let gmxVault: IGmxVault;
 
-let usdcTokenContract: ERC20;
-let wbtcTokenContract: ERC20;
+let usdcTokenContract: ERC20Mock;
+let wbtcTokenContract: ERC20Mock;
 
 let userBalanceBefore: BigNumber;
 let userBalanceAfter: BigNumber;
@@ -254,6 +254,9 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
     let user1InputAmount: BigNumber;
     let user2InputAmount: BigNumber;
 
+    let traderInitialBalance: BigNumber;
+    let user1InitialBalance: BigNumber;
+
     before(async() => {
       traderInputAmount = utils.parseUnits("1000", 6);
       user1InputAmount = utils.parseUnits("5000", 6);
@@ -263,6 +266,8 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
       await usdcTokenContract.connect(usdcHolder0).transfer(traderAddress, traderInputAmount);
       await usdcTokenContract.connect(usdcHolder0).transfer(user1Address, user1InputAmount);
 
+      traderInitialBalance = await usdcTokenContract.balanceOf(traderAddress);
+      user1InitialBalance = await usdcTokenContract.balanceOf(user1Address);
 
       await usdcTokenContract.connect(trader)
         .approve(traderWalletContract.address, traderInputAmount);
@@ -293,8 +298,8 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
       expect(await usdcTokenContract.balanceOf(usersVaultContract.address))
         .to.equal(user1InputAmount);
 
-      console.log(await usdcTokenContract.balanceOf(traderWalletContract.address));
-      console.log(await usdcTokenContract.balanceOf(usersVaultContract.address));
+      // console.log(await usdcTokenContract.balanceOf(traderWalletContract.address));
+      // console.log(await usdcTokenContract.balanceOf(usersVaultContract.address));
       
     });
 
@@ -371,8 +376,10 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
       
           const events = txReceipt.events?.filter((event: any) => event.topics[0] === createIncreasePositionEvent)
 
-          walletRequestKey = requestKeyFromEvent(events[0]);
-          vaultRequestKey = requestKeyFromEvent(events[1]);
+          if (events) {
+            walletRequestKey = requestKeyFromEvent(events[0]);
+            vaultRequestKey = requestKeyFromEvent(events[1]);
+          }
         });
 
         it("Should sell all USDC tokens", async () => {
@@ -562,10 +569,11 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
 
                     traderBalanceBefore = await usdcTokenContract.balanceOf(traderAddress);
                     walletBalance = await usdcTokenContract.balanceOf(traderWalletContract.address);
-      
                     await traderWalletContract.connect(trader).withdrawRequest(walletBalance);
-                    await usersVaultContract.connect(user1).claimShares(1, user1Address);
-                    await usersVaultContract.connect(user1).withdrawRequest(1);
+
+                    const shares = await usersVaultContract.previewShares(user1Address);
+                    await usersVaultContract.connect(user1).claimShares(shares, user1Address);
+                    await usersVaultContract.connect(user1).withdrawRequest(shares);
                     await traderWalletContract.connect(trader).rollover();
                   });
       
@@ -585,19 +593,33 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
                       .to.equal(traderBalanceBefore.add(walletBalance));
                   });
       
-                  xit("Should pay to user1 trader (increase user1 balance)", async () => {
       
-                  });
-      
-                  xdescribe("User withdraws profit after trading", function() {
+                  describe("User withdraws profit after trading", function() {
+                    let user1BalanceBefore: BigNumber;
+                    let vaultBalanceBefore: BigNumber;
+    
                     before(async() => {
-                      // @todo issue ZeroAmount();
-                      await usersVaultContract.connect(user1).claimAllAssets(user1Address)
+                      user1BalanceBefore = await usdcTokenContract.balanceOf(user1Address);
+                      vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
+    
+                      const claimableAssets = await usersVaultContract.previewAssets(user1Address)
+                      // console.log("claimableAssets:", claimableAssets);
+                      await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
+    
                     });
-                    
-                    xit("Should increase users balance", async () => {
-                      console.log("User balance after ", await usdcTokenContract.balanceOf(user1Address));
+    
+                    it("Should withdraw all tokens from Vault contract", async () => {
+                      expect(await usdcTokenContract.balanceOf(usersVaultContract.address))
+                        .to.equal(ZERO_AMOUNT);
                     });
+    
+                    it("Should return profitable user1 balance after trading", async () => {
+                      const userBalance = await usdcTokenContract.balanceOf(user1Address)
+    
+                      expect(userBalance).to.equal(user1BalanceBefore.add(vaultBalanceBefore));
+                      expect(userBalance).to.be.gt(user1InitialBalance);
+                    });
+    
                   });
       
                 });
@@ -605,12 +627,8 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
               });
             });
           });
-
-
         });
       });
-
     });
-  
   });
 });

@@ -9,10 +9,9 @@ import {
   GMXAdapter,
   ERC20Mock,
   UniswapV3Adapter,
-  ERC20,
   Lens
 } from "../../typechain-types";
-import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
+import { tokens } from "../_helpers/arbitrumAddresses";
 
 
 export const setupContracts = async (
@@ -33,10 +32,9 @@ export const setupContracts = async (
   let adaptersRegistryContract: AdaptersRegistryMock;
   let AdapterFactory: ContractFactory;
   let adapterContract: AdapterMock;
-  let usdcTokenContract: ERC20;
-  let wbtcTokenContract: ERC20;
+  let usdcTokenContract: ERC20Mock;
+  let wbtcTokenContract: ERC20Mock;
   let underlyingTokenAddress: string;
-  let usdcHolder0: Signer;
   let LensFactory: ContractFactory;
   let lensContract: Lens;
 
@@ -46,8 +44,8 @@ export const setupContracts = async (
 
   
   // USDC contract
-  wbtcTokenContract = await ethers.getContractAt("ERC20", tokens.wbtc)
-  usdcTokenContract = await ethers.getContractAt("ERC20", tokens.usdc);
+  wbtcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.wbtc)
+  usdcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.usdc);
   underlyingTokenAddress = usdcTokenContract.address;
 
   LensFactory = await ethers.getContractFactory("Lens");

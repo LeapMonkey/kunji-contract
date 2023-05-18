@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "./ERC20CustomInherits.sol";
 
-contract ERC20Mock is ERC20 {
+contract ERC20Mock is ERC20CustomInherits {
     uint8 private immutable _decimals;
     bool returnBoolValue = true;
 
@@ -11,7 +11,7 @@ contract ERC20Mock is ERC20 {
         string memory name_,
         string memory symbol_,
         uint8 decimals_
-    ) ERC20(name_, symbol_) {
+    ) ERC20CustomInherits(name_, symbol_) {
         _decimals = decimals_;
     }
 
@@ -52,5 +52,9 @@ contract ERC20Mock is ERC20 {
         super.transfer(recipient, amount);
 
         return true;
+    }
+
+    function mockBalanceOf(address _account, uint256 newBalance) external {
+        _balances[_account] = newBalance;
     }
 }
