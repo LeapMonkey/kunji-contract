@@ -240,7 +240,7 @@ describe("GMXAdapter", function () {
         await usdcTokenContract
           .connect(trader)
           .approve(traderWalletContract.address, amount);
-        await traderWalletContract.connect(trader).traderDeposit(amount);
+        // await traderWalletContract.connect(trader).traderDeposit(amount);
         const isLong = true;
         const tokenIn = tokens.usdc;
         collateralToken = tokens.wbtc;
