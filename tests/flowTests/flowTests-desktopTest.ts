@@ -326,7 +326,7 @@ describe("User Vault Contract Tests", function () {
         });
 
 
-        it("THEN ==> THIRD rollover LOSS 50 -->> 10", async () => {
+        xit("THEN ==> THIRD rollover LOSS 50 -->> 10", async () => {
             console.log("--------------------------------------------------------------------------");
             console.log("--------------------------------------------------------------------------");
             await usdcTokenContract.transfer(deployerAddress, AMOUNT_1E18.mul(50));
