@@ -290,7 +290,7 @@ contract UsersVault is
             _sharesAmount;
 
         pendingWithdrawShares = pendingWithdrawShares + _sharesAmount;
-
+ 
         super._transfer(_msgSender(), address(this), _sharesAmount);
     }
 
@@ -367,9 +367,9 @@ contract UsersVault is
         // Make pending withdrawals 0
         pendingWithdrawShares = 0;
         vaultProfit = 0;
-        processedWithdrawAssets = 0;
 
         initialVaultBalance = getUnderlyingLiquidity();
+        processedWithdrawAssets = 0;
 
         emit RolloverExecuted(
             currentRound,

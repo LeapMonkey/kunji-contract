@@ -262,25 +262,6 @@ describe("User Vault Contract Tests", function () {
           .withArgs("_traderWalletAddress");
       });
 
-      xit("THEN it should FAIL when _dynamicValueAddress is ZERO", async () => {
-        await expect(
-          upgrades.deployProxy(
-            UsersVaultFactory,
-            [
-              underlyingTokenAddress,
-              adaptersRegistryAddress,
-              contractsFactoryContract.address,
-              traderWalletAddress,
-              ownerAddress,
-              SHARES_NAME,
-              SHARES_SYMBOL,
-            ]
-          )
-        )
-          .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
-          .withArgs("_dynamicValueAddress");
-      });
-
       it("THEN it should FAIL when _ownerAddress is ZERO", async () => {
         await expect(
           upgrades.deployProxy(
@@ -1523,9 +1504,9 @@ describe("User Vault Contract Tests", function () {
                   await usersVaultContract.pendingDepositAssets()
                 ).to.equal(ZERO_AMOUNT);
               });
-              it("THEN after rollover initialVaultBalance should be plain underlying balances", async () => {
+              it("THEN after rollover initialVaultBalance should be plain underlying balances sub withdraw requests", async () => {
                 expect(await usersVaultContract.initialVaultBalance()).to.equal(
-                  AMOUNT_1E18.mul(1500)
+                  (AMOUNT_1E18.mul(1500)).sub(AMOUNT)
                 );
               });
               it("THEN contract shares balance should decrease", async () => {

@@ -40,6 +40,8 @@ let TraderWalletDeployerAddress = "";
 let UsersVaultDeployerAddress = "";
 let ContractsFactoryAddress = "";
 let AdaptersRegistryAddress = "";
+// let ContractsFactoryAddress = "0xe1C86FbcC22b130FD57Df020EF011d1757A41162";
+// let AdaptersRegistryAddress = "0x212aD3d42722B905E47D96Cb86729d099E13F31C";
 let TraderWalletAddress = "";
 let UsersVaultAddress = "";
 
