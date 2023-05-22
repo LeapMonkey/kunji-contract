@@ -2,102 +2,35 @@
 
 pragma solidity 0.8.20;
 
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
+
+import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
+import {BaseVault} from "./BaseVault.sol";
 
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IUsersVault} from "./interfaces/IUsersVault.sol";
-import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 // import "hardhat/console.sol";
 
 // import its own interface as well
 
-contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract TraderWallet is BaseVault {
     address public vaultAddress;
-    address public underlyingTokenAddress;
-    address public adaptersRegistryAddress;
-    address public contractsFactoryAddress;
     address public traderAddress;
     address public dynamicValueAddress;
     int256 public traderProfit;
-    int256 public vaultProfit;
     uint256 public cumulativePendingDeposits;
     uint256 public cumulativePendingWithdrawals;
     uint256 public initialTraderBalance;
-    uint256 public initialVaultBalance;
     uint256 public afterRoundTraderBalance;
-    uint256 public afterRoundVaultBalance;
     uint256 public ratioProportions;
-    uint256 public currentRound;
     address[] public traderSelectedAdaptersArray;
     mapping(uint256 => address) public adaptersPerProtocol;
 
-    error ZeroAddress(string target);
-    error ZeroAmount();
-    error InvalidVault();
-    error CallerNotAllowed();
-    error TraderNotAllowed();
-    error InvalidProtocol();
-    error AdapterPresent();
-    error AdapterNotPresent();
-    error InvalidAdapter();
-    error AdapterOperationFailed(string target);
-    error UsersVaultOperationFailed();
-    error ApproveFailed(address caller, address token, uint256 amount);
-    error TokenTransferFailed();
-    error InvalidRollover();
-    error RolloverFailed();
-    error SendToTraderFailed();
-    error InvalidRound();
-
-    event VaultAddressSet(address indexed vaultAddress);
-    event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
-    event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
-    event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
-    event TraderAddressSet(address indexed traderAddress);
-    event DynamicValueAddressSet(address indexed dynamicValueAddress);
-    event AdapterToUseAdded(
-        uint256 protocolId,
-        address indexed adapter,
-        address indexed trader
-    );
-    event AdapterToUseRemoved(address indexed adapter, address indexed caller);
-    event TraderDeposit(
-        address indexed account,
-        address indexed token,
-        uint256 amount
-    );
-    event WithdrawRequest(
-        address indexed account,
-        address indexed token,
-        uint256 amount
-    );
-    event OperationExecuted(
-        uint256 protocolId,
-        uint256 timestamp,
-        string target,
-        bool replicate,
-        uint256 initialBalance,
-        uint256 walletRatio
-    );
-    event RolloverExecuted(
-        uint256 timestamp,
-        uint256 round,
-        int256 traderProfit,
-        int256 vaultProfit
-    );
-
     modifier onlyTrader() {
         if (_msgSender() != traderAddress) revert CallerNotAllowed();
-        _;
-    }
-
-    modifier notZeroAddress(address _variable, string memory _message) {
-        if (_variable == address(0)) revert ZeroAddress({target: _message});
         _;
     }
 
@@ -108,51 +41,48 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         address _traderAddress,
         address _dynamicValueAddress,
         address _ownerAddress
-    ) external initializer {
+    ) external virtual initializer {
         // CHECK CALLER IS THE FACTORY
 
-        if (_underlyingTokenAddress == address(0))
-            revert ZeroAddress({target: "_underlyingTokenAddress"});
-        if (_adaptersRegistryAddress == address(0))
-            revert ZeroAddress({target: "_adaptersRegistryAddress"});
-        if (_contractsFactoryAddress == address(0))
-            revert ZeroAddress({target: "_contractsFactoryAddress"});
-        if (_traderAddress == address(0))
-            revert ZeroAddress({target: "_traderAddress"});
-        // CHECK TRADER IS ALLOWED
-
-        if (_dynamicValueAddress == address(0))
-            revert ZeroAddress({target: "_dynamicValueAddress"});
-        if (_ownerAddress == address(0))
-            revert ZeroAddress({target: "_ownerAddress"});
-
-        __Ownable_init();
-        transferOwnership(_ownerAddress);
-
-        __ReentrancyGuard_init();
-        GMXAdapter.__initApproveGmxPlugin();
-
-        underlyingTokenAddress = _underlyingTokenAddress;
-        adaptersRegistryAddress = _adaptersRegistryAddress;
-        contractsFactoryAddress = _contractsFactoryAddress;
-        traderAddress = _traderAddress;
-        dynamicValueAddress = _dynamicValueAddress;
-
-        cumulativePendingDeposits = 0;
-        cumulativePendingWithdrawals = 0;
-        initialTraderBalance = 0;
-        initialVaultBalance = 0;
-        afterRoundTraderBalance = 0;
-        afterRoundVaultBalance = 0;
-        currentRound = 0;
-        traderProfit = 0;
-        vaultProfit = 0;
+        __TraderWallet_init(
+            _underlyingTokenAddress,
+            _adaptersRegistryAddress,
+            _contractsFactoryAddress,
+            _traderAddress,
+            _dynamicValueAddress,
+            _ownerAddress
+        );
     }
 
-    //
-    receive() external payable {}
+    function __TraderWallet_init(
+        address _underlyingTokenAddress,
+        address _adaptersRegistryAddress,
+        address _contractsFactoryAddress,
+        address _traderAddress,
+        address _dynamicValueAddress,
+        address _ownerAddress
+    ) internal onlyInitializing {
+        __BaseVault_init(
+            _underlyingTokenAddress,
+            _adaptersRegistryAddress,
+            _contractsFactoryAddress,
+            _ownerAddress
+        );
 
-    fallback() external {}
+        __TraderWallet_init_unchained(_traderAddress, _dynamicValueAddress);
+    }
+
+    function __TraderWallet_init_unchained(
+        address _traderAddress,
+        address _dynamicValueAddress
+    ) internal onlyInitializing {
+        _checkZeroAddress(_traderAddress, "_traderAddress");
+        _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
+        // CHECK TRADER IS ALLOWED
+
+        traderAddress = _traderAddress;
+        dynamicValueAddress = _dynamicValueAddress;
+    }
 
     function setVaultAddress(
         address _vaultAddress
@@ -166,17 +96,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         vaultAddress = _vaultAddress;
     }
 
-    function setAdaptersRegistryAddress(
-        address _adaptersRegistryAddress
-    )
-        external
-        onlyOwner
-        notZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress")
-    {
-        emit AdaptersRegistryAddressSet(_adaptersRegistryAddress);
-        adaptersRegistryAddress = _adaptersRegistryAddress;
-    }
-
     function setDynamicValueAddress(
         address _dynamicValueAddress
     )
@@ -186,17 +105,6 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     {
         emit DynamicValueAddressSet(_dynamicValueAddress);
         dynamicValueAddress = _dynamicValueAddress;
-    }
-
-    function setContractsFactoryAddress(
-        address _contractsFactoryAddress
-    )
-        external
-        onlyOwner
-        notZeroAddress(_contractsFactoryAddress, "_contractsFactoryAddress")
-    {
-        emit ContractsFactoryAddressSet(_contractsFactoryAddress);
-        contractsFactoryAddress = _contractsFactoryAddress;
     }
 
     function setUnderlyingTokenAddress(
@@ -365,7 +273,7 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         // get values for next round proportions
         (initialTraderBalance, initialVaultBalance) = getBalances();
         currentRound = IUsersVault(vaultAddress).currentRound();
-        emit RolloverExecuted(
+        emit TraderWalletRolloverExecuted(
             block.timestamp,
             currentRound,
             traderProfit,
@@ -508,28 +416,5 @@ contract TraderWallet is OwnableUpgradeable, ReentrancyGuardUpgradeable {
             }
         }
         return (found, i);
-    }
-
-    function _executeOnAdapter(
-        address _adapterAddress,
-        uint256 _walletRatio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal returns (bool) {
-        return
-            IAdapter(_adapterAddress).executeOperation(
-                _walletRatio,
-                _traderOperation
-            );
-    }
-
-    function _executeOnGmx(
-        uint256 _walletRatio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal returns (bool) {
-        return GMXAdapter.executeOperation(_walletRatio, _traderOperation);
-    }
-
-    function _checkZeroRound() internal view {
-        if (currentRound == 0) revert InvalidRound();
     }
 }

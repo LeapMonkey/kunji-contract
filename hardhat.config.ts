@@ -59,7 +59,11 @@ const config: HardhatUserConfig = {
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
     currency: "USD",
-    excludeContracts: ["@openzeppelin/contracts/", "mocks/"],
+    excludeContracts: [
+      "@openzeppelin/contracts/",
+      "@openzeppelin/contracts-upgradeable/",
+      "mocks/",
+    ],
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
@@ -68,7 +72,11 @@ const config: HardhatUserConfig = {
     alphaSort: true,
     runOnCompile: true,
     disambiguatePaths: false,
-    except: ["@openzeppelin/contracts/", "mocks/"],
+    except: [
+      "@openzeppelin/contracts/",
+      "@openzeppelin/contracts-upgradeable/",
+      "mocks/",
+    ],
   },
   mocha: {
     timeout: 100000000,
@@ -83,7 +91,12 @@ const config: HardhatUserConfig = {
     clear: true,
     flat: true,
     spacing: 2,
-    except: ["@openzeppelin/contracts/", "interfaces/", "mocks/"],
+    except: [
+      "@openzeppelin/contracts/",
+      "@openzeppelin/contracts-upgradeable/",
+      "interfaces/",
+      "mocks/",
+    ],
   },
 };
 

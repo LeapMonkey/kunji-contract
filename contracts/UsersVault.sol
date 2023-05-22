@@ -5,24 +5,18 @@ pragma solidity 0.8.20;
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {CustomReentrancyGuard} from "./CustomReentrancyGuard.sol";
+import {BaseVault} from "./BaseVault.sol";
 
 import {ITraderWallet} from "./interfaces/ITraderWallet.sol";
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
-import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 
 // import "hardhat/console.sol";
 
 // import its own interface as well
 
-contract UsersVault is
-    ERC20Upgradeable,
-    OwnableUpgradeable,
-    CustomReentrancyGuard
-{
+contract UsersVault is ERC20Upgradeable, BaseVault {
     struct UserDeposit {
         uint256 round;
         uint256 pendingAssets;
@@ -34,13 +28,7 @@ contract UsersVault is
         uint256 unclaimedAssets;
     }
 
-    address public underlyingTokenAddress;
-    address public adaptersRegistryAddress;
-    address public contractsFactoryAddress;
     address public traderWalletAddress;
-    uint256 public currentRound;
-    uint256 public initialVaultBalance;
-    uint256 public afterRoundVaultBalance;
 
     // Total amount of total deposit assets in mapped round
     uint256 public pendingDepositAssets;
@@ -49,7 +37,6 @@ contract UsersVault is
     uint256 public pendingWithdrawShares;
 
     uint256 public processedWithdrawAssets;
-    int256 public vaultProfit;
 
     // user specific deposits accounting
     mapping(address => UserDeposit) public userDeposits;
@@ -60,54 +47,10 @@ contract UsersVault is
     // ratio per round
     mapping(uint256 => uint256) public assetsPerShareXRound;
 
-    error ZeroAddress(string target);
-    error ZeroAmount();
-    error UserNotAllowed();
-    error InvalidTraderWallet();
-    error TokenTransferFailed();
-    error InvalidRound();
-    error InsufficientShares(uint256 unclaimedShareBalance);
-    error InsufficientAssets(uint256 unclaimedAssetBalance);
-    error InvalidRollover();
-    error InvalidAdapter();
-    error AdapterOperationFailed(string target);
-    error ApproveFailed(address caller, address token, uint256 amount);
-    error NotEnoughAssetsForWithdraw(
-        uint256 underlyingContractBalance,
-        uint256 processedWithdrawAssets
-    );
-
-    event AdaptersRegistryAddressSet(address indexed adaptersRegistryAddress);
-    event ContractsFactoryAddressSet(address indexed contractsFactoryAddress);
-
-    event TraderWalletAddressSet(address indexed traderWalletAddress);
-    event UserDeposited(
-        address indexed caller,
-        address tokenAddress,
-        uint256 assetsAmount
-    );
-    event WithdrawRequest(
-        address indexed account,
-        address indexed token,
-        uint256 amount
-    );
-    event SharesClaimed(
-        uint256 round,
-        uint256 shares,
-        address caller,
-        address receiver
-    );
-    event AssetsClaimed(
-        uint256 round,
-        uint256 assets,
-        address owner,
-        address receiver
-    );
-    event RolloverExecuted(
-        uint256 round,
-        uint256 newDeposit,
-        uint256 newWithdrawal
-    );
+    modifier onlyTraderWallet() {
+        if (_msgSender() != traderWalletAddress) revert UserNotAllowed();
+        _;
+    }
 
     function initialize(
         address _underlyingTokenAddress,
@@ -117,59 +60,47 @@ contract UsersVault is
         address _ownerAddress,
         string memory _sharesName,
         string memory _sharesSymbol
-    ) external initializer {
+    ) external virtual initializer {
         // CHECK CALLER IS THE FACTORY
         // CHECK TRADER IS ALLOWED
 
-        if (_underlyingTokenAddress == address(0))
-            revert ZeroAddress({target: "_underlyingTokenAddress"});
-        if (_adaptersRegistryAddress == address(0))
-            revert ZeroAddress({target: "_adaptersRegistryAddress"});
-        if (_contractsFactoryAddress == address(0))
-            revert ZeroAddress({target: "_contractsFactoryAddress"});
-        if (_traderWalletAddress == address(0))
-            revert ZeroAddress({target: "_traderWalletAddress"});
-        if (_ownerAddress == address(0))
-            revert ZeroAddress({target: "_ownerAddress"});
+        __UsersVault_init(
+            _underlyingTokenAddress,
+            _adaptersRegistryAddress,
+            _contractsFactoryAddress,
+            _traderWalletAddress,
+            _ownerAddress,
+            _sharesName,
+            _sharesSymbol
+        );
+    }
 
-        __Ownable_init();
-        transferOwnership(_ownerAddress);
-
+    function __UsersVault_init(
+        address _underlyingTokenAddress,
+        address _adaptersRegistryAddress,
+        address _contractsFactoryAddress,
+        address _traderWalletAddress,
+        address _ownerAddress,
+        string memory _sharesName,
+        string memory _sharesSymbol
+    ) internal onlyInitializing {
+        __BaseVault_init(
+            _underlyingTokenAddress,
+            _adaptersRegistryAddress,
+            _contractsFactoryAddress,
+            _ownerAddress
+        );
         __ERC20_init(_sharesName, _sharesSymbol);
-        __ReentrancyGuard_init();
-        GMXAdapter.__initApproveGmxPlugin();
 
-        underlyingTokenAddress = _underlyingTokenAddress;
-        adaptersRegistryAddress = _adaptersRegistryAddress;
-        contractsFactoryAddress = _contractsFactoryAddress;
+        __UsersVault_init_unchained(_traderWalletAddress);
+    }
+
+    function __UsersVault_init_unchained(
+        address _traderWalletAddress
+    ) internal onlyInitializing {
+        _checkZeroAddress(_traderWalletAddress, "_traderWalletAddress");
+
         traderWalletAddress = _traderWalletAddress;
-        currentRound = 0;
-        vaultProfit = 0;
-        processedWithdrawAssets = 0;
-        pendingDepositAssets = 0;
-        pendingWithdrawShares = 0;
-    }
-
-    receive() external payable {}
-
-    fallback() external {}
-
-    function setAdaptersRegistryAddress(
-        address _adaptersRegistryAddress
-    ) external {
-        _checkOwner();
-        _checkZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress");
-        emit AdaptersRegistryAddressSet(_adaptersRegistryAddress);
-        adaptersRegistryAddress = _adaptersRegistryAddress;
-    }
-
-    function setContractsFactoryAddress(
-        address _contractsFactoryAddress
-    ) external {
-        _checkOwner();
-        _checkZeroAddress(_contractsFactoryAddress, "_contractsFactoryAddress");
-        emit ContractsFactoryAddressSet(_contractsFactoryAddress);
-        contractsFactoryAddress = _contractsFactoryAddress;
     }
 
     function setTraderWalletAddress(address _traderWalletAddress) external {
@@ -295,9 +226,7 @@ contract UsersVault is
         super._transfer(_msgSender(), address(this), _sharesAmount);
     }
 
-    function rolloverFromTrader() external returns (bool) {
-        _onlyTraderWallet(_msgSender());
-
+    function rolloverFromTrader() external onlyTraderWallet returns (bool) {
         if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
             revert InvalidRollover();
 
@@ -372,7 +301,7 @@ contract UsersVault is
         initialVaultBalance = getUnderlyingLiquidity();
         processedWithdrawAssets = 0;
 
-        emit RolloverExecuted(
+        emit UserVaultRolloverExecuted(
             currentRound,
             pendingDepositAssets,
             pendingWithdrawShares
@@ -387,9 +316,8 @@ contract UsersVault is
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         uint256 _walletRatio
-    ) external returns (bool) {
+    ) external onlyTraderWallet returns (bool) {
         _checkZeroRound();
-        _onlyTraderWallet(_msgSender());
         address adapterAddress;
 
         bool success = false;
@@ -417,10 +345,6 @@ contract UsersVault is
 
     function getSharesContractBalance() external view returns (uint256) {
         return this.balanceOf(address(this));
-    }
-
-    function getRound() external view returns (uint256) {
-        return currentRound;
     }
 
     function previewShares(address _receiver) external view returns (uint256) {
@@ -568,24 +492,6 @@ contract UsersVault is
     }
 
     //
-    function _executeOnAdapter(
-        address _adapterAddress,
-        uint256 _ratio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal returns (bool) {
-        return
-            IAdapter(_adapterAddress).executeOperation(
-                _ratio,
-                _traderOperation
-            );
-    }
-
-    function _executeOnGmx(
-        uint256 _ratio,
-        IAdapter.AdapterOperation memory _traderOperation
-    ) internal returns (bool) {
-        return GMXAdapter.executeOperation(_ratio, _traderOperation);
-    }
 
     function _onlyValidInvestors(address _account) internal view {
         if (
@@ -593,20 +499,5 @@ contract UsersVault is
                 _account
             )
         ) revert UserNotAllowed();
-    }
-
-    function _onlyTraderWallet(address _account) internal view {
-        if (_account != traderWalletAddress) revert UserNotAllowed();
-    }
-
-    function _checkZeroRound() internal view {
-        if (currentRound == 0) revert InvalidRound();
-    }
-
-    function _checkZeroAddress(
-        address _variable,
-        string memory _message
-    ) internal pure {
-        if (_variable == address(0)) revert ZeroAddress({target: _message});
     }
 }

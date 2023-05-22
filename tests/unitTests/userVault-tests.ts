@@ -1196,9 +1196,11 @@ describe("User Vault Contract Tests", function () {
           describe("WHEN round is ZERO", function () {
             it("THEN it should fail", async () => {
               await expect(
-                usersVaultContract
-                  .connect(traderWallet)
-                  .executeOnProtocol(1, traderOperation, BigNumber.from(1))
+                traderWalletMockContract.callExecuteOnProtocolInVault(
+                  1,
+                  traderOperation,
+                  BigNumber.from(1)
+                )
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
                 "InvalidRound"
@@ -1329,7 +1331,7 @@ describe("User Vault Contract Tests", function () {
             it("THEN it should emit an event", async () => {
               await expect(txResult).to.emit(
                 traderWalletMockContract,
-                "RolloverExecuted"
+                "TraderWalletRolloverExecuted"
               );
             });
           });
@@ -1412,7 +1414,7 @@ describe("User Vault Contract Tests", function () {
             it("THEN it should emit an Event", async () => {
               await expect(txResult).to.emit(
                 usersVaultContract,
-                "RolloverExecuted"
+                "UserVaultRolloverExecuted"
               );
             });
             it("THEN currentRound should be increased", async () => {
@@ -1469,7 +1471,7 @@ describe("User Vault Contract Tests", function () {
               it("THEN it should emit an Event", async () => {
                 await expect(txResult).to.emit(
                   usersVaultContract,
-                  "RolloverExecuted"
+                  "UserVaultRolloverExecuted"
                 );
               });
               it("THEN currentRound should be increased", async () => {

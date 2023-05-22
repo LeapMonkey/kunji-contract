@@ -5,7 +5,7 @@ import {IUsersVault} from "./../interfaces/IUsersVault.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
 contract TraderWalletMock {
-    event RolloverExecuted();
+    event TraderWalletRolloverExecuted();
 
     address public addressToReturn;
     address public usersVaultAddress;
@@ -37,7 +37,7 @@ contract TraderWalletMock {
             _traderOperation,
             _walletRatio
         );
-        emit RolloverExecuted();
+        emit TraderWalletRolloverExecuted();
     }
 
     function callRolloverInVault() external {

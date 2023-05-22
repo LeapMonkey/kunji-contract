@@ -1637,7 +1637,7 @@ describe("Trader Wallet Contract Tests", function () {
               it("THEN it should emit an Event", async () => {
                 await expect(txResult).to.emit(
                   traderWalletContract,
-                  "RolloverExecuted"
+                  "TraderWalletRolloverExecuted"
                 );
                 // .withArgs(BLOCK TIME STAMP, 0);
               });
