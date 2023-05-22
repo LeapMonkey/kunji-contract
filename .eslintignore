@@ -1,4 +1,10 @@
-node_modules
-artifacts
-cache
-coverage
+artifacts/
+cache/
+data/
+node_modules/
+coverage.json
+coverage/
+crytic-export/
+deployments/
+docs/
+typechain-types

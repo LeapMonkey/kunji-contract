@@ -1,8 +1,19 @@
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-network-helpers";
+import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomiclabs/hardhat-ethers";
+import "@nomiclabs/hardhat-etherscan";
+import "solidity-coverage";
+import "hardhat-contract-sizer";
+import "hardhat-gas-reporter";
+import "hardhat-abi-exporter";
+import "hardhat-spdx-license-identifier";
+import "hardhat-tracer";
+import "solidity-docgen";
+import "@typechain/hardhat";
 import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
-import "hardhat-contract-sizer";
-import 'solidity-coverage';
-import { HardhatUserConfig } from "hardhat/config";
+
 import * as dotenv from "dotenv";
 dotenv.config();
 
@@ -48,12 +59,31 @@ const config: HardhatUserConfig = {
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
     currency: "USD",
+    excludeContracts: ["@openzeppelin/contracts/", "mocks/"],
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
+  contractSizer: {
+    alphaSort: true,
+    runOnCompile: true,
+    disambiguatePaths: false,
+    except: ["@openzeppelin/contracts/", "mocks/"],
+  },
   mocha: {
     timeout: 100000000,
+  },
+  spdxLicenseIdentifier: {
+    overwrite: true,
+    runOnCompile: true,
+  },
+  abiExporter: {
+    path: "./data/abi",
+    runOnCompile: true,
+    clear: true,
+    flat: true,
+    spacing: 2,
+    except: ["@openzeppelin/contracts/", "interfaces/", "mocks/"],
   },
 };
 
