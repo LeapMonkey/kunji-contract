@@ -808,7 +808,8 @@ describe("ContractsFactory Tests", function () {
               const abi = [
                 "event UsersVaultDeployed(address indexed _usersVaultAddress,address indexed _traderWalletAddress, address indexed _underlyingTokenAddress, string sharesName)",
               ];
-              const signature = "UsersVaultDeployed(address,address,address,string)";
+              const signature =
+                "UsersVaultDeployed(address,address,address,string)";
 
               txReceipt = await txResult.wait();
               const decodedEvent = await decodeEvent(abi, signature, txReceipt);
@@ -833,15 +834,15 @@ describe("ContractsFactory Tests", function () {
               expect(
                 await usersVaultContract.contractsFactoryAddress()
               ).to.equal(contractsFactoryContract.address);
-              
+
               expect(await usersVaultContract.owner()).to.equal(ownerAddress);
 
-              expect(
-                await usersVaultContract.pendingDepositAssets()
-              ).to.equal(ZERO_AMOUNT);
-              expect(
-                await usersVaultContract.pendingWithdrawShares()
-              ).to.equal(ZERO_AMOUNT);
+              expect(await usersVaultContract.pendingDepositAssets()).to.equal(
+                ZERO_AMOUNT
+              );
+              expect(await usersVaultContract.pendingWithdrawShares()).to.equal(
+                ZERO_AMOUNT
+              );
             });
 
             xit("THEN it should emit an Event", async () => {
@@ -855,7 +856,7 @@ describe("ContractsFactory Tests", function () {
                 );
             });
 
-             it("THEN walletPerDeployedVault mapping on factory should have the new vault", async () => {
+            it("THEN walletPerDeployedVault mapping on factory should have the new vault", async () => {
               expect(
                 await contractsFactoryContract.walletPerDeployedVault(
                   usersVaultAddress
@@ -870,9 +871,7 @@ describe("ContractsFactory Tests", function () {
                   .transferOwnership(otherAddress);
               });
               it("THEN it should return the correct owner", async () => {
-                expect(await usersVaultContract.owner()).to.equal(
-                  otherAddress
-                );
+                expect(await usersVaultContract.owner()).to.equal(otherAddress);
               });
             });
           });

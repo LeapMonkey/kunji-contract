@@ -1,17 +1,17 @@
 import { ethers } from "hardhat";
-import { 
+import {
   Signer,
   ContractFactory,
   ContractTransaction,
   BigNumber,
   utils,
-  constants
+  constants,
 } from "ethers";
 import {
   SnapshotRestorer,
   takeSnapshot,
   setBalance,
-  setCode
+  setCode,
 } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import {
@@ -40,14 +40,22 @@ import {
   claimShares,
 } from "../_helpers/functions";
 import { setupContracts } from "../_helpers/setupFork";
-import { addLiquidity, createPool, initializePool } from "../_helpers/UniswapV3/createPool";
+import {
+  addLiquidity,
+  createPool,
+  initializePool,
+} from "../_helpers/UniswapV3/createPool";
 import { tokens, gmx, tokenHolders } from "../_helpers/arbitrumAddresses";
 
-const createIncreasePositionEvent = utils.keccak256(utils.toUtf8Bytes("CreateIncreasePosition(address,bytes32)"))
-const createDecreasePositionEvent = utils.keccak256(utils.toUtf8Bytes("CreateDecreasePosition(address,bytes32)"))
+const createIncreasePositionEvent = utils.keccak256(
+  utils.toUtf8Bytes("CreateIncreasePosition(address,bytes32)")
+);
+const createDecreasePositionEvent = utils.keccak256(
+  utils.toUtf8Bytes("CreateDecreasePosition(address,bytes32)")
+);
 
 function requestKeyFromEvent(event: any): string {
-  const requestKey = event.data.slice(66)
+  const requestKey = event.data.slice(66);
   return `0x${requestKey}`;
 }
 
@@ -81,7 +89,6 @@ let user4Address: string;
 let user5Address: string;
 let usdcHolder0: Signer;
 
-
 let txResult: ContractTransaction;
 let traderWalletContract: TraderWallet;
 let usersVaultContract: UsersVault;
@@ -114,9 +121,7 @@ let userAddresses: Array<string>;
 
 let roundCounter: BigNumber;
 
-
 describe("Vault and Wallet Flow Tests on GMX", function () {
-
   before(async () => {
     // get signers
     [
@@ -174,7 +179,10 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
     traderWalletContract = contract.traderWalletContract;
     usersVaultContract = contract.usersVaultContract;
     lensContract = contract.lensContract;
-    gmxPositionRouter = await ethers.getContractAt("IGmxPositionRouter", gmx.positionRouterAddress);
+    gmxPositionRouter = await ethers.getContractAt(
+      "IGmxPositionRouter",
+      gmx.positionRouterAddress
+    );
     gmxVault = await ethers.getContractAt("IGmxVault", gmx.vaultAddress);
 
     trader = deployer;
@@ -183,7 +191,9 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
     ownerAddress = deployerAddress;
     underlyingTokenAddress = usdcTokenContract.address;
 
-    const GmxPriceFeedFactory = await ethers.getContractFactory("GmxVaultPriceFeedMock")
+    const GmxPriceFeedFactory = await ethers.getContractFactory(
+      "GmxVaultPriceFeedMock"
+    );
     gmxVaultPriceFeedMockContract = await GmxPriceFeedFactory.deploy();
     await gmxVaultPriceFeedMockContract.deployed();
 
@@ -212,7 +222,7 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
 
       /////////////////////////////////////////////////////////////
       /////////////////////////////////////////////////////////////
-      
+
       expect(await traderWalletContract.vaultAddress()).to.equal(
         usersVaultContract.address
       );
@@ -236,16 +246,10 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
       expect(
         await traderWalletContract.cumulativePendingWithdrawals()
       ).to.equal(ZERO_AMOUNT);
-      expect(
-        await traderWalletContract.currentRound()
-      ).to.equal(roundCounter);
+      expect(await traderWalletContract.currentRound()).to.equal(roundCounter);
 
-      expect(
-        await usersVaultContract.totalSupply()
-      ).to.equal(ZERO_AMOUNT);
-      expect(
-        await usersVaultContract.currentRound()
-      ).to.equal(roundCounter);
+      expect(await usersVaultContract.totalSupply()).to.equal(ZERO_AMOUNT);
+      expect(await usersVaultContract.currentRound()).to.equal(roundCounter);
     });
   });
 
@@ -257,83 +261,85 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
     let traderInitialBalance: BigNumber;
     let user1InitialBalance: BigNumber;
 
-    before(async() => {
+    before(async () => {
       traderInputAmount = utils.parseUnits("1000", 6);
       user1InputAmount = utils.parseUnits("5000", 6);
 
       // initial funds
       usdcHolder0 = await ethers.getImpersonatedSigner(tokenHolders.usdc[0]);
-      await usdcTokenContract.connect(usdcHolder0).transfer(traderAddress, traderInputAmount);
-      await usdcTokenContract.connect(usdcHolder0).transfer(user1Address, user1InputAmount);
+      await usdcTokenContract
+        .connect(usdcHolder0)
+        .transfer(traderAddress, traderInputAmount);
+      await usdcTokenContract
+        .connect(usdcHolder0)
+        .transfer(user1Address, user1InputAmount);
 
       traderInitialBalance = await usdcTokenContract.balanceOf(traderAddress);
       user1InitialBalance = await usdcTokenContract.balanceOf(user1Address);
 
-      await usdcTokenContract.connect(trader)
+      await usdcTokenContract
+        .connect(trader)
         .approve(traderWalletContract.address, traderInputAmount);
-      await usdcTokenContract.connect(user1)
+      await usdcTokenContract
+        .connect(user1)
         .approve(usersVaultContract.address, user1InputAmount);
 
-      await traderWalletContract.connect(trader)
+      await traderWalletContract
+        .connect(trader)
         .traderDeposit(traderInputAmount);
-      await usersVaultContract.connect(user1)
-        .userDeposit(user1InputAmount);
-    })
+      await usersVaultContract.connect(user1).userDeposit(user1InputAmount);
+    });
 
     it("Should updates trader's and user's deposits in the contracts", async () => {
-      expect(await traderWalletContract.cumulativePendingDeposits())
-        .to.equal(traderInputAmount);
+      expect(await traderWalletContract.cumulativePendingDeposits()).to.equal(
+        traderInputAmount
+      );
 
-      const { round, pendingAssets, unclaimedShares } = await usersVaultContract
-        .userDeposits(user1Address);
+      const { round, pendingAssets, unclaimedShares } =
+        await usersVaultContract.userDeposits(user1Address);
       expect(round).to.equal(ZERO_AMOUNT);
       expect(pendingAssets).to.equal(user1InputAmount);
       expect(unclaimedShares).to.equal(ZERO_AMOUNT);
     });
 
     it("Should increase USDC balances of the Wallet and Vault", async () => {
-      expect(await usdcTokenContract.balanceOf(traderWalletContract.address))
-        .to.equal(traderInputAmount);
+      expect(
+        await usdcTokenContract.balanceOf(traderWalletContract.address)
+      ).to.equal(traderInputAmount);
 
-      expect(await usdcTokenContract.balanceOf(usersVaultContract.address))
-        .to.equal(user1InputAmount);
+      expect(
+        await usdcTokenContract.balanceOf(usersVaultContract.address)
+      ).to.equal(user1InputAmount);
 
       // console.log(await usdcTokenContract.balanceOf(traderWalletContract.address));
       // console.log(await usdcTokenContract.balanceOf(usersVaultContract.address));
-      
     });
 
     describe("Executing first rollover", function () {
-      before(async() => {
+      before(async () => {
         roundCounter = roundCounter.add(1);
         await traderWalletContract.connect(trader).rollover();
       });
 
       it("Should increase current round counter", async () => {
-        expect(
-          await traderWalletContract.currentRound()
-        ).to.equal(roundCounter);
-        expect(
-          await usersVaultContract.currentRound()
-        ).to.equal(roundCounter);
+        expect(await traderWalletContract.currentRound()).to.equal(
+          roundCounter
+        );
+        expect(await usersVaultContract.currentRound()).to.equal(roundCounter);
       });
 
       it("Should increase Vault's totalSupply", async () => {
-        expect(
-          await usersVaultContract.totalSupply()
-        ).to.equal(user1InputAmount);
-
+        expect(await usersVaultContract.totalSupply()).to.equal(
+          user1InputAmount
+        );
       });
-    }); 
-  
+    });
+
     describe("GMX Trading Flow", function () {
-      
-      before(async() => {
-
-      });
+      before(async () => {});
 
       describe("Create Long Increase position for Wallet and Vault with whole balance", function () {
-        const protocolId = 1;   // GMX 
+        const protocolId = 1; // GMX
         const replicate = true;
         let collateralToken: string;
         let indexToken: string;
@@ -343,15 +349,17 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
         let keeper: Signer;
         let walletRequestKey: string;
         let vaultRequestKey: string;
-        
+
         before(async () => {
           // top-up ether balances to pay execution fee
-          await trader.sendTransaction(
-            { to: traderWalletContract.address, value: utils.parseEther("0.2") }
-          );
-          await trader.sendTransaction(
-            { to: usersVaultContract.address, value: utils.parseEther("0.2") }
-          );
+          await trader.sendTransaction({
+            to: traderWalletContract.address,
+            value: utils.parseEther("0.2"),
+          });
+          await trader.sendTransaction({
+            to: usersVaultContract.address,
+            value: utils.parseEther("0.2"),
+          });
 
           const tokenIn = usdcTokenContract.address;
           collateralToken = wbtcTokenContract.address;
@@ -364,8 +372,8 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
           const tradeData = abiCoder.encode(
             ["address[]", "address", "uint256", "uint256", "uint256", "bool"],
             [path, indexToken, amountIn, minOut, sizeDelta, isLong]
-            );
-          const operationId = 0;  // increasePosition
+          );
+          const operationId = 0; // increasePosition
           const tradeOperation = { operationId, data: tradeData };
 
           txResult = await traderWalletContract
@@ -373,8 +381,10 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
             .executeOnProtocol(protocolId, tradeOperation, replicate);
 
           const txReceipt = await txResult.wait();
-      
-          const events = txReceipt.events?.filter((event: any) => event.topics[0] === createIncreasePositionEvent)
+
+          const events = txReceipt.events?.filter(
+            (event: any) => event.topics[0] === createIncreasePositionEvent
+          );
 
           if (events) {
             walletRequestKey = requestKeyFromEvent(events[0]);
@@ -385,67 +395,79 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
         it("Should sell all USDC tokens", async () => {
           expect(
             await usdcTokenContract.balanceOf(traderWalletContract.address)
-            ).to.equal(ZERO_AMOUNT);
+          ).to.equal(ZERO_AMOUNT);
           expect(
             await usdcTokenContract.balanceOf(usersVaultContract.address)
-            ).to.equal(ZERO_AMOUNT);  
+          ).to.equal(ZERO_AMOUNT);
         });
 
-        it("Should create IncreasePositionRequest in GMX.PositionRouter contract for Wallet ", async() => {
-          const walletCreatedRequest = await gmxPositionRouter.increasePositionRequests(walletRequestKey);
-          expect(walletCreatedRequest.account).to.equal(traderWalletContract.address);
+        it("Should create IncreasePositionRequest in GMX.PositionRouter contract for Wallet ", async () => {
+          const walletCreatedRequest =
+            await gmxPositionRouter.increasePositionRequests(walletRequestKey);
+          expect(walletCreatedRequest.account).to.equal(
+            traderWalletContract.address
+          );
           expect(walletCreatedRequest.amountIn).to.equal(traderInputAmount);
         });
 
-        it("Should create IncreasePositionRequest in GMX.PositionRouter contract for Vault ", async() => {
-          const vaultCreatedRequest = await gmxPositionRouter.increasePositionRequests(vaultRequestKey);
-          expect(vaultCreatedRequest.account).to.equal(usersVaultContract.address);
+        it("Should create IncreasePositionRequest in GMX.PositionRouter contract for Vault ", async () => {
+          const vaultCreatedRequest =
+            await gmxPositionRouter.increasePositionRequests(vaultRequestKey);
+          expect(vaultCreatedRequest.account).to.equal(
+            usersVaultContract.address
+          );
           expect(vaultCreatedRequest.amountIn).to.equal(user1InputAmount);
         });
-
 
         describe("Execute increasing positions by a keeper", function () {
           before(async () => {
             keeper = await ethers.getImpersonatedSigner(gmx.keeper);
             await setBalance(gmx.keeper, utils.parseEther("10"));
-            await gmxPositionRouter.connect(keeper).executeIncreasePosition(walletRequestKey, gmx.keeper);
-            await gmxPositionRouter.connect(keeper).executeIncreasePosition(vaultRequestKey, gmx.keeper);
-
+            await gmxPositionRouter
+              .connect(keeper)
+              .executeIncreasePosition(walletRequestKey, gmx.keeper);
+            await gmxPositionRouter
+              .connect(keeper)
+              .executeIncreasePosition(vaultRequestKey, gmx.keeper);
           });
 
-          it("Should remove Wallet's IncreasePositionRequest after executing ", async() => {
-            const createdRequest = await gmxPositionRouter.increasePositionRequests(walletRequestKey);
-            expect(createdRequest.account).to.equal(constants.AddressZero);
-            expect(createdRequest.indexToken).to.equal(constants.AddressZero);
-            expect(createdRequest.amountIn).to.equal(constants.Zero);
-          });
-
-          it("Should remove Vault's IncreasePositionRequest after executing ", async() => {
-            const createdRequest = await gmxPositionRouter.increasePositionRequests(vaultRequestKey);
-            expect(createdRequest.account).to.equal(constants.AddressZero);
-            expect(createdRequest.indexToken).to.equal(constants.AddressZero);
-            expect(createdRequest.amountIn).to.equal(constants.Zero);
-          });
-
-          it("Should return opened position from positions list for Wallet", async() => {
-            const position = await lensContract.getPositions(
-                traderWalletContract.address,
-                [collateralToken],
-                [indexToken],
-                [isLong]
+          it("Should remove Wallet's IncreasePositionRequest after executing ", async () => {
+            const createdRequest =
+              await gmxPositionRouter.increasePositionRequests(
+                walletRequestKey
               );
-            const [ size ] = position;
+            expect(createdRequest.account).to.equal(constants.AddressZero);
+            expect(createdRequest.indexToken).to.equal(constants.AddressZero);
+            expect(createdRequest.amountIn).to.equal(constants.Zero);
+          });
+
+          it("Should remove Vault's IncreasePositionRequest after executing ", async () => {
+            const createdRequest =
+              await gmxPositionRouter.increasePositionRequests(vaultRequestKey);
+            expect(createdRequest.account).to.equal(constants.AddressZero);
+            expect(createdRequest.indexToken).to.equal(constants.AddressZero);
+            expect(createdRequest.amountIn).to.equal(constants.Zero);
+          });
+
+          it("Should return opened position from positions list for Wallet", async () => {
+            const position = await lensContract.getPositions(
+              traderWalletContract.address,
+              [collateralToken],
+              [indexToken],
+              [isLong]
+            );
+            const [size] = position;
             expect(size).to.equal(sizeDelta);
           });
 
-          it("Should return opened position from positions list for Vault", async() => {
+          it("Should return opened position from positions list for Vault", async () => {
             const position = await lensContract.getPositions(
-                usersVaultContract.address,
-                [collateralToken],
-                [indexToken],
-                [isLong]
-              );
-            const [ size ] = position;
+              usersVaultContract.address,
+              [collateralToken],
+              [indexToken],
+              [isLong]
+            );
+            const [size] = position;
             expect(size).to.equal(sizeDelta.mul(5));
           });
 
@@ -453,177 +475,250 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
             let currentPriceWbtc: BigNumber;
             let newPriceWbtc: BigNumber;
 
-            before(async() => {
+            before(async () => {
               // local snapshot?
 
               // get current price
-              const usdcPrice = await gmxVault.getMaxPrice(usdcTokenContract.address);
+              const usdcPrice = await gmxVault.getMaxPrice(
+                usdcTokenContract.address
+              );
               currentPriceWbtc = await gmxVault.getMaxPrice(indexToken);
-              newPriceWbtc = currentPriceWbtc.add(utils.parseUnits("1000", 30)); 
+              newPriceWbtc = currentPriceWbtc.add(utils.parseUnits("1000", 30));
 
-              const gmxPriceFeedMockCode = await ethers.provider.getCode(gmxVaultPriceFeedMockContract.address);
+              const gmxPriceFeedMockCode = await ethers.provider.getCode(
+                gmxVaultPriceFeedMockContract.address
+              );
               await setCode(gmx.vaultPriceFeedAddress, gmxPriceFeedMockCode);
-              gmxVaultPriceFeedMock = await ethers.getContractAt("GmxVaultPriceFeedMock", gmx.vaultPriceFeedAddress);
-  
+              gmxVaultPriceFeedMock = await ethers.getContractAt(
+                "GmxVaultPriceFeedMock",
+                gmx.vaultPriceFeedAddress
+              );
+
               // increase price
               await gmxVaultPriceFeedMock.setPrice(indexToken, newPriceWbtc);
               // and set price for swap back token
-              await gmxVaultPriceFeedMock.setPrice(usdcTokenContract.address, usdcPrice);
+              await gmxVaultPriceFeedMock.setPrice(
+                usdcTokenContract.address,
+                usdcPrice
+              );
             });
 
-            after(async() => {
+            after(async () => {
               // revert local snapshot
             });
 
             describe("Closing position", function () {
-
-              before(async() => {
+              before(async () => {
                 const tokenOut = tokens.usdc;
                 const path = [collateralToken, tokenOut];
                 const collateralDelta = 0;
                 const minOut = 0;
 
                 const tradeData = abiCoder.encode(
-                  ["address[]", "address", "uint256", "uint256", "bool", "uint256"],
+                  [
+                    "address[]",
+                    "address",
+                    "uint256",
+                    "uint256",
+                    "bool",
+                    "uint256",
+                  ],
                   [path, indexToken, collateralDelta, sizeDelta, isLong, minOut]
                 );
                 const operationId = 1; // decrease position
                 const tradeOperation = { operationId, data: tradeData };
-                txResult = await traderWalletContract.connect(trader).executeOnProtocol(
-                  protocolId,
-                  tradeOperation,
-                  replicate
-                );
+                txResult = await traderWalletContract
+                  .connect(trader)
+                  .executeOnProtocol(protocolId, tradeOperation, replicate);
                 const txReceipt = await txResult.wait();
               });
 
               it("Should create decrease requests for Wallet", async () => {
-                const walletRequest = await lensContract
-                  .getLatestDecreaseRequest(traderWalletContract.address);
+                const walletRequest =
+                  await lensContract.getLatestDecreaseRequest(
+                    traderWalletContract.address
+                  );
                 expect(walletRequest.sizeDelta).to.equal(sizeDelta);
-                expect(walletRequest.indexToken).to.equal(wbtcTokenContract.address);
+                expect(walletRequest.indexToken).to.equal(
+                  wbtcTokenContract.address
+                );
               });
 
               it("Should create decrease requests for Vault", async () => {
-                const vaultRequest = await lensContract
-                  .getLatestDecreaseRequest(usersVaultContract.address);
+                const vaultRequest =
+                  await lensContract.getLatestDecreaseRequest(
+                    usersVaultContract.address
+                  );
                 expect(vaultRequest.sizeDelta).to.equal(sizeDelta.mul(5));
-                expect(vaultRequest.indexToken).to.equal(wbtcTokenContract.address);
+                expect(vaultRequest.indexToken).to.equal(
+                  wbtcTokenContract.address
+                );
               });
 
               describe("Execute decreasing position by a keeper", function () {
                 let walletDecreaseRequestKey: string;
                 let vaultDecreaseRequestKey: string;
                 before(async () => {
-                  walletDecreaseRequestKey = await lensContract.getRequestKey(traderWalletContract.address, 1);
-                  vaultDecreaseRequestKey = await lensContract.getRequestKey(usersVaultContract.address, 1);
+                  walletDecreaseRequestKey = await lensContract.getRequestKey(
+                    traderWalletContract.address,
+                    1
+                  );
+                  vaultDecreaseRequestKey = await lensContract.getRequestKey(
+                    usersVaultContract.address,
+                    1
+                  );
 
-                  await gmxPositionRouter.connect(keeper).executeDecreasePosition(walletDecreaseRequestKey, gmx.keeper);
-                  await gmxPositionRouter.connect(keeper).executeDecreasePosition(vaultDecreaseRequestKey, gmx.keeper);
+                  await gmxPositionRouter
+                    .connect(keeper)
+                    .executeDecreasePosition(
+                      walletDecreaseRequestKey,
+                      gmx.keeper
+                    );
+                  await gmxPositionRouter
+                    .connect(keeper)
+                    .executeDecreasePosition(
+                      vaultDecreaseRequestKey,
+                      gmx.keeper
+                    );
                 });
-                it("Should remove trader's DecreasePositionRequest after executing", async() => {
-                  const walletRequest = await lensContract.getLatestDecreaseRequest(traderWalletContract.address);
+                it("Should remove trader's DecreasePositionRequest after executing", async () => {
+                  const walletRequest =
+                    await lensContract.getLatestDecreaseRequest(
+                      traderWalletContract.address
+                    );
                   expect(walletRequest.sizeDelta).to.equal(ZERO_AMOUNT);
                   expect(walletRequest.indexToken).to.equal(ZERO_ADDRESS);
                 });
-                it("Should remove vault's DecreasePositionRequest after executing", async() => {
-                  const vaultRequest = await lensContract.getLatestDecreaseRequest(usersVaultContract.address);
+                it("Should remove vault's DecreasePositionRequest after executing", async () => {
+                  const vaultRequest =
+                    await lensContract.getLatestDecreaseRequest(
+                      usersVaultContract.address
+                    );
                   expect(vaultRequest.sizeDelta).to.equal(ZERO_AMOUNT);
                   expect(vaultRequest.indexToken).to.equal(ZERO_ADDRESS);
                 });
-                it("Should return nothing for traderWallet position from positions list", async() => {
+                it("Should return nothing for traderWallet position from positions list", async () => {
                   const position = await lensContract.getPositions(
                     traderWalletContract.address,
                     [collateralToken],
                     [indexToken],
                     [isLong]
                   );
-                  const [ size ] = position;
+                  const [size] = position;
                   expect(size).to.equal(ZERO_AMOUNT);
                 });
-                it("Should return nothing for Vault position from positions list", async() => {
+                it("Should return nothing for Vault position from positions list", async () => {
                   const position = await lensContract.getPositions(
                     usersVaultContract.address,
                     [collateralToken],
                     [indexToken],
                     [isLong]
                   );
-                  const [ size ] = position;
+                  const [size] = position;
                   expect(size).to.equal(ZERO_AMOUNT);
                 });
-                it("Should increase Wallet USDC balance", async() => {
-                  const walletNewBalance = await usdcTokenContract.balanceOf(usersVaultContract.address);
+                it("Should increase Wallet USDC balance", async () => {
+                  const walletNewBalance = await usdcTokenContract.balanceOf(
+                    usersVaultContract.address
+                  );
                   expect(walletNewBalance).to.be.gt(traderInputAmount);
                 });
-                it("Should increase Vault USDC balance", async() => {
-                  const vaultNewBalance = await usdcTokenContract.balanceOf(usersVaultContract.address);
+                it("Should increase Vault USDC balance", async () => {
+                  const vaultNewBalance = await usdcTokenContract.balanceOf(
+                    usersVaultContract.address
+                  );
                   expect(vaultNewBalance).to.be.gt(user1InputAmount);
                 });
 
-                describe("Rollover after first trade", function() {
+                describe("Rollover after first trade", function () {
                   let traderBalanceBefore: BigNumber;
                   let walletBalance: BigNumber;
-      
-                  before(async() => {
+
+                  before(async () => {
                     roundCounter = roundCounter.add(1);
 
-                    traderBalanceBefore = await usdcTokenContract.balanceOf(traderAddress);
-                    walletBalance = await usdcTokenContract.balanceOf(traderWalletContract.address);
-                    await traderWalletContract.connect(trader).withdrawRequest(walletBalance);
+                    traderBalanceBefore = await usdcTokenContract.balanceOf(
+                      traderAddress
+                    );
+                    walletBalance = await usdcTokenContract.balanceOf(
+                      traderWalletContract.address
+                    );
+                    await traderWalletContract
+                      .connect(trader)
+                      .withdrawRequest(walletBalance);
 
-                    const shares = await usersVaultContract.previewShares(user1Address);
-                    await usersVaultContract.connect(user1).claimShares(shares, user1Address);
-                    await usersVaultContract.connect(user1).withdrawRequest(shares);
+                    const shares = await usersVaultContract.previewShares(
+                      user1Address
+                    );
+                    await usersVaultContract
+                      .connect(user1)
+                      .claimShares(shares, user1Address);
+                    await usersVaultContract
+                      .connect(user1)
+                      .withdrawRequest(shares);
                     await traderWalletContract.connect(trader).rollover();
                   });
-      
+
                   it("Should increase current round counter", async () => {
-                    expect(
-                      await traderWalletContract.currentRound()
-                    ).to.equal(roundCounter);
-                    expect(
-                      await usersVaultContract.currentRound()
-                    ).to.equal(roundCounter);
+                    expect(await traderWalletContract.currentRound()).to.equal(
+                      roundCounter
+                    );
+                    expect(await usersVaultContract.currentRound()).to.equal(
+                      roundCounter
+                    );
                   });
-      
+
                   it("Should pay out whole profit to trader (increase trader balance)", async () => {
-                    expect(await usdcTokenContract.balanceOf(traderWalletContract.address))
-                      .to.equal(ZERO_AMOUNT);
-                    expect(await usdcTokenContract.balanceOf(traderAddress))
-                      .to.equal(traderBalanceBefore.add(walletBalance));
+                    expect(
+                      await usdcTokenContract.balanceOf(
+                        traderWalletContract.address
+                      )
+                    ).to.equal(ZERO_AMOUNT);
+                    expect(
+                      await usdcTokenContract.balanceOf(traderAddress)
+                    ).to.equal(traderBalanceBefore.add(walletBalance));
                   });
-      
-      
-                  describe("User withdraws profit after trading", function() {
+
+                  describe("User withdraws profit after trading", function () {
                     let user1BalanceBefore: BigNumber;
                     let vaultBalanceBefore: BigNumber;
-    
-                    before(async() => {
-                      user1BalanceBefore = await usdcTokenContract.balanceOf(user1Address);
-                      vaultBalanceBefore = await usdcTokenContract.balanceOf(usersVaultContract.address);
-    
-                      const claimableAssets = await usersVaultContract.previewAssets(user1Address)
+
+                    before(async () => {
+                      user1BalanceBefore = await usdcTokenContract.balanceOf(
+                        user1Address
+                      );
+                      vaultBalanceBefore = await usdcTokenContract.balanceOf(
+                        usersVaultContract.address
+                      );
+
+                      const claimableAssets =
+                        await usersVaultContract.previewAssets(user1Address);
                       // console.log("claimableAssets:", claimableAssets);
-                      await usersVaultContract.connect(user1).claimAssets(claimableAssets, user1Address);
-    
+                      await usersVaultContract
+                        .connect(user1)
+                        .claimAssets(claimableAssets, user1Address);
                     });
-    
+
                     it("Should withdraw all tokens from Vault contract", async () => {
-                      expect(await usdcTokenContract.balanceOf(usersVaultContract.address))
-                        .to.equal(ZERO_AMOUNT);
+                      expect(
+                        await usdcTokenContract.balanceOf(
+                          usersVaultContract.address
+                        )
+                      ).to.equal(ZERO_AMOUNT);
                     });
-    
+
                     it("Should return profitable user1 balance after trading", async () => {
-                      const userBalance = await usdcTokenContract.balanceOf(user1Address)
-    
-                      expect(userBalance).to.equal(user1BalanceBefore.add(vaultBalanceBefore));
+                      const userBalance = await usdcTokenContract.balanceOf(
+                        user1Address
+                      );
+
+                      expect(userBalance).to.equal(
+                        user1BalanceBefore.add(vaultBalanceBefore)
+                      );
                       expect(userBalance).to.be.gt(user1InitialBalance);
                     });
-    
                   });
-      
                 });
-                
               });
             });
           });

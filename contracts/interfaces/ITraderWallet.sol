@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {IAdapter} from "./IAdapter.sol";
@@ -52,5 +53,7 @@ interface ITraderWallet {
 
     function currentRound() external view returns (uint256);
 
-    function getAdapterAddressPerProtocol(uint256) external view returns (address);
+    function getAdapterAddressPerProtocol(
+        uint256
+    ) external view returns (address);
 }

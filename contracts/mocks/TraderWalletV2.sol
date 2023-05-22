@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -257,9 +258,7 @@ contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     //
-    function traderDeposit(
-        uint256 _amount
-    ) external onlyTrader {
+    function traderDeposit(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
@@ -277,9 +276,7 @@ contract TraderWalletV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable {
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
-    function withdrawRequest(
-        uint256 _amount
-    ) external onlyTrader {
+    function withdrawRequest(uint256 _amount) external onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         // require(

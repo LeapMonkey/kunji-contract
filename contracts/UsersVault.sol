@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
@@ -290,7 +291,7 @@ contract UsersVault is
             _sharesAmount;
 
         pendingWithdrawShares = pendingWithdrawShares + _sharesAmount;
- 
+
         super._transfer(_msgSender(), address(this), _sharesAmount);
     }
 

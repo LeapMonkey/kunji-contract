@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-
 
 contract ContractsFactoryMock is OwnableUpgradeable {
     bool public returnValue;
@@ -30,16 +30,13 @@ contract ContractsFactoryMock is OwnableUpgradeable {
         return returnValue;
     }
 
-    function isVaultAllowed(
-        address _vault
-    ) external view returns (bool) {
+    function isVaultAllowed(address _vault) external view returns (bool) {
         _vault; // just to avoid warnings
         return returnValue;
     }
 
     function getFeeRate() external view returns (uint256) {
-        returnValue; // just to avoid warnings        
+        returnValue; // just to avoid warnings
         return 1e18;
     }
 }
-

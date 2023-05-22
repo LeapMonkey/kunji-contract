@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 /// @title Permissionless pool actions
@@ -99,12 +100,15 @@ interface IUniswapV3Pool {
     /// @dev This method is no-op if the pool already has an observationCardinalityNext greater than or equal to
     /// the input observationCardinalityNext.
     /// @param observationCardinalityNext The desired minimum number of observations for the pool to store
-    function increaseObservationCardinalityNext(uint16 observationCardinalityNext) external;
+    function increaseObservationCardinalityNext(
+        uint16 observationCardinalityNext
+    ) external;
 
     function token0() external view returns (address);
+
     function token1() external view returns (address);
 
- /// @notice The 0th storage slot in the pool stores many values, and is exposed as a single method to save gas
+    /// @notice The 0th storage slot in the pool stores many values, and is exposed as a single method to save gas
     /// when accessed externally.
     /// @return sqrtPriceX96 The current price of the pool as a sqrt(token1/token0) Q64.96 value
     /// tick The current tick of the pool, i.e. according to the last tick transition that was run.
@@ -140,7 +144,10 @@ interface IUniswapV3Pool {
 
     /// @notice The amounts of token0 and token1 that are owed to the protocol
     /// @dev Protocol fees will never exceed uint128 max in either token
-    function protocolFees() external view returns (uint128 token0, uint128 token1);
+    function protocolFees()
+        external
+        view
+        returns (uint128 token0, uint128 token1);
 
     /// @notice The currently in range liquidity available to the pool
     /// @dev This value has no relationship to the total liquidity across all ticks
@@ -160,7 +167,9 @@ interface IUniswapV3Pool {
     /// Outside values can only be used if the tick is initialized, i.e. if liquidityGross is greater than 0.
     /// In addition, these values are only relative and must be used only in comparison to previous snapshots for
     /// a specific position.
-    function ticks(int24 tick)
+    function ticks(
+        int24 tick
+    )
         external
         view
         returns (
@@ -184,7 +193,9 @@ interface IUniswapV3Pool {
     /// Returns feeGrowthInside1LastX128 fee growth of token1 inside the tick range as of the last mint/burn/poke,
     /// Returns tokensOwed0 the computed amount of token0 owed to the position as of the last mint/burn/poke,
     /// Returns tokensOwed1 the computed amount of token1 owed to the position as of the last mint/burn/poke
-    function positions(bytes32 key)
+    function positions(
+        bytes32 key
+    )
         external
         view
         returns (
@@ -203,7 +214,9 @@ interface IUniswapV3Pool {
     /// Returns tickCumulative the tick multiplied by seconds elapsed for the life of the pool as of the observation timestamp,
     /// Returns secondsPerLiquidityCumulativeX128 the seconds per in range liquidity for the life of the pool as of the observation timestamp,
     /// Returns initialized whether the observation has been initialized and the values are safe to use
-    function observations(uint256 index)
+    function observations(
+        uint256 index
+    )
         external
         view
         returns (

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
 contract AdapterMock {
     bool public executedOperation;
-    
+
     function setExecuteOperationReturn(bool _value) external {
         executedOperation = _value;
     }

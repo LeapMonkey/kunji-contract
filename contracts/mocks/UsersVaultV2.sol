@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
@@ -236,7 +237,7 @@ contract UsersVaultV2 is
     //     traderSelectedAdaptersArray.push(adapterAddress);
     //     adaptersPerProtocol[_protocolId] = adapterAddress;
 
-    //     /* 
+    //     /*
     //         MAKES APPROVAL OF UNDERLYING HERE ???
     //     */
     // }
@@ -272,7 +273,8 @@ contract UsersVaultV2 is
     ) external returns (bool) {
         _checkOwner();
 
-        address adapterAddress = ITraderWallet(traderWalletAddress).getAdapterAddressPerProtocol(_protocolId);
+        address adapterAddress = ITraderWallet(traderWalletAddress)
+            .getAdapterAddressPerProtocol(_protocolId);
         if (adapterAddress == address(0)) revert InvalidAdapter();
 
         uint256 amount;
@@ -484,7 +486,8 @@ contract UsersVaultV2 is
         if (_protocolId == 1) {
             success = _executeOnGmx(_walletRatio, _traderOperation);
         } else {
-            adapterAddress = ITraderWallet(traderWalletAddress).getAdapterAddressPerProtocol(_protocolId);
+            adapterAddress = ITraderWallet(traderWalletAddress)
+                .getAdapterAddressPerProtocol(_protocolId);
             if (adapterAddress == address(0)) revert InvalidAdapter();
 
             success = _executeOnAdapter(
@@ -633,11 +636,12 @@ contract UsersVaultV2 is
 
             userWithdrawals[_msgSender()].unclaimedAssets =
                 userWithdrawals[_msgSender()].unclaimedAssets +
-                (userWithdrawals[_msgSender()].pendingShares * assetsPerShare) / 1e18;
-                // userWithdrawals[_msgSender()].pendingShares.mulDiv(
-                //     assetsPerShare,
-                //     1e18
-                // );
+                (userWithdrawals[_msgSender()].pendingShares * assetsPerShare) /
+                1e18;
+            // userWithdrawals[_msgSender()].pendingShares.mulDiv(
+            //     assetsPerShare,
+            //     1e18
+            // );
             userWithdrawals[_msgSender()].pendingShares = 0;
         }
 

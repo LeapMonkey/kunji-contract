@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -23,7 +24,9 @@ contract AdaptersRegistryMock is OwnableUpgradeable {
         adapterAddress = _address;
     }
 
-    function getAdapterAddress(uint256 _protocolId) external view returns(bool, address) {
+    function getAdapterAddress(
+        uint256 _protocolId
+    ) external view returns (bool, address) {
         _protocolId; // just to avoid warnings
         return (returnValue, adapterAddress);
     }

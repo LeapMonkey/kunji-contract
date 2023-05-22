@@ -9,10 +9,9 @@ import {
   GMXAdapter,
   ERC20Mock,
   UniswapV3Adapter,
-  Lens
+  Lens,
 } from "../../typechain-types";
 import { tokens } from "../_helpers/arbitrumAddresses";
-
 
 export const setupContracts = async (
   deployer: Signer,
@@ -38,13 +37,11 @@ export const setupContracts = async (
   let LensFactory: ContractFactory;
   let lensContract: Lens;
 
-
   const SHARES_NAME = "UserVaultShares";
   const SHARES_SYMBOL = "UVS";
 
-  
   // USDC contract
-  wbtcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.wbtc)
+  wbtcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.wbtc);
   usdcTokenContract = await ethers.getContractAt("ERC20Mock", tokens.usdc);
   underlyingTokenAddress = usdcTokenContract.address;
 
@@ -59,9 +56,13 @@ export const setupContracts = async (
 
   // deploy uniswap adapter
   UniswapAdapterFactory = await ethers.getContractFactory("UniswapV3Adapter");
-  uniswapAdapterContract = (await upgrades.deployProxy(UniswapAdapterFactory, [], {
-      initializer: "initialize"
-  })) as UniswapV3Adapter;
+  uniswapAdapterContract = (await upgrades.deployProxy(
+    UniswapAdapterFactory,
+    [],
+    {
+      initializer: "initialize",
+    }
+  )) as UniswapV3Adapter;
   await uniswapAdapterContract.deployed();
 
   // deploy mocked ContractsFactory
@@ -85,10 +86,12 @@ export const setupContracts = async (
     []
   )) as AdaptersRegistryMock;
   await adaptersRegistryContract.deployed();
-  
+
   // set uniswap
   await adaptersRegistryContract.setReturnValue(true);
-  await adaptersRegistryContract.setReturnAddress(uniswapAdapterContract.address);
+  await adaptersRegistryContract.setReturnAddress(
+    uniswapAdapterContract.address
+  );
 
   // deploy mocked adapter
   AdapterFactory = await ethers.getContractFactory("AdapterMock");
@@ -111,7 +114,7 @@ export const setupContracts = async (
       deployerAddress,
       deployerAddress, // not used
       deployerAddress, // owner
-    ],
+    ]
     // { unsafeAllowLinkedLibraries: true }
   )) as TraderWallet;
   await traderWalletContract.deployed();
@@ -133,20 +136,17 @@ export const setupContracts = async (
       deployerAddress, // owner
       SHARES_NAME,
       SHARES_SYMBOL,
-    ],
+    ]
     // { unsafeAllowLinkedLibraries: true }
   )) as UsersVault;
   await usersVaultContract.deployed();
 
-  
   // set vault address in trader wallet
   await traderWalletContract
     .connect(deployer)
     .setVaultAddress(usersVaultContract.address);
 
-  await traderWalletContract
-    .connect(deployer)
-    .addAdapterToUse(2);
+  await traderWalletContract.connect(deployer).addAdapterToUse(2);
 
   await traderWalletContract
     .connect(deployer)
@@ -177,6 +177,6 @@ export const setupContracts = async (
     traderWalletContract,
     usersVaultContract,
     uniswapAdapterContract,
-    lensContract
+    lensContract,
   };
 };

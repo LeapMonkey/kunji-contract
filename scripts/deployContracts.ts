@@ -326,9 +326,9 @@ async function main(): Promise<void> {
   const [deployer] = await ethers.getSigners();
   const deployerAddress = await deployer.getAddress();
 
-  console.log('deployerAddress :>> ', deployerAddress);
-  console.log('\n\n');
-  
+  console.log("deployerAddress :>> ", deployerAddress);
+  console.log("\n\n");
+
   let lensContract: Lens;
   let traderWalletDeployerContract: TraderWalletDeployer;
   let usersVaultDeployerContract: UsersVaultDeployer;
@@ -397,9 +397,9 @@ async function main(): Promise<void> {
   }
 
   // PUT VALUE HERE TO DEPLOY VAULT AND WALLET WITHOUT DEPLOYING FACTORY
-  // ContractsFactoryAddress = ""; 
+  // ContractsFactoryAddress = "";
   // PUT DEPLOY_FACTORY constant ON FALSE AT THE TOP
-  
+
   // asign address of usdc token to underlying
   UnderlyingTokenAddress = tokens.usdc;
   if (

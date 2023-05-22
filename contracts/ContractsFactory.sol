@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.9;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -193,7 +194,9 @@ contract ContractsFactory is OwnableUpgradeable {
         return false;
     }
 
-    function isVaultAllowed(address _usersVaultAddress) external view returns (bool) {
+    function isVaultAllowed(
+        address _usersVaultAddress
+    ) external view returns (bool) {
         if (walletPerDeployedVault[_usersVaultAddress] != address(0))
             return true;
         return false;
