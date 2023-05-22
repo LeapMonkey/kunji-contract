@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity >=0.8.0;
 
 interface IQuoterV2 {
     /// @notice Returns the amount out received for a given exact input swap without executing the swap

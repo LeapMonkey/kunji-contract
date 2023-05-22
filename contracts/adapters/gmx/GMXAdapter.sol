@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity 0.8.20;
 
 import {IERC20Upgradeable as IERC20} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 
@@ -77,7 +77,7 @@ library GMXAdapter {
         revert InvalidOperationId();
     }
 
-    /* 
+    /*
     @notice Opens new or increases the size of an existing position
     @param tradeData must contain parameters:
         path:       [collateralToken] or [tokenIn, collateralToken] if a swap is needed
@@ -87,7 +87,7 @@ library GMXAdapter {
         sizeDelta:  the USD value of the change in position size  (scaled 1e30)
         isLong:     whether to long or short position
 
-    Additional params for increasing position    
+    Additional params for increasing position
         executionFee:   can be set to PositionRouter.minExecutionFee
         referralCode:   referral code for affiliate rewards and rebates
         callbackTarget: an optional callback contract (note: has gas limit)
@@ -155,7 +155,7 @@ library GMXAdapter {
         return true;
     }
 
-    /* 
+    /*
     @notice Closes or decreases an existing position
     @param tradeData must contain parameters:
         path:            [collateralToken] or [collateralToken, tokenOut] if a swap is needed
@@ -165,8 +165,8 @@ library GMXAdapter {
         isLong:          whether the position is a long or short
         minOut:          the min output token amount (can be zero if no swap is required)
 
-    Additional params for increasing position    
-        receiver:       the address to receive the withdrawn tokens 
+    Additional params for increasing position
+        receiver:       the address to receive the withdrawn tokens
         acceptablePrice: the USD value of the max (for longs) or min (for shorts) index price acceptable when executing
         executionFee:   can be set to PositionRouter.minExecutionFee
         withdrawETH:    only applicable if WETH will be withdrawn, the WETH will be unwrapped to ETH if this is set to true
@@ -237,7 +237,7 @@ library GMXAdapter {
     /// Orders
     /// /// /// ///
 
-    /* 
+    /*
     @notice Creates new order to open or increase position
             Also can be used to create stop-loss or take-profit orders
     @param tradeData must contain parameters:
@@ -254,7 +254,7 @@ library GMXAdapter {
             in terms of Short position:
                 'false' for creating new Short order
 
-    Additional params for increasing position    
+    Additional params for increasing position
         collateralToken: the collateral token (must be path[path.length-1] )
         executionFee:   can be set to OrderBook.minExecutionFee
         shouldWrap:     true if 'tokenIn' is native and should be wrapped
@@ -325,7 +325,7 @@ library GMXAdapter {
         return true;
     }
 
-    /* 
+    /*
     @notice Updates exist increase order
     @param tradeData must contain parameters:
         orderIndexes:      the array with Wallet and Vault indexes of the exist orders to update
@@ -337,7 +337,7 @@ library GMXAdapter {
                 'true' for take-profit orders, 'false' for stop-loss orders
             in terms of Short position:
                 'false' for creating new Short order
-                'false' for take-profit orders', true' for stop-loss orders 
+                'false' for take-profit orders', true' for stop-loss orders
 
     @return bool - Returns 'true' if order was successfully updated
     */
@@ -369,7 +369,7 @@ library GMXAdapter {
         return true;
     }
 
-    /* 
+    /*
     @notice Cancels exist increase order
     @param tradeData must contain parameters:
         orderIndexes:  the array with Wallet and Vault indexes of the exist orders to update
@@ -392,7 +392,7 @@ library GMXAdapter {
         return true;
     }
 
-    /* 
+    /*
     @notice Creates new order to close or decrease position
             Also can be used to create (partial) stop-loss or take-profit orders
     @param tradeData must contain parameters:
@@ -406,7 +406,7 @@ library GMXAdapter {
             in terms of Long position:
                 'true' for take-profit orders, 'false' for stop-loss orders
             in terms of Short position:
-                'false' for take-profit orders', true' for stop-loss orders 
+                'false' for take-profit orders', true' for stop-loss orders
     @return bool - Returns 'true' if order was successfully created
     */
     function _createDecreaseOrder(
@@ -490,7 +490,7 @@ library GMXAdapter {
         return true;
     }
 
-    /* 
+    /*
         @notice Cancels exist decrease order
         @param tradeData must contain parameters:
             orderIndexes:      the array with Wallet and Vault indexes of the exist orders to update

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity 0.8.20;
 import {IUsersVault} from "./../interfaces/IUsersVault.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
