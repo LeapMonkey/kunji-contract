@@ -20,15 +20,15 @@ abstract contract BaseVault is
     Errors,
     Events
 {
-    address public underlyingTokenAddress;
-    address public adaptersRegistryAddress;
-    address public contractsFactoryAddress;
+    address public override underlyingTokenAddress;
+    address public override adaptersRegistryAddress;
+    address public override contractsFactoryAddress;
 
-    uint256 public currentRound;
-    int256 public vaultProfit;
+    uint256 public override currentRound;
+    int256 public override vaultProfit;
 
-    uint256 public initialVaultBalance;
-    uint256 public afterRoundVaultBalance;
+    uint256 public override initialVaultBalance;
+    uint256 public override afterRoundVaultBalance;
 
     modifier notZeroAddress(address _variable, string memory _message) {
         _checkZeroAddress(_variable, _message);
@@ -80,6 +80,7 @@ abstract contract BaseVault is
         address _adaptersRegistryAddress
     )
         external
+        override
         onlyOwner
         notZeroAddress(_adaptersRegistryAddress, "_adaptersRegistryAddress")
     {
@@ -91,6 +92,7 @@ abstract contract BaseVault is
         address _contractsFactoryAddress
     )
         external
+        override
         onlyOwner
         notZeroAddress(_contractsFactoryAddress, "_contractsFactoryAddress")
     {
