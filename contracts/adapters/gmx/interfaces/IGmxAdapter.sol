@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
 
+pragma solidity >=0.8.0;
 
 interface IGmxAdapter {
     /// @notice Swaps tokens along the route determined by the path
@@ -82,4 +82,3 @@ interface IGmxAdapter {
         AdapterOperation[] memory traderOperations
     ) external returns (bool);
 }
-

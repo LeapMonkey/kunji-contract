@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
 
+pragma solidity >=0.8.0;
 
 interface IGmxPositionRouter {
-
     struct IncreasePositionRequest {
         address account;
         // address[] path;
@@ -20,8 +19,9 @@ interface IGmxPositionRouter {
         address callbackTarget;
     }
 
-    function increasePositionRequests(bytes32 requestKey) external view returns (IncreasePositionRequest memory);
-
+    function increasePositionRequests(
+        bytes32 requestKey
+    ) external view returns (IncreasePositionRequest memory);
 
     struct DecreasePositionRequest {
         address account;
@@ -40,16 +40,25 @@ interface IGmxPositionRouter {
         address callbackTarget;
     }
 
-    function decreasePositionRequests(bytes32 requestKey) external view returns (DecreasePositionRequest memory);
+    function decreasePositionRequests(
+        bytes32 requestKey
+    ) external view returns (DecreasePositionRequest memory);
 
-    /// @notice Returns current account's increase position index 
-    function increasePositionsIndex(address account) external view returns (uint256);
+    /// @notice Returns current account's increase position index
+    function increasePositionsIndex(
+        address account
+    ) external view returns (uint256);
 
-    /// @notice Returns current account's decrease position index 
-    function decreasePositionsIndex(address positionRequester) external view returns (uint256);
+    /// @notice Returns current account's decrease position index
+    function decreasePositionsIndex(
+        address positionRequester
+    ) external view returns (uint256);
 
     /// @notice Returns request key
-    function getRequestKey(address account, uint256 index) external view returns (bytes32);
+    function getRequestKey(
+        address account,
+        uint256 index
+    ) external view returns (bytes32);
 
     function createIncreasePosition(
         address[] memory _path,
@@ -101,10 +110,11 @@ interface IGmxPositionRouter {
     function minExecutionFee() external view returns (uint256);
 }
 
-
 interface IGmxRouter {
-
-    function approvedPlugins(address user, address plugin) external view returns (bool); 
+    function approvedPlugins(
+        address user,
+        address plugin
+    ) external view returns (bool);
 
     function approvePlugin(address plugin) external;
 

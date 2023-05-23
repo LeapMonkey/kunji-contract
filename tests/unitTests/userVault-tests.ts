@@ -151,8 +151,7 @@ describe("User Vault Contract Tests", function () {
         (await GMXAdapterLibraryFactory.deploy()) as GMXAdapter;
       await gmxAdapterContract.deployed();
 
-      UsersVaultFactory = await ethers.getContractFactory("UsersVault", {
-      });
+      UsersVaultFactory = await ethers.getContractFactory("UsersVault", {});
       ContractsFactoryFactory = await ethers.getContractFactory(
         "ContractsFactoryMock"
       );
@@ -188,18 +187,15 @@ describe("User Vault Contract Tests", function () {
     describe("WHEN trying to deploy UserVault contract with invalid parameters", function () {
       it("THEN it should FAIL when _underlyingTokenAddress is ZERO", async () => {
         await expect(
-          upgrades.deployProxy(
-            UsersVaultFactory,
-            [
-              ZERO_ADDRESS,
-              adaptersRegistryAddress,
-              contractsFactoryContract.address,
-              traderWalletAddress,
-              ownerAddress,
-              SHARES_NAME,
-              SHARES_SYMBOL,
-            ]
-          )
+          upgrades.deployProxy(UsersVaultFactory, [
+            ZERO_ADDRESS,
+            adaptersRegistryAddress,
+            contractsFactoryContract.address,
+            traderWalletAddress,
+            ownerAddress,
+            SHARES_NAME,
+            SHARES_SYMBOL,
+          ])
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
           .withArgs("_underlyingTokenAddress");
@@ -207,18 +203,15 @@ describe("User Vault Contract Tests", function () {
 
       it("THEN it should FAIL when _adaptersRegistryAddress is ZERO", async () => {
         await expect(
-          upgrades.deployProxy(
-            UsersVaultFactory,
-            [
-              underlyingTokenAddress,
-              ZERO_ADDRESS,
-              contractsFactoryContract.address,
-              traderWalletAddress,
-              ownerAddress,
-              SHARES_NAME,
-              SHARES_SYMBOL,
-            ]
-          )
+          upgrades.deployProxy(UsersVaultFactory, [
+            underlyingTokenAddress,
+            ZERO_ADDRESS,
+            contractsFactoryContract.address,
+            traderWalletAddress,
+            ownerAddress,
+            SHARES_NAME,
+            SHARES_SYMBOL,
+          ])
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
           .withArgs("_adaptersRegistryAddress");
@@ -226,18 +219,15 @@ describe("User Vault Contract Tests", function () {
 
       it("THEN it should FAIL when _contractsFactoryAddress is ZERO", async () => {
         await expect(
-          upgrades.deployProxy(
-            UsersVaultFactory,
-            [
-              underlyingTokenAddress,
-              adaptersRegistryAddress,
-              ZERO_ADDRESS,
-              traderWalletAddress,
-              ownerAddress,
-              SHARES_NAME,
-              SHARES_SYMBOL,
-            ]
-          )
+          upgrades.deployProxy(UsersVaultFactory, [
+            underlyingTokenAddress,
+            adaptersRegistryAddress,
+            ZERO_ADDRESS,
+            traderWalletAddress,
+            ownerAddress,
+            SHARES_NAME,
+            SHARES_SYMBOL,
+          ])
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
           .withArgs("_contractsFactoryAddress");
@@ -245,18 +235,15 @@ describe("User Vault Contract Tests", function () {
 
       it("THEN it should FAIL when _traderWalletAddress is ZERO", async () => {
         await expect(
-          upgrades.deployProxy(
-            UsersVaultFactory,
-            [
-              underlyingTokenAddress,
-              adaptersRegistryAddress,
-              contractsFactoryContract.address,
-              ZERO_ADDRESS,
-              ownerAddress,
-              SHARES_NAME,
-              SHARES_SYMBOL,
-            ]
-          )
+          upgrades.deployProxy(UsersVaultFactory, [
+            underlyingTokenAddress,
+            adaptersRegistryAddress,
+            contractsFactoryContract.address,
+            ZERO_ADDRESS,
+            ownerAddress,
+            SHARES_NAME,
+            SHARES_SYMBOL,
+          ])
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
           .withArgs("_traderWalletAddress");
@@ -264,18 +251,15 @@ describe("User Vault Contract Tests", function () {
 
       it("THEN it should FAIL when _ownerAddress is ZERO", async () => {
         await expect(
-          upgrades.deployProxy(
-            UsersVaultFactory,
-            [
-              underlyingTokenAddress,
-              adaptersRegistryAddress,
-              contractsFactoryContract.address,
-              traderWalletAddress,
-              ZERO_ADDRESS,
-              SHARES_NAME,
-              SHARES_SYMBOL,
-            ]
-          )
+          upgrades.deployProxy(UsersVaultFactory, [
+            underlyingTokenAddress,
+            adaptersRegistryAddress,
+            contractsFactoryContract.address,
+            traderWalletAddress,
+            ZERO_ADDRESS,
+            SHARES_NAME,
+            SHARES_SYMBOL,
+          ])
         )
           .to.be.revertedWithCustomError(UsersVaultFactory, "ZeroAddress")
           .withArgs("_ownerAddress");
@@ -284,18 +268,15 @@ describe("User Vault Contract Tests", function () {
 
     describe("WHEN trying to deploy UserVault contract with correct parameters", function () {
       before(async () => {
-        usersVaultContract = (await upgrades.deployProxy(
-          UsersVaultFactory,
-          [
-            underlyingTokenAddress,
-            adaptersRegistryContract.address,
-            contractsFactoryContract.address,
-            traderWalletAddress,
-            ownerAddress,
-            SHARES_NAME,
-            SHARES_SYMBOL,
-          ]
-        )) as UsersVault;
+        usersVaultContract = (await upgrades.deployProxy(UsersVaultFactory, [
+          underlyingTokenAddress,
+          adaptersRegistryContract.address,
+          contractsFactoryContract.address,
+          traderWalletAddress,
+          ownerAddress,
+          SHARES_NAME,
+          SHARES_SYMBOL,
+        ])) as UsersVault;
         await usersVaultContract.deployed();
 
         // approve and mint to users
@@ -557,9 +538,8 @@ describe("User Vault Contract Tests", function () {
             it("THEN it should fail", async () => {
               await expect(
                 usersVaultContract.connect(user1).userDeposit(AMOUNT_1E18)
-              ).to.be.revertedWithCustomError(
-                usersVaultContract,
-                "TokenTransferFailed"
+              ).to.be.revertedWith(
+                "SafeERC20: ERC20 operation did not succeed"
               );
             });
           });
@@ -1215,9 +1195,11 @@ describe("User Vault Contract Tests", function () {
           describe("WHEN round is ZERO", function () {
             it("THEN it should fail", async () => {
               await expect(
-                usersVaultContract
-                  .connect(traderWallet)
-                  .executeOnProtocol(1, traderOperation, BigNumber.from(1))
+                traderWalletMockContract.callExecuteOnProtocolInVault(
+                  1,
+                  traderOperation,
+                  BigNumber.from(1)
+                )
               ).to.be.revertedWithCustomError(
                 usersVaultContract,
                 "InvalidRound"
@@ -1299,21 +1281,21 @@ describe("User Vault Contract Tests", function () {
               TraderWalletMockFactory = await ethers.getContractFactory(
                 "TraderWalletMock"
               );
-    
+
               // deploy trader wallet mock to return a valid adapter address
               traderWalletMockContract =
                 (await TraderWalletMockFactory.deploy()) as TraderWalletMock;
               await traderWalletMockContract.deployed();
-    
+
               // set the wallet in the vault
               await usersVaultContract.setTraderWalletAddress(
                 traderWalletMockContract.address
               );
-    
+
               // set the vault in the mock contract
               await traderWalletMockContract.setUsersVault(
                 usersVaultContract.address
-              )
+              );
 
               // change returnValue to return true on function call
               await adaptersRegistryContract.setReturnValue(true);
@@ -1348,7 +1330,7 @@ describe("User Vault Contract Tests", function () {
             it("THEN it should emit an event", async () => {
               await expect(txResult).to.emit(
                 traderWalletMockContract,
-                "RolloverExecuted"
+                "TraderWalletRolloverExecuted"
               );
             });
           });
@@ -1431,7 +1413,7 @@ describe("User Vault Contract Tests", function () {
             it("THEN it should emit an Event", async () => {
               await expect(txResult).to.emit(
                 usersVaultContract,
-                "RolloverExecuted"
+                "UserVaultRolloverExecuted"
               );
             });
             it("THEN currentRound should be increased", async () => {
@@ -1488,7 +1470,7 @@ describe("User Vault Contract Tests", function () {
               it("THEN it should emit an Event", async () => {
                 await expect(txResult).to.emit(
                   usersVaultContract,
-                  "RolloverExecuted"
+                  "UserVaultRolloverExecuted"
                 );
               });
               it("THEN currentRound should be increased", async () => {
@@ -1506,7 +1488,7 @@ describe("User Vault Contract Tests", function () {
               });
               it("THEN after rollover initialVaultBalance should be plain underlying balances sub withdraw requests", async () => {
                 expect(await usersVaultContract.initialVaultBalance()).to.equal(
-                  (AMOUNT_1E18.mul(1500)).sub(AMOUNT)
+                  AMOUNT_1E18.mul(1500).sub(AMOUNT)
                 );
               });
               it("THEN contract shares balance should decrease", async () => {
@@ -1534,9 +1516,7 @@ describe("User Vault Contract Tests", function () {
         let usersVaultV2Contract: UsersVaultV2;
 
         before(async () => {
-          UsersVaultV2Factory = await ethers.getContractFactory(
-            "UsersVaultV2"
-          );
+          UsersVaultV2Factory = await ethers.getContractFactory("UsersVaultV2");
           usersVaultV2Contract = (await upgrades.upgradeProxy(
             usersVaultContract.address,
             UsersVaultV2Factory

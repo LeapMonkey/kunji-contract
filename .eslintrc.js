@@ -7,9 +7,10 @@ module.exports = {
   },
   plugins: ["@typescript-eslint"],
   extends: [
-    "standard",
+    "eslint:recommended",
     "plugin:prettier/recommended",
     "plugin:node/recommended",
+    "plugin:@typescript-eslint/recommended"
   ],
   parser: "@typescript-eslint/parser",
   parserOptions: {

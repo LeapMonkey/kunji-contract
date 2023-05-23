@@ -1,30 +1,30 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
 
+pragma solidity >=0.8.0;
+
+import {IBaseVault} from "./IBaseVault.sol";
 import {IAdapter} from "./IAdapter.sol";
 
-interface ITraderWallet {
-    function setVaultAddress(address) external;
+interface ITraderWallet is IBaseVault {
+    function setVaultAddress(address vaultAddress) external;
 
-    function setAdaptersRegistryAddress(address) external;
+    function setUnderlyingTokenAddress(address underlyingTokenAddress) external;
 
-    function setDynamicValueAddress(address) external;
+    function setTraderAddress(address traderAddress) external;
 
-    function setContractsFactoryAddress(address) external;
+    function addAdapterToUse(uint256 protocolId) external;
 
-    function setUnderlyingTokenAddress(address) external;
+    function removeAdapterToUse(uint256 protocolId) external;
 
-    function setTraderAddress(address) external;
+    function traderDeposit(uint256 amount) external;
 
-    function addAdapterToUse(uint256) external;
+    function withdrawRequest(uint256 amount) external;
 
-    function removeAdapterToUse(uint256) external;
-
-    function traderDeposit(address _tokenAddress, uint256 _amount) external;
-
-    function withdrawRequest(address, uint256) external;
-
-    function setAdapterAllowanceOnToken(uint256, address, bool) external;
+    function setAdapterAllowanceOnToken(
+        uint256 protocolId,
+        address tokenAddress,
+        bool revoke
+    ) external returns (bool);
 
     function rollover() external;
 
@@ -41,16 +41,12 @@ interface ITraderWallet {
     function getRatio() external view returns (uint256);
 
     function executeOnProtocol(
-        uint256,
-        IAdapter.AdapterOperation memory,
-        uint256
+        uint256 protocolId,
+        IAdapter.AdapterOperation memory traderOperation,
+        bool replicate
     ) external returns (bool);
 
-    function rolloverFromTrader() external returns (bool);
-
-    function getUnderlyingLiquidity() external view returns (uint256);
-
-    function currentRound() external view returns (uint256);
-
-    function getAdapterAddressPerProtocol(uint256) external view returns (address);
+    function getAdapterAddressPerProtocol(
+        uint256 protocolId
+    ) external view returns (address);
 }

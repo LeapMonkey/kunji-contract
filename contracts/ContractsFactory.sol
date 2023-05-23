@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+
+pragma solidity 0.8.20;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {TraderWalletDeployer} from "./factoryLibraries/TraderWalletDeployer.sol";
@@ -111,12 +112,10 @@ contract ContractsFactory is OwnableUpgradeable {
     function deployTraderWallet(
         address _underlyingTokenAddress,
         address _traderAddress,
-        address _dynamicValueAddress,
         address _owner
     ) external onlyOwner {
         _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
         _checkZeroAddress(_traderAddress, "_traderAddress");
-        _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
         _checkZeroAddress(_owner, "_owner");
         _checkZeroAddress(adaptersRegistryAddress, "adaptersRegistryAddress");
         if (tradersAllowList[_traderAddress]) revert InvalidTrader();
@@ -124,7 +123,6 @@ contract ContractsFactory is OwnableUpgradeable {
         address proxyAddress = TraderWalletDeployer.deployTraderWallet(
             _underlyingTokenAddress,
             _traderAddress,
-            _dynamicValueAddress,
             adaptersRegistryAddress,
             address(this),
             _owner
@@ -193,7 +191,9 @@ contract ContractsFactory is OwnableUpgradeable {
         return false;
     }
 
-    function isVaultAllowed(address _usersVaultAddress) external view returns (bool) {
+    function isVaultAllowed(
+        address _usersVaultAddress
+    ) external view returns (bool) {
         if (walletPerDeployedVault[_usersVaultAddress] != address(0))
             return true;
         return false;

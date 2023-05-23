@@ -1,5 +1,10 @@
-node_modules
-artifacts
-cache
+artifacts/
+cache/
+data/
+node_modules/
 coverage*
+crytic-export/
+deployments/
+docs/
+typechain-types
 gasReporterOutput.json

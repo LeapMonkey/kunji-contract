@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+
+pragma solidity >=0.8.0;
 
 interface IGmxOrderBook {
     struct IncreaseOrder {
@@ -28,14 +29,24 @@ interface IGmxOrderBook {
     }
 
     function minExecutionFee() external view returns (uint256);
-    
-    function increaseOrdersIndex(address orderCreator) external view returns (uint256);
-    
-    function increaseOrders(address orderCreator, uint256 index) external view returns (IncreaseOrder memory);
 
-    function decreaseOrdersIndex(address orderCreator) external view returns (uint256);
-    
-    function decreaseOrders(address orderCreator, uint256 index) external view returns (DecreaseOrder memory);
+    function increaseOrdersIndex(
+        address orderCreator
+    ) external view returns (uint256);
+
+    function increaseOrders(
+        address orderCreator,
+        uint256 index
+    ) external view returns (IncreaseOrder memory);
+
+    function decreaseOrdersIndex(
+        address orderCreator
+    ) external view returns (uint256);
+
+    function decreaseOrders(
+        address orderCreator,
+        uint256 index
+    ) external view returns (DecreaseOrder memory);
 
     function createSwapOrder(
         address[] memory _path,
@@ -99,41 +110,35 @@ interface IGmxOrderBook {
         uint256[] memory _decreaseOrderIndexes
     ) external;
 
-
     function executeDecreaseOrder(
         address _address,
         uint256 _orderIndex,
-        address payable _feeReceiver) external;
+        address payable _feeReceiver
+    ) external;
 
     function executeIncreaseOrder(
         address _address,
         uint256 _orderIndex,
         address payable _feeReceiver
     ) external;
-
 }
 
-
 interface IGmxOrderBookReader {
-
     function getIncreaseOrders(
-        address payable _orderBookAddress, 
+        address payable _orderBookAddress,
         address _account,
         uint256[] memory _indices
     ) external view returns (uint256[] memory, address[] memory);
-
 
     function getDecreaseOrders(
-        address payable _orderBookAddress, 
+        address payable _orderBookAddress,
         address _account,
         uint256[] memory _indices
     ) external view returns (uint256[] memory, address[] memory);
-
 
     function getSwapOrders(
-        address payable _orderBookAddress, 
+        address payable _orderBookAddress,
         address _account,
         uint256[] memory _indices
     ) external view returns (uint256[] memory, address[] memory);
-
 }

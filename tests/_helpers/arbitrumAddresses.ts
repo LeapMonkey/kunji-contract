@@ -35,7 +35,7 @@ export const tokenHolders = {
     "0x0df5dfd95966753f01cb80e76dc20ea958238c46",
     "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8",
     "0xc31e54c7a869b9fcbecc14363cf510d1c41fa443",
-  ]
+  ],
 };
 
 export const uniswap = {
@@ -43,4 +43,4 @@ export const uniswap = {
   positionManagerAddress: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
   factoryAddress: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
   quoterAddress: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
-}
+};
