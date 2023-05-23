@@ -7,6 +7,7 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 
 import {BaseVault} from "./BaseVault.sol";
 
+import {IUsersVault} from "./interfaces/IUsersVault.sol";
 import {ITraderWallet} from "./interfaces/ITraderWallet.sol";
 import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
@@ -16,33 +17,22 @@ import {IAdapter} from "./interfaces/IAdapter.sol";
 
 // import its own interface as well
 
-contract UsersVault is ERC20Upgradeable, BaseVault {
-    struct UserDeposit {
-        uint256 round;
-        uint256 pendingAssets;
-        uint256 unclaimedShares;
-    }
-    struct UserWithdrawal {
-        uint256 round;
-        uint256 pendingShares;
-        uint256 unclaimedAssets;
-    }
-
-    address public traderWalletAddress;
+contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
+    address public override traderWalletAddress;
 
     // Total amount of total deposit assets in mapped round
-    uint256 public pendingDepositAssets;
+    uint256 public override pendingDepositAssets;
 
     // Total amount of total withdrawal shares in mapped round
-    uint256 public pendingWithdrawShares;
+    uint256 public override pendingWithdrawShares;
 
-    uint256 public processedWithdrawAssets;
+    uint256 public override processedWithdrawAssets;
 
     // user specific deposits accounting
-    mapping(address => UserDeposit) public userDeposits;
+    mapping(address => UserDeposit) public override userDeposits;
 
     // user specific withdrawals accounting
-    mapping(address => UserWithdrawal) public userWithdrawals;
+    mapping(address => UserWithdrawal) public override userWithdrawals;
 
     // ratio per round
     mapping(uint256 => uint256) public assetsPerShareXRound;
@@ -103,7 +93,9 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         traderWalletAddress = _traderWalletAddress;
     }
 
-    function setTraderWalletAddress(address _traderWalletAddress) external {
+    function setTraderWalletAddress(
+        address _traderWalletAddress
+    ) external override {
         _checkOwner();
         _checkZeroAddress(_traderWalletAddress, "_traderWalletAddress");
         if (
@@ -119,7 +111,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         uint256 _protocolId,
         address _tokenAddress,
         bool _revoke
-    ) external returns (bool) {
+    ) external override returns (bool) {
         _checkOwner();
 
         address adapterAddress = ITraderWallet(traderWalletAddress)
@@ -141,7 +133,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         return true;
     }
 
-    function userDeposit(uint256 _amount) external {
+    function userDeposit(uint256 _amount) external override {
         _onlyValidInvestors(_msgSender());
 
         if (_amount == 0) revert ZeroAmount();
@@ -188,7 +180,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         pendingDepositAssets = pendingDepositAssets + _amount;
     }
 
-    function withdrawRequest(uint256 _sharesAmount) external {
+    function withdrawRequest(uint256 _sharesAmount) external override {
         _onlyValidInvestors(_msgSender());
         _checkZeroRound();
         if (_sharesAmount == 0) revert ZeroAmount();
@@ -226,7 +218,12 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         super._transfer(_msgSender(), address(this), _sharesAmount);
     }
 
-    function rolloverFromTrader() external onlyTraderWallet returns (bool) {
+    function rolloverFromTrader()
+        external
+        override
+        onlyTraderWallet
+        returns (bool)
+    {
         if (pendingDepositAssets == 0 && pendingWithdrawShares == 0)
             revert InvalidRollover();
 
@@ -316,7 +313,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         uint256 _walletRatio
-    ) external onlyTraderWallet returns (bool) {
+    ) external override onlyTraderWallet returns (bool) {
         _checkZeroRound();
         address adapterAddress;
 
@@ -343,11 +340,18 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         return true;
     }
 
-    function getSharesContractBalance() external view returns (uint256) {
+    function getSharesContractBalance()
+        external
+        view
+        override
+        returns (uint256)
+    {
         return this.balanceOf(address(this));
     }
 
-    function previewShares(address _receiver) external view returns (uint256) {
+    function previewShares(
+        address _receiver
+    ) external view override returns (uint256) {
         _checkZeroRound();
 
         if (
@@ -375,7 +379,10 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         return userWithdrawals[_receiver].unclaimedAssets;
     }
 
-    function claimShares(uint256 _sharesAmount, address _receiver) public {
+    function claimShares(
+        uint256 _sharesAmount,
+        address _receiver
+    ) external override {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());
 
@@ -412,7 +419,10 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
         super._transfer(address(this), _receiver, _sharesAmount);
     }
 
-    function claimAssets(uint256 _assetsAmount, address _receiver) public {
+    function claimAssets(
+        uint256 _assetsAmount,
+        address _receiver
+    ) external override {
         _checkZeroRound();
         _onlyValidInvestors(_msgSender());
 
@@ -456,7 +466,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault {
     }
 
     //
-    function getUnderlyingLiquidity() public view returns (uint256) {
+    function getUnderlyingLiquidity() public view override returns (uint256) {
         return
             IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -

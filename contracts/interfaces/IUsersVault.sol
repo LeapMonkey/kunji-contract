@@ -2,56 +2,73 @@
 
 pragma solidity >=0.8.0;
 
+import {IBaseVault} from "./IBaseVault.sol";
 import {IAdapter} from "./IAdapter.sol";
 
-interface IUsersVault {
-    function setAdaptersRegistryAddress(address) external;
+interface IUsersVault is IBaseVault {
+    struct UserDeposit {
+        uint256 round;
+        uint256 pendingAssets;
+        uint256 unclaimedShares;
+    }
 
-    function setDynamicValueAddress(address) external;
+    struct UserWithdrawal {
+        uint256 round;
+        uint256 pendingShares;
+        uint256 unclaimedAssets;
+    }
 
-    function setContractsFactoryAddress(address) external;
+    function traderWalletAddress() external view returns (address);
 
-    function setTraderWalletAddress(address) external;
+    function pendingDepositAssets() external view returns (uint256);
 
-    function setUnderlyingTokenAddress(address) external;
+    function pendingWithdrawShares() external view returns (uint256);
 
-    function addAdapterToUse(uint256) external;
+    function processedWithdrawAssets() external view returns (uint256);
 
-    function removeAdapterToUse(uint256) external;
+    function userDeposits(
+        address
+    )
+        external
+        view
+        returns (uint256 round, uint256 pendingAssets, uint256 unclaimedShares);
+
+    function userWithdrawals(
+        address
+    )
+        external
+        view
+        returns (uint256 round, uint256 pendingShares, uint256 unclaimedAssets);
+
+    function assetsPerShareXRound(uint256) external view returns (uint256);
+
+    function setTraderWalletAddress(address traderWalletAddress) external;
 
     function setAdapterAllowanceOnToken(
-        uint256,
-        address,
-        bool
+        uint256 protocolId,
+        address tokenAddress,
+        bool revoke
     ) external returns (bool);
 
-    function userDeposit(address, uint256) external;
+    function userDeposit(uint256 amount) external;
 
-    function withdrawRequest(uint256) external;
+    function withdrawRequest(uint256 sharesAmount) external;
 
     function rolloverFromTrader() external returns (bool);
 
     function executeOnProtocol(
-        uint256,
-        IAdapter.AdapterOperation memory,
-        uint256
+        uint256 protocolId,
+        IAdapter.AdapterOperation memory traderOperation,
+        uint256 walletRatio
     ) external returns (bool);
 
     function getUnderlyingLiquidity() external view returns (uint256);
 
-    function currentRound() external view returns (uint256);
-
-    function claimAllAssets(address) external returns (uint256);
-
-    function previewShares(address) external view returns (uint256);
+    function previewShares(address receiver) external view returns (uint256);
 
     function getSharesContractBalance() external view returns (uint256);
 
-    function getTraderSelectedAdaptersLength() external view returns (uint256);
+    function claimShares(uint256 sharesAmount, address receiver) external;
 
-    function claimShares(uint256, address) external;
-
-    function claimAssets(uint256, address) external;
-
-    // function claimAllShares(address) external returns (uint256);
+    function claimAssets(uint256 assetsAmount, address receiver) external;
 }
