@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+
+pragma solidity 0.8.20;
 
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
@@ -33,8 +34,8 @@ contract UsersVaultMock {
         liquidity = _value;
     }
 
-    function rolloverFromTrader() external returns(bool) {
-        variableToPreventWarning = 0;     
+    function rolloverFromTrader() external returns (bool) {
+        variableToPreventWarning = 0;
         return generalReturnValue;
     }
 

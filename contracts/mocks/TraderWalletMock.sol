@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+
+pragma solidity 0.8.20;
 import {IUsersVault} from "./../interfaces/IUsersVault.sol";
 import {IAdapter} from "../interfaces/IAdapter.sol";
 
 contract TraderWalletMock {
-    event RolloverExecuted();
+    event TraderWalletRolloverExecuted();
 
     address public addressToReturn;
     address public usersVaultAddress;
 
-    constructor() {
-        
-    }
+    constructor() {}
 
     function setUsersVault(address _value) external {
         usersVaultAddress = _value;
@@ -38,7 +37,7 @@ contract TraderWalletMock {
             _traderOperation,
             _walletRatio
         );
-        emit RolloverExecuted();
+        emit TraderWalletRolloverExecuted();
     }
 
     function callRolloverInVault() external {

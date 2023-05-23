@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+
+pragma solidity >=0.8.0;
 
 interface IUniswapV3Adapter {
-
     /// @notice Returns address of the UniswapV3Router contract
     function uniswapV3Router() external view returns (address);
 
@@ -16,7 +16,12 @@ interface IUniswapV3Adapter {
     /// @return sqrtPriceX96AfterList List of the sqrt price after the swap for each pool in the path
     /// @return initializedTicksCrossedList List of the initialized ticks that the swap crossed for each pool in the path
     /// @return gasEstimate The estimate of the gas that the swap consumes
-    function getAmountOut(bytes memory path, uint256 amountIn) external returns (
+    function getAmountOut(
+        bytes memory path,
+        uint256 amountIn
+    )
+        external
+        returns (
             uint256 amountOut,
             uint160[] memory sqrtPriceX96AfterList,
             uint32[] memory initializedTicksCrossedList,
@@ -30,7 +35,12 @@ interface IUniswapV3Adapter {
     /// @return sqrtPriceX96AfterList List of the sqrt price after the swap for each pool in the path
     /// @return initializedTicksCrossedList List of the initialized ticks that the swap crossed for each pool in the path
     /// @return gasEstimate The estimate of the gas that the swap consumes
-    function getAmountIn(bytes memory path, uint256 amountOut) external returns (
+    function getAmountIn(
+        bytes memory path,
+        uint256 amountOut
+    )
+        external
+        returns (
             uint256 amountIn,
             uint160[] memory sqrtPriceX96AfterList,
             uint32[] memory initializedTicksCrossedList,
