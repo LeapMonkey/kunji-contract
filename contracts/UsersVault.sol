@@ -2,7 +2,9 @@
 
 pragma solidity 0.8.20;
 
-import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 import {BaseVault} from "./BaseVault.sol";
@@ -18,6 +20,8 @@ import {IAdapter} from "./interfaces/IAdapter.sol";
 // import its own interface as well
 
 contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
+    using SafeERC20 for IERC20;
+
     address public override traderWalletAddress;
 
     // Total amount of total deposit assets in mapped round
@@ -122,7 +126,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
         if (!_revoke) amount = type(uint256).max;
         else amount = 0;
 
-        if (!IERC20Upgradeable(_tokenAddress).approve(adapterAddress, amount)) {
+        if (!IERC20(_tokenAddress).approve(adapterAddress, amount)) {
             revert ApproveFailed({
                 caller: _msgSender(),
                 token: _tokenAddress,
@@ -138,15 +142,11 @@ contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
 
         if (_amount == 0) revert ZeroAmount();
 
-        if (
-            !(
-                IERC20Upgradeable(underlyingTokenAddress).transferFrom(
-                    _msgSender(),
-                    address(this),
-                    _amount
-                )
-            )
-        ) revert TokenTransferFailed();
+        IERC20(underlyingTokenAddress).safeTransferFrom(
+            _msgSender(),
+            address(this),
+            _amount
+        );
 
         emit UserDeposited(_msgSender(), underlyingTokenAddress, _amount);
 
@@ -239,8 +239,9 @@ contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
             sharesToMint = (pendingDepositAssets * assetsPerShare) / 1e18;
         } else {
             // first round dont consider pendings
-            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
-                .balanceOf(address(this));
+            afterRoundVaultBalance = IERC20(underlyingTokenAddress).balanceOf(
+                address(this)
+            );
             // first ratio between shares and deposit = 1
             assetsPerShare = 1e18;
             // since ratio is 1 shares to mint is equal to actual balance
@@ -266,9 +267,8 @@ contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
 
         // Revert if the assets required for withdrawals < asset balance present in the vault
         if (processedWithdrawAssets > 0) {
-            uint256 underlyingContractBalance = IERC20Upgradeable(
-                underlyingTokenAddress
-            ).balanceOf(address(this));
+            uint256 underlyingContractBalance = IERC20(underlyingTokenAddress)
+                .balanceOf(address(this));
             if (underlyingContractBalance < processedWithdrawAssets)
                 revert NotEnoughAssetsForWithdraw(
                     underlyingContractBalance,
@@ -288,7 +288,7 @@ contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
             int256 kunjiFee = int256(
                 IContractsFactory(contractsFactoryAddress).getFeeRate()
             );
-            vaultProfit = overallProfit - ((overallProfit / 100) * kunjiFee);
+            vaultProfit = overallProfit - ((overallProfit * kunjiFee) / 100);
         }
 
         // Make pending withdrawals 0
@@ -455,20 +455,13 @@ contract UsersVault is ERC20Upgradeable, BaseVault, IUsersVault {
             _receiver
         );
 
-        if (
-            !(
-                IERC20Upgradeable(underlyingTokenAddress).transfer(
-                    _receiver,
-                    _assetsAmount
-                )
-            )
-        ) revert TokenTransferFailed();
+        IERC20(underlyingTokenAddress).safeTransfer(_receiver, _assetsAmount);
     }
 
     //
     function getUnderlyingLiquidity() public view override returns (uint256) {
         return
-            IERC20Upgradeable(underlyingTokenAddress).balanceOf(address(this)) -
+            IERC20(underlyingTokenAddress).balanceOf(address(this)) -
             pendingDepositAssets -
             processedWithdrawAssets;
     }

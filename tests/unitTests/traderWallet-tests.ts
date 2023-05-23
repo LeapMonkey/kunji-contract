@@ -957,9 +957,8 @@ describe("Trader Wallet Contract Tests", function () {
                   traderWalletContract
                     .connect(trader)
                     .traderDeposit(AMOUNT_1E18)
-                ).to.be.revertedWithCustomError(
-                  traderWalletContract,
-                  "TokenTransferFailed"
+                ).to.be.revertedWith(
+                  "SafeERC20: ERC20 operation did not succeed"
                 );
               });
             });
@@ -1430,9 +1429,8 @@ describe("Trader Wallet Contract Tests", function () {
                 it("THEN rollover should fail", async () => {
                   await expect(
                     traderWalletContract.connect(trader).rollover()
-                  ).to.be.revertedWithCustomError(
-                    traderWalletContract,
-                    "SendToTraderFailed"
+                  ).to.be.revertedWith(
+                    "SafeERC20: ERC20 operation did not succeed"
                   );
                 });
               });

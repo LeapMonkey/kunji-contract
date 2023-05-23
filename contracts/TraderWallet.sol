@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.20;
 
-import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC20Upgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {GMXAdapter} from "./adapters/gmx/GMXAdapter.sol";
 import {BaseVault} from "./BaseVault.sol";
@@ -18,6 +19,8 @@ import {ITraderWallet} from "./interfaces/ITraderWallet.sol";
 // import its own interface as well
 
 contract TraderWallet is BaseVault, ITraderWallet {
+    using SafeERC20 for IERC20;
+
     address public vaultAddress;
     address public traderAddress;
     int256 public traderProfit;
@@ -175,15 +178,11 @@ contract TraderWallet is BaseVault, ITraderWallet {
     function traderDeposit(uint256 _amount) external override onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
-        if (
-            !(
-                IERC20Upgradeable(underlyingTokenAddress).transferFrom(
-                    _msgSender(),
-                    address(this),
-                    _amount
-                )
-            )
-        ) revert TokenTransferFailed();
+        IERC20(underlyingTokenAddress).safeTransferFrom(
+            _msgSender(),
+            address(this),
+            _amount
+        );
 
         emit TraderDeposit(_msgSender(), underlyingTokenAddress, _amount);
 
@@ -211,7 +210,7 @@ contract TraderWallet is BaseVault, ITraderWallet {
         if (!_revoke) amount = type(uint256).max;
         else amount = 0;
 
-        if (!IERC20Upgradeable(_tokenAddress).approve(adapterAddress, amount)) {
+        if (!IERC20(_tokenAddress).approve(adapterAddress, amount)) {
             revert ApproveFailed({
                 caller: _msgSender(),
                 token: _tokenAddress,
@@ -230,10 +229,12 @@ contract TraderWallet is BaseVault, ITraderWallet {
         if (currentRound != 0) {
             (afterRoundTraderBalance, afterRoundVaultBalance) = getBalances();
         } else {
-            afterRoundTraderBalance = IERC20Upgradeable(underlyingTokenAddress)
-                .balanceOf(address(this));
-            afterRoundVaultBalance = IERC20Upgradeable(underlyingTokenAddress)
-                .balanceOf(vaultAddress);
+            afterRoundTraderBalance = IERC20(underlyingTokenAddress).balanceOf(
+                address(this)
+            );
+            afterRoundVaultBalance = IERC20(underlyingTokenAddress).balanceOf(
+                vaultAddress
+            );
         }
 
         bool success = IUsersVault(vaultAddress).rolloverFromTrader();
@@ -241,11 +242,10 @@ contract TraderWallet is BaseVault, ITraderWallet {
 
         if (cumulativePendingWithdrawals > 0) {
             // send to trader account
-            success = IERC20Upgradeable(underlyingTokenAddress).transfer(
+            IERC20(underlyingTokenAddress).safeTransfer(
                 traderAddress,
                 cumulativePendingWithdrawals
             );
-            if (!success) revert SendToTraderFailed();
 
             cumulativePendingWithdrawals = 0;
         }
@@ -378,8 +378,9 @@ contract TraderWallet is BaseVault, ITraderWallet {
     function getBalances() public view override returns (uint256, uint256) {
         uint256 pendingsFunds = cumulativePendingDeposits +
             cumulativePendingWithdrawals;
-        uint256 underlyingBalance = IERC20Upgradeable(underlyingTokenAddress)
-            .balanceOf(address(this));
+        uint256 underlyingBalance = IERC20(underlyingTokenAddress).balanceOf(
+            address(this)
+        );
         uint256 vaultUnderlying = IUsersVault(vaultAddress)
             .getUnderlyingLiquidity();
 

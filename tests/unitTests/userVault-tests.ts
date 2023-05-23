@@ -538,9 +538,8 @@ describe("User Vault Contract Tests", function () {
             it("THEN it should fail", async () => {
               await expect(
                 usersVaultContract.connect(user1).userDeposit(AMOUNT_1E18)
-              ).to.be.revertedWithCustomError(
-                usersVaultContract,
-                "TokenTransferFailed"
+              ).to.be.revertedWith(
+                "SafeERC20: ERC20 operation did not succeed"
               );
             });
           });
