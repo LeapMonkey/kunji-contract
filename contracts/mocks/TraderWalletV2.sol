@@ -15,7 +15,6 @@ contract TraderWalletV2 is TraderWallet {
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
         address _traderAddress,
-        address _dynamicValueAddress,
         address _ownerAddress
     ) external override initializer {
         __TraderWallet_init(
@@ -23,7 +22,6 @@ contract TraderWalletV2 is TraderWallet {
             _adaptersRegistryAddress,
             _contractsFactoryAddress,
             _traderAddress,
-            _dynamicValueAddress,
             _ownerAddress
         );
     }

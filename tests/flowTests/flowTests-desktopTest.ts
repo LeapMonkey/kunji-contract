@@ -29,7 +29,6 @@ let vault: Signer;
 let traderWallet: Signer;
 let adaptersRegistry: Signer;
 let contractsFactory: Signer;
-let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
@@ -45,7 +44,6 @@ let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
 let traderWalletAddress: string;
-let dynamicValueAddress: string;
 let otherAddress: string;
 let ownerAddress: string;
 let user1Address: string;
@@ -201,7 +199,6 @@ describe("User Vault Contract Tests", function () {
       traderWallet,
       adaptersRegistry,
       contractsFactory,
-      dynamicValue,
       nonAuthorized,
       otherSigner,
       user1,
@@ -217,7 +214,6 @@ describe("User Vault Contract Tests", function () {
       traderWalletAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
-      dynamicValueAddress,
       otherAddress,
       user1Address,
       user2Address,
@@ -230,7 +226,6 @@ describe("User Vault Contract Tests", function () {
       traderWallet.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
-      dynamicValue.getAddress(),
       otherSigner.getAddress(),
       user1.getAddress(),
       user2.getAddress(),

@@ -35,7 +35,6 @@ const abiCoder = new utils.AbiCoder();
 let trader: Signer;
 let adaptersRegistry: Signer;
 let contractsFactory: Signer;
-let dynamicValue: Signer;
 let owner: Signer;
 let usdcHolder0: Signer;
 let usersVaultContract: UsersVaultMock;
@@ -44,7 +43,6 @@ let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let contractsFactoryAddress: string;
 let traderAddress: string;
-let dynamicValueAddress: string;
 let ownerAddress: string;
 
 let txResult: ContractTransaction;
@@ -120,20 +118,18 @@ describe("GMXAdapter", function () {
       gmx.positionManagerAddress
     );
 
-    [trader, adaptersRegistry, contractsFactory, dynamicValue, owner] =
+    [trader, adaptersRegistry, contractsFactory, owner] =
       await ethers.getSigners();
 
     [
       traderAddress,
       adaptersRegistryAddress,
       contractsFactoryAddress,
-      dynamicValueAddress,
       ownerAddress,
     ] = await Promise.all([
       trader.getAddress(),
       adaptersRegistry.getAddress(),
       contractsFactory.getAddress(),
-      dynamicValue.getAddress(),
       owner.getAddress(),
     ]);
 
@@ -162,7 +158,6 @@ describe("GMXAdapter", function () {
         adaptersRegistryAddress,
         contractsFactoryAddress,
         traderAddress,
-        dynamicValueAddress,
         ownerAddress,
       ],
       {

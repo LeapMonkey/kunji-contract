@@ -64,7 +64,6 @@ let snapshot: SnapshotRestorer;
 
 let deployer: Signer;
 let trader: Signer;
-let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
@@ -79,7 +78,6 @@ let traderAddress: string;
 let underlyingTokenAddress: string;
 let adaptersRegistryAddress: string;
 let traderWalletAddress: string;
-let dynamicValueAddress: string;
 let otherAddress: string;
 let ownerAddress: string;
 let user1Address: string;
@@ -124,22 +122,12 @@ let roundCounter: BigNumber;
 describe("Vault and Wallet Flow Tests on GMX", function () {
   before(async () => {
     // get signers
-    [
-      deployer,
-      dynamicValue,
-      nonAuthorized,
-      otherSigner,
-      user1,
-      user2,
-      user3,
-      user4,
-      user5,
-    ] = await ethers.getSigners();
+    [deployer, nonAuthorized, otherSigner, user1, user2, user3, user4, user5] =
+      await ethers.getSigners();
 
     // get addresses
     [
       deployerAddress,
-      dynamicValueAddress,
       otherAddress,
       user1Address,
       user2Address,
@@ -148,7 +136,6 @@ describe("Vault and Wallet Flow Tests on GMX", function () {
       user5Address,
     ] = await Promise.all([
       deployer.getAddress(),
-      dynamicValue.getAddress(),
       otherSigner.getAddress(),
       user1.getAddress(),
       user2.getAddress(),

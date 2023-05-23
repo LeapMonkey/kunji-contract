@@ -241,7 +241,6 @@ const deployTraderWallet = async (
   const txResult = await contractsFactoryContract.deployTraderWallet(
     underlyingTokenAddress,
     deployerAddress, // trader address
-    deployerAddress, // not used
     deployerAddress // owner
   );
 

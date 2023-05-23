@@ -112,12 +112,10 @@ contract ContractsFactory is OwnableUpgradeable {
     function deployTraderWallet(
         address _underlyingTokenAddress,
         address _traderAddress,
-        address _dynamicValueAddress,
         address _owner
     ) external onlyOwner {
         _checkZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress");
         _checkZeroAddress(_traderAddress, "_traderAddress");
-        _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
         _checkZeroAddress(_owner, "_owner");
         _checkZeroAddress(adaptersRegistryAddress, "adaptersRegistryAddress");
         if (tradersAllowList[_traderAddress]) revert InvalidTrader();
@@ -125,7 +123,6 @@ contract ContractsFactory is OwnableUpgradeable {
         address proxyAddress = TraderWalletDeployer.deployTraderWallet(
             _underlyingTokenAddress,
             _traderAddress,
-            _dynamicValueAddress,
             adaptersRegistryAddress,
             address(this),
             _owner

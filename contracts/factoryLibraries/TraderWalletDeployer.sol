@@ -15,19 +15,17 @@ library TraderWalletDeployer {
     function deployTraderWallet(
         address _underlyingTokenAddress,
         address _traderAddress,
-        address _dynamicValueAddress,
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
         address _owner
     ) external returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(msg.sender, block.number));
         bytes memory data = abi.encodeWithSignature(
-            "initialize(address,address,address,address,address,address)",
+            "initialize(address,address,address,address,address)",
             _underlyingTokenAddress,
             _adaptersRegistryAddress,
             _contractsFactoryAddress,
             _traderAddress,
-            _dynamicValueAddress,
             _owner
         );
 

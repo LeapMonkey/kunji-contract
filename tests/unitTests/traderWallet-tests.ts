@@ -32,7 +32,6 @@ let snapshot: SnapshotRestorer;
 let deployer: Signer;
 let vault: Signer;
 let trader: Signer;
-let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
@@ -41,7 +40,6 @@ let deployerAddress: string;
 let vaultAddress: string;
 let underlyingTokenAddress: string;
 let traderAddress: string;
-let dynamicValueAddress: string;
 let otherAddress: string;
 let ownerAddress: string;
 
@@ -97,24 +95,17 @@ describe("Trader Wallet Contract Tests", function () {
     await usdcTokenContract.deployed();
     underlyingTokenAddress = usdcTokenContract.address;
 
-    [deployer, vault, trader, dynamicValue, nonAuthorized, otherSigner, owner] =
+    [deployer, vault, trader, nonAuthorized, otherSigner, owner] =
       await ethers.getSigners();
 
-    [
-      deployerAddress,
-      vaultAddress,
-      traderAddress,
-      dynamicValueAddress,
-      otherAddress,
-      ownerAddress,
-    ] = await Promise.all([
-      deployer.getAddress(),
-      vault.getAddress(),
-      trader.getAddress(),
-      dynamicValue.getAddress(),
-      otherSigner.getAddress(),
-      owner.getAddress(),
-    ]);
+    [deployerAddress, vaultAddress, traderAddress, otherAddress, ownerAddress] =
+      await Promise.all([
+        deployer.getAddress(),
+        vault.getAddress(),
+        trader.getAddress(),
+        otherSigner.getAddress(),
+        owner.getAddress(),
+      ]);
   });
 
   describe("TraderWallet contract Deployment Tests", function () {
@@ -176,7 +167,6 @@ describe("Trader Wallet Contract Tests", function () {
                 adaptersRegistryContract.address,
                 contractsFactoryContract.address,
                 traderAddress,
-                dynamicValueAddress,
                 ownerAddress,
               ]
               // { unsafeAllowLinkedLibraries: true }
@@ -195,7 +185,6 @@ describe("Trader Wallet Contract Tests", function () {
                 ZERO_ADDRESS,
                 contractsFactoryContract.address,
                 traderAddress,
-                dynamicValueAddress,
                 ownerAddress,
               ]
               // { unsafeAllowLinkedLibraries: true }
@@ -214,7 +203,6 @@ describe("Trader Wallet Contract Tests", function () {
                 adaptersRegistryContract.address,
                 ZERO_ADDRESS,
                 traderAddress,
-                dynamicValueAddress,
                 ownerAddress,
               ]
               // { unsafeAllowLinkedLibraries: true }
@@ -233,7 +221,6 @@ describe("Trader Wallet Contract Tests", function () {
                 adaptersRegistryContract.address,
                 contractsFactoryContract.address,
                 ZERO_ADDRESS,
-                dynamicValueAddress,
                 ownerAddress,
               ]
               // { unsafeAllowLinkedLibraries: true }
@@ -241,25 +228,6 @@ describe("Trader Wallet Contract Tests", function () {
           )
             .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
             .withArgs("_traderAddress");
-        });
-
-        it("THEN it should FAIL when _dynamicValueAddress is ZERO", async () => {
-          await expect(
-            upgrades.deployProxy(
-              TraderWalletFactory,
-              [
-                underlyingTokenAddress,
-                adaptersRegistryContract.address,
-                contractsFactoryContract.address,
-                traderAddress,
-                ZERO_ADDRESS,
-                ownerAddress,
-              ]
-              // { unsafeAllowLinkedLibraries: true }
-            )
-          )
-            .to.be.revertedWithCustomError(TraderWalletFactory, "ZeroAddress")
-            .withArgs("_dynamicValueAddress");
         });
 
         it("THEN it should FAIL when ownerAddress, is ZERO", async () => {
@@ -271,7 +239,6 @@ describe("Trader Wallet Contract Tests", function () {
                 adaptersRegistryContract.address,
                 contractsFactoryContract.address,
                 traderAddress,
-                dynamicValueAddress,
                 ZERO_ADDRESS,
               ]
               // { unsafeAllowLinkedLibraries: true }
@@ -291,7 +258,6 @@ describe("Trader Wallet Contract Tests", function () {
               adaptersRegistryContract.address,
               contractsFactoryContract.address,
               traderAddress,
-              dynamicValueAddress,
               ownerAddress,
             ]
             // ,
@@ -349,9 +315,6 @@ describe("Trader Wallet Contract Tests", function () {
           );
           expect(await traderWalletContract.traderAddress()).to.equal(
             traderAddress
-          );
-          expect(await traderWalletContract.dynamicValueAddress()).to.equal(
-            dynamicValueAddress
           );
           expect(await traderWalletContract.owner()).to.equal(ownerAddress);
 
@@ -528,56 +491,6 @@ describe("Trader Wallet Contract Tests", function () {
             it("THEN it should emit an Event", async () => {
               await expect(txResult)
                 .to.emit(traderWalletContract, "ContractsFactoryAddressSet")
-                .withArgs(otherAddress);
-            });
-          });
-        });
-
-        describe("WHEN trying to set the dynamicValueAddress", async () => {
-          describe("WHEN calling with invalid caller or parameters", function () {
-            describe("WHEN caller is not owner", function () {
-              it("THEN it should fail", async () => {
-                await expect(
-                  traderWalletContract
-                    .connect(nonAuthorized)
-                    .setDynamicValueAddress(otherAddress)
-                ).to.be.revertedWith("Ownable: caller is not the owner");
-              });
-            });
-
-            describe("WHEN address is invalid", function () {
-              it("THEN it should fail", async () => {
-                await expect(
-                  traderWalletContract
-                    .connect(owner)
-                    .setDynamicValueAddress(ZERO_ADDRESS)
-                )
-                  .to.be.revertedWithCustomError(
-                    traderWalletContract,
-                    "ZeroAddress"
-                  )
-                  .withArgs("_dynamicValueAddress");
-              });
-            });
-          });
-
-          describe("WHEN calling with correct caller and address", function () {
-            before(async () => {
-              txResult = await traderWalletContract
-                .connect(owner)
-                .setDynamicValueAddress(otherAddress);
-            });
-            after(async () => {
-              await snapshot.restore();
-            });
-            it("THEN new address should be stored", async () => {
-              expect(await traderWalletContract.dynamicValueAddress()).to.equal(
-                otherAddress
-              );
-            });
-            it("THEN it should emit an Event", async () => {
-              await expect(txResult)
-                .to.emit(traderWalletContract, "DynamicValueAddressSet")
                 .withArgs(otherAddress);
             });
           });
@@ -820,7 +733,7 @@ describe("Trader Wallet Contract Tests", function () {
 
           describe("WHEN trying to remove an adapter (removeAdapterToUse)", async () => {
             // otherAddress is already added from previous flow (addAdapterToUse)
-            // to add now deployerAddress, contractsFactoryAddress, dynamicValueAddress
+            // to add now deployerAddress, contractsFactoryAddress, ownerAddress
             // just to store something and test the function
             let adapter1Address: string;
             let adapter2Address: string;
@@ -832,7 +745,7 @@ describe("Trader Wallet Contract Tests", function () {
               adapter1Address = otherAddress;
               adapter2Address = deployerAddress;
               adapter3Address = contractsFactoryContract.address;
-              adapter4Address = dynamicValueAddress;
+              adapter4Address = underlyingTokenAddress;
               adapter10Address = vaultAddress;
 
               await adaptersRegistryContract
@@ -1707,9 +1620,6 @@ describe("Trader Wallet Contract Tests", function () {
             ).to.equal(contractsFactoryContract.address);
             expect(await traderWalletV2Contract.traderAddress()).to.equal(
               traderAddress
-            );
-            expect(await traderWalletV2Contract.dynamicValueAddress()).to.equal(
-              dynamicValueAddress
             );
             expect(await traderWalletV2Contract.owner()).to.equal(ownerAddress);
           });

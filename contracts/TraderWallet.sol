@@ -11,15 +11,15 @@ import {IContractsFactory} from "./interfaces/IContractsFactory.sol";
 import {IAdaptersRegistry} from "./interfaces/IAdaptersRegistry.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 import {IUsersVault} from "./interfaces/IUsersVault.sol";
+import {ITraderWallet} from "./interfaces/ITraderWallet.sol";
 
 // import "hardhat/console.sol";
 
 // import its own interface as well
 
-contract TraderWallet is BaseVault {
+contract TraderWallet is BaseVault, ITraderWallet {
     address public vaultAddress;
     address public traderAddress;
-    address public dynamicValueAddress;
     int256 public traderProfit;
     uint256 public cumulativePendingDeposits;
     uint256 public cumulativePendingWithdrawals;
@@ -39,7 +39,6 @@ contract TraderWallet is BaseVault {
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
         address _traderAddress,
-        address _dynamicValueAddress,
         address _ownerAddress
     ) external virtual initializer {
         // CHECK CALLER IS THE FACTORY
@@ -49,7 +48,6 @@ contract TraderWallet is BaseVault {
             _adaptersRegistryAddress,
             _contractsFactoryAddress,
             _traderAddress,
-            _dynamicValueAddress,
             _ownerAddress
         );
     }
@@ -59,7 +57,6 @@ contract TraderWallet is BaseVault {
         address _adaptersRegistryAddress,
         address _contractsFactoryAddress,
         address _traderAddress,
-        address _dynamicValueAddress,
         address _ownerAddress
     ) internal onlyInitializing {
         __BaseVault_init(
@@ -69,24 +66,26 @@ contract TraderWallet is BaseVault {
             _ownerAddress
         );
 
-        __TraderWallet_init_unchained(_traderAddress, _dynamicValueAddress);
+        __TraderWallet_init_unchained(_traderAddress);
     }
 
     function __TraderWallet_init_unchained(
-        address _traderAddress,
-        address _dynamicValueAddress
+        address _traderAddress
     ) internal onlyInitializing {
         _checkZeroAddress(_traderAddress, "_traderAddress");
-        _checkZeroAddress(_dynamicValueAddress, "_dynamicValueAddress");
         // CHECK TRADER IS ALLOWED
 
         traderAddress = _traderAddress;
-        dynamicValueAddress = _dynamicValueAddress;
     }
 
     function setVaultAddress(
         address _vaultAddress
-    ) external onlyOwner notZeroAddress(_vaultAddress, "_vaultAddress") {
+    )
+        external
+        override
+        onlyOwner
+        notZeroAddress(_vaultAddress, "_vaultAddress")
+    {
         if (
             !IContractsFactory(contractsFactoryAddress).isVaultAllowed(
                 _vaultAddress
@@ -96,21 +95,11 @@ contract TraderWallet is BaseVault {
         vaultAddress = _vaultAddress;
     }
 
-    function setDynamicValueAddress(
-        address _dynamicValueAddress
-    )
-        external
-        onlyOwner
-        notZeroAddress(_dynamicValueAddress, "_dynamicValueAddress")
-    {
-        emit DynamicValueAddressSet(_dynamicValueAddress);
-        dynamicValueAddress = _dynamicValueAddress;
-    }
-
     function setUnderlyingTokenAddress(
         address _underlyingTokenAddress
     )
         external
+        override
         onlyTrader
         notZeroAddress(_underlyingTokenAddress, "_underlyingTokenAddress")
     {
@@ -120,7 +109,12 @@ contract TraderWallet is BaseVault {
 
     function setTraderAddress(
         address _traderAddress
-    ) external onlyOwner notZeroAddress(_traderAddress, "_traderAddress") {
+    )
+        external
+        override
+        onlyOwner
+        notZeroAddress(_traderAddress, "_traderAddress")
+    {
         if (
             !IContractsFactory(contractsFactoryAddress).isTraderAllowed(
                 _traderAddress
@@ -131,7 +125,7 @@ contract TraderWallet is BaseVault {
         traderAddress = _traderAddress;
     }
 
-    function addAdapterToUse(uint256 _protocolId) external onlyTrader {
+    function addAdapterToUse(uint256 _protocolId) external override onlyTrader {
         address adapterAddress = _getAdapterAddress(_protocolId);
         (bool isAdapterOnArray, ) = _isAdapterOnArray(adapterAddress);
         if (isAdapterOnArray) revert AdapterPresent();
@@ -147,7 +141,9 @@ contract TraderWallet is BaseVault {
         */
     }
 
-    function removeAdapterToUse(uint256 _protocolId) external onlyTrader {
+    function removeAdapterToUse(
+        uint256 _protocolId
+    ) external override onlyTrader {
         address adapterAddress = _getAdapterAddress(_protocolId);
         (bool isAdapterOnArray, uint256 index) = _isAdapterOnArray(
             adapterAddress
@@ -171,12 +167,12 @@ contract TraderWallet is BaseVault {
 
     function getAdapterAddressPerProtocol(
         uint256 _protocolId
-    ) external view returns (address) {
+    ) external view override returns (address) {
         return _getAdapterAddress(_protocolId);
     }
 
     //
-    function traderDeposit(uint256 _amount) external onlyTrader {
+    function traderDeposit(uint256 _amount) external override onlyTrader {
         if (_amount == 0) revert ZeroAmount();
 
         if (
@@ -194,7 +190,7 @@ contract TraderWallet is BaseVault {
         cumulativePendingDeposits = cumulativePendingDeposits + _amount;
     }
 
-    function withdrawRequest(uint256 _amount) external onlyTrader {
+    function withdrawRequest(uint256 _amount) external override onlyTrader {
         _checkZeroRound();
         if (_amount == 0) revert ZeroAmount();
 
@@ -207,7 +203,7 @@ contract TraderWallet is BaseVault {
         uint256 _protocolId,
         address _tokenAddress,
         bool _revoke
-    ) external onlyTrader returns (bool) {
+    ) external override onlyTrader returns (bool) {
         address adapterAddress = adaptersPerProtocol[_protocolId];
         if (adapterAddress == address(0)) revert InvalidAdapter();
 
@@ -227,7 +223,7 @@ contract TraderWallet is BaseVault {
     }
 
     // not sure if the execution is here. Don't think so
-    function rollover() external onlyTrader {
+    function rollover() external override onlyTrader {
         if (cumulativePendingDeposits == 0 && cumulativePendingWithdrawals == 0)
             revert InvalidRollover();
 
@@ -289,7 +285,7 @@ contract TraderWallet is BaseVault {
         uint256 _protocolId,
         IAdapter.AdapterOperation memory _traderOperation,
         bool _replicate
-    ) external onlyTrader nonReentrant returns (bool) {
+    ) external override onlyTrader nonReentrant returns (bool) {
         _checkZeroRound();
 
         address adapterAddress;
@@ -352,19 +348,34 @@ contract TraderWallet is BaseVault {
         return true;
     }
 
-    function getTraderSelectedAdaptersLength() external view returns (uint256) {
+    function getTraderSelectedAdaptersLength()
+        external
+        view
+        override
+        returns (uint256)
+    {
         return traderSelectedAdaptersArray.length;
     }
 
-    function getCumulativePendingWithdrawals() external view returns (uint256) {
+    function getCumulativePendingWithdrawals()
+        external
+        view
+        override
+        returns (uint256)
+    {
         return cumulativePendingWithdrawals;
     }
 
-    function getCumulativePendingDeposits() external view returns (uint256) {
+    function getCumulativePendingDeposits()
+        external
+        view
+        override
+        returns (uint256)
+    {
         return cumulativePendingDeposits;
     }
 
-    function getBalances() public view returns (uint256, uint256) {
+    function getBalances() public view override returns (uint256, uint256) {
         uint256 pendingsFunds = cumulativePendingDeposits +
             cumulativePendingWithdrawals;
         uint256 underlyingBalance = IERC20Upgradeable(underlyingTokenAddress)
@@ -380,14 +391,14 @@ contract TraderWallet is BaseVault {
         );
     }
 
-    function calculateRatio() public view returns (uint256) {
+    function calculateRatio() public view override returns (uint256) {
         return
             initialTraderBalance > 0
                 ? (1e18 * initialVaultBalance) / initialTraderBalance
                 : 1;
     }
 
-    function getRatio() public view returns (uint256) {
+    function getRatio() external view override returns (uint256) {
         return ratioProportions;
     }
 

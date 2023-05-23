@@ -32,7 +32,6 @@ let snapshot: SnapshotRestorer;
 
 let deployer: Signer;
 let trader: Signer;
-let dynamicValue: Signer;
 let nonAuthorized: Signer;
 let otherSigner: Signer;
 let owner: Signer;
@@ -40,7 +39,6 @@ let owner: Signer;
 let deployerAddress: string;
 let underlyingTokenAddress: string;
 let traderAddress: string;
-let dynamicValueAddress: string;
 let traderWalletAddress: string;
 let usersVaultAddress: string;
 let nonAuthorizedAddress: string;
@@ -66,19 +64,17 @@ describe("ContractsFactory Tests", function () {
   this.timeout(TEST_TIMEOUT);
 
   before(async () => {
-    [deployer, trader, dynamicValue, nonAuthorized, otherSigner, owner] =
+    [deployer, trader, nonAuthorized, otherSigner, owner] =
       await ethers.getSigners();
     [
       deployerAddress,
       traderAddress,
-      dynamicValueAddress,
       nonAuthorizedAddress,
       otherAddress,
       ownerAddress,
     ] = await Promise.all([
       deployer.getAddress(),
       trader.getAddress(),
-      dynamicValue.getAddress(),
       nonAuthorized.getAddress(),
       otherSigner.getAddress(),
       owner.getAddress(),
@@ -506,7 +502,6 @@ describe("ContractsFactory Tests", function () {
                 .deployTraderWallet(
                   usdcTokenContract.address,
                   traderAddress,
-                  otherAddress,
                   ownerAddress
                 );
             });
@@ -522,7 +517,6 @@ describe("ContractsFactory Tests", function () {
                     .deployTraderWallet(
                       usdcTokenContract.address,
                       traderAddress,
-                      otherAddress,
                       ownerAddress
                     )
                 ).to.be.revertedWith("Ownable: caller is not the owner");
@@ -536,7 +530,6 @@ describe("ContractsFactory Tests", function () {
                     .deployTraderWallet(
                       ZERO_ADDRESS,
                       traderAddress,
-                      otherAddress,
                       ownerAddress
                     )
                 )
@@ -555,7 +548,6 @@ describe("ContractsFactory Tests", function () {
                     .deployTraderWallet(
                       usdcTokenContract.address,
                       ZERO_ADDRESS,
-                      otherAddress,
                       ownerAddress
                     )
                 )
@@ -566,25 +558,6 @@ describe("ContractsFactory Tests", function () {
                   .withArgs("_traderAddress");
               });
             });
-            describe("WHEN _dynamicValueAddress address is zero address", function () {
-              it("THEN it should fail", async () => {
-                await expect(
-                  contractsFactoryContract
-                    .connect(deployer)
-                    .deployTraderWallet(
-                      usdcTokenContract.address,
-                      traderAddress,
-                      ZERO_ADDRESS,
-                      ownerAddress
-                    )
-                )
-                  .to.be.revertedWithCustomError(
-                    contractsFactoryContract,
-                    "ZeroAddress"
-                  )
-                  .withArgs("_dynamicValueAddress");
-              });
-            });
             describe("WHEN _owner address is zero address", function () {
               it("THEN it should fail", async () => {
                 await expect(
@@ -593,7 +566,6 @@ describe("ContractsFactory Tests", function () {
                     .deployTraderWallet(
                       usdcTokenContract.address,
                       traderAddress,
-                      otherAddress,
                       ZERO_ADDRESS
                     )
                 )
@@ -618,7 +590,6 @@ describe("ContractsFactory Tests", function () {
                 .deployTraderWallet(
                   usdcTokenContract.address,
                   traderAddress,
-                  otherAddress,
                   ownerAddress
                 );
 
@@ -653,9 +624,6 @@ describe("ContractsFactory Tests", function () {
 
               expect(await traderWalletContract.traderAddress()).to.equal(
                 traderAddress
-              );
-              expect(await traderWalletContract.dynamicValueAddress()).to.equal(
-                otherAddress
               );
               expect(await traderWalletContract.owner()).to.equal(ownerAddress);
 
@@ -715,7 +683,6 @@ describe("ContractsFactory Tests", function () {
               .deployTraderWallet(
                 usdcTokenContract.address,
                 traderAddress,
-                otherAddress,
                 ownerAddress
               );
 

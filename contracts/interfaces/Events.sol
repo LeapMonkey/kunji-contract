@@ -38,7 +38,6 @@ interface Events {
     event VaultAddressSet(address indexed vaultAddress);
     event UnderlyingTokenAddressSet(address indexed underlyingTokenAddress);
     event TraderAddressSet(address indexed traderAddress);
-    event DynamicValueAddressSet(address indexed dynamicValueAddress);
     event AdapterToUseAdded(
         uint256 protocolId,
         address indexed adapter,

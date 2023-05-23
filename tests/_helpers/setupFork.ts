@@ -112,7 +112,6 @@ export const setupContracts = async (
       adaptersRegistryContract.address,
       contractsFactoryContract.address,
       deployerAddress,
-      deployerAddress, // not used
       deployerAddress, // owner
     ]
     // { unsafeAllowLinkedLibraries: true }
